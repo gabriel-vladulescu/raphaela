@@ -1,0 +1,191 @@
+/* ---------- Midnight sky: constellations + falling stars ---------- */
+.midnight-sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.constellation {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+
+.constellation.is-visible {
+  opacity: 1;
+}
+
+.constellation svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Placed where the page leaves sky open: the side margins and the column under the home sidebar. */
+.midnight-sky {
+  --margin: calc((100vw - min(100vw, 1240px)) / 2);
+  --margin-w: clamp(135px, calc(var(--margin) - 10px), 250px);
+}
+
+.constellation-a,
+.constellation-c {
+  width: var(--margin-w);
+  left: max(6px, calc((var(--margin) - var(--margin-w)) / 2));
+}
+
+.constellation-a {
+  top: 16vh;
+}
+
+.constellation-c {
+  bottom: 7vh;
+}
+
+.constellation-b {
+  top: 62vh;
+  right: calc(var(--margin) + 34px);
+  width: 260px;
+}
+
+.constellation-lines line {
+  stroke: rgb(242 196 109 / 0.55);
+  stroke-width: 0.45;
+  stroke-linecap: round;
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  animation: constellation-draw 1.3s ease-out forwards;
+  animation-delay: var(--delay);
+}
+
+.constellation-stars circle {
+  fill: #fff6dc;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    star-appear 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) backwards,
+    star-twinkle var(--twinkle) ease-in-out infinite;
+  animation-delay: var(--delay), calc(var(--delay) + 0.7s);
+}
+
+.constellation-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(242 196 109 / 0.75);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgb(242 196 109 / 0.5);
+  animation: constellation-name-in 1.2s ease 1.2s backwards;
+}
+
+.constellation-glyph {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+@keyframes constellation-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes star-appear {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+@keyframes star-twinkle {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes constellation-name-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* A shooting star: the bright head leads, the tail fades behind it. */
+.meteor {
+  position: absolute;
+  top: var(--y, 10vh);
+  left: var(--x, 70vw);
+  width: var(--length, 140px);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgb(255 236 190 / 0.35) 55%, rgb(255 255 255 / 0.95));
+  transform-origin: left center;
+  opacity: 0;
+  animation: meteor-fall 10s linear infinite;
+}
+
+.meteor::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -2px;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px 3px rgb(255 240 200 / 0.85);
+}
+
+/* 145deg points the travel direction down and to the left. */
+@keyframes meteor-fall {
+  0% {
+    opacity: 0;
+    transform: rotate(145deg) translateX(0);
+  }
+  1% {
+    opacity: 1;
+  }
+  7% {
+    opacity: 0;
+    transform: rotate(145deg) translateX(min(55vw, 520px));
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(145deg) translateX(min(55vw, 520px));
+  }
+}
+
+@media (max-width: 1100px) {
+  .constellation-c {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .constellation-b {
+    display: none;
+  }
+
+  /* Phones have no open margins, so names would show through the cards. */
+  .constellation-name {
+    display: none;
+  }
+
+  .constellation-a {
+    top: auto;
+    bottom: 8vh;
+    left: auto;
+    right: 6vw;
+    width: 150px;
+  }
+}

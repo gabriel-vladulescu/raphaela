@@ -1,0 +1,2208 @@
+/* ---------- Header: the settings cog and account menu, with no bar behind them ---------- */
+.site-header {
+  position: relative;
+  z-index: 50; /* keeps the popovers above the page */
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: var(--header-height);
+}
+
+/* Room on the left for a page's own control (the home page's search, on phones: Header.tsx). */
+.header-slot {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.header-slot .search-box {
+  width: 100%;
+  margin-right: 4px;
+  padding: 2px 4px 2px 14px;
+}
+
+.header-slot .search-box input {
+  height: 38px;
+}
+
+/* The post page's "Back to posts" (narrow screens). */
+.header-slot .back-link {
+  min-width: 0;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* The account button's room while it's not yet known who's here (phones). */
+.account-btn-placeholder {
+  width: 42px;
+  height: 42px;
+}
+
+/* ---------- Footer: © company year · terms ---------- */
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 10px;
+}
+
+.footer-inner > * {
+  white-space: nowrap;
+}
+
+.footer-link {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.footer-link:hover {
+  color: var(--text);
+}
+
+
+.avatar-btn {
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: border-color 0.18s;
+}
+
+.avatar-btn:hover,
+.avatar-btn.is-active {
+  border-color: var(--accent);
+}
+
+/* ---------- Popover ---------- */
+.popover-root {
+  position: relative;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  z-index: 60;
+  min-width: 240px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  animation: popover-in 0.16s var(--ease);
+}
+
+.popover-end {
+  right: 0;
+  transform-origin: top right;
+}
+
+.popover-start {
+  left: 0;
+  transform-origin: top left;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+
+.popover-heading {
+  margin: 4px 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.popover-heading:not(:first-child) {
+  margin-top: 16px;
+}
+
+.settings-popover {
+  width: 260px;
+}
+
+.theme-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 500;
+}
+
+.theme-option:hover {
+  background: var(--surface-2);
+}
+
+.theme-option.is-selected {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+/* Just the swatches, side by side (the account sheet). */
+.theme-swatches {
+  flex-direction: row;
+  gap: 6px;
+}
+
+.theme-swatches .theme-option {
+  padding: 3px;
+  border-radius: 13px;
+}
+
+.theme-swatches .theme-swatch {
+  width: 34px;
+  height: 34px;
+}
+
+.theme-swatch {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgb(127 127 127 / 0.25);
+}
+
+.theme-swatch-light {
+  background: linear-gradient(135deg, #ffffff, #efeaff);
+  color: #6d4aff;
+}
+
+.theme-swatch-dark {
+  background: linear-gradient(135deg, #2a2836, #15141c);
+  color: #b3a2ff;
+}
+
+.theme-swatch-midnight {
+  background: radial-gradient(circle at 30% 30%, #2a3170, #050918 70%);
+  color: #f2c46d;
+}
+
+.settings-account {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-account .popover-heading {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.settings-account .google-btn {
+  width: 100%;
+}
+
+.settings-other {
+  text-align: center;
+  font-weight: 600;
+}
+
+.theme-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.segmented {
+  display: flex;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.segmented button {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+
+.segmented button.is-selected {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.user-popover {
+  width: 280px;
+  padding: 10px;
+}
+
+.user-card {
+  display: flex;
+  gap: 12px;
+  padding: 8px 8px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.user-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.user-card-text .muted {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-text .badge {
+  margin-top: 4px;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-2);
+  font-size: 0.93rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.menu-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.menu-item-danger,
+.menu-item-danger:hover {
+  color: var(--danger);
+}
+
+/* Phones have no footer: its links are at the bottom of the account sheet instead. */
+@media (max-width: 640px) {
+  .site-footer {
+    display: none;
+  }
+}
+
+/* ---------- Avatar ---------- */
+.avatar {
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.avatar-initials {
+  display: inline-grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Heart burst (double-tap to like on a post's banner) ---------- */
+.heart-burst {
+  position: absolute;
+  z-index: 3;
+  color: var(--heart);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 22px rgb(229 72 107 / 0.65));
+  transform: translate(-50%, -50%);
+  animation: heart-burst 0.9s var(--ease) forwards;
+}
+
+@keyframes heart-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  45% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -62%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -95%) scale(0.8);
+  }
+}
+
+/* ---------- Toast and the install card: at the bottom (above the post page's bar on narrow screens) ---------- */
+.toast,
+.install-card {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  animation: rise-in 0.32s var(--ease);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+}
+
+.toast {
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(480px, calc(100vw - 24px));
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.toast-message {
+  padding: 4px 0;
+}
+
+.toast-action {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.toast-action:hover {
+  color: var(--accent-text);
+  filter: brightness(1.08);
+}
+
+.toast-close {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.install-card {
+  z-index: 65;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  width: min(420px, calc(100vw - 24px));
+  padding: 14px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.install-icon {
+  border-radius: 11px;
+}
+
+.install-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-2);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.install-text strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.install-share {
+  display: inline;
+  margin: 0 3px;
+  color: var(--accent);
+  vertical-align: -2px;
+}
+
+.install-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1000px) {
+  body:has(.post-bar) .toast,
+  body:has(.post-bar) .install-card {
+    bottom: calc(112px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Modal ---------- */
+.modal {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.modal[open] {
+  animation: modal-in 0.22s var(--ease);
+}
+
+/* While a dialog is open, the page behind it stays put. Its scrollbar goes, and the room it took is given back to
+   the page as padding (Modal.tsx measures it), so nothing shifts and no empty strip shows where it was. */
+html:has(dialog.modal[open]) {
+  overflow: hidden;
+}
+
+html:has(dialog.modal[open]) body {
+  padding-right: var(--scrollbar-gap, 0px);
+}
+
+.modal {
+  overscroll-behavior: contain;
+}
+
+/* How far a sheet has been swiped down, 0 to 1 (Modal.tsx): fades its backdrop. */
+@property --sheet-drag {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.modal::backdrop {
+  background: rgb(8 6 20 / 0.45);
+  backdrop-filter: blur(6px);
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+}
+
+.modal-body h2 {
+  font-size: 1.45rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.name-modal {
+  align-items: center;
+  text-align: center;
+}
+
+.name-modal .field,
+.name-modal .auth-terms {
+  width: 100%;
+  text-align: left;
+}
+
+.name-modal .modal-actions {
+  width: 100%;
+}
+
+.name-modal .modal-actions .btn-primary {
+  flex: 1;
+}
+
+/* ---------- Share sheet: a dialog on wide screens, a sheet rising from the bottom on phones ---------- */
+.modal.share-sheet {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.share-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px 22px;
+}
+
+.share-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.share-head h2 {
+  font-size: 1.3rem;
+}
+
+.share-preview {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.share-preview img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+}
+
+.share-preview-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 12px;
+}
+
+.share-preview-text strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.share-preview-text span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.share-apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 14px 4px;
+}
+
+.share-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.share-app:hover {
+  color: var(--text);
+}
+
+.share-app-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s var(--ease);
+}
+
+.share-app:hover .share-app-icon,
+.share-app:focus-visible .share-app-icon {
+  transform: translateY(-2px) scale(1.06);
+}
+
+.share-app:active .share-app-icon {
+  transform: scale(0.94);
+}
+
+.share-whatsapp .share-app-icon {
+  background: #25d366;
+}
+
+.share-facebook .share-app-icon {
+  background: #0866ff;
+}
+
+.share-instagram .share-app-icon {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%);
+}
+
+.share-x .share-app-icon {
+  background: #000000;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18), var(--shadow-sm);
+}
+
+.share-telegram .share-app-icon {
+  background: #26a5e4;
+}
+
+.share-pinterest .share-app-icon {
+  background: #e60023;
+}
+
+.share-email .share-app-icon {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.share-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.share-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-more {
+  align-self: center;
+}
+
+.share-notice {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+/* Sheets (share, comment options): dialogs on wide screens, rising from the bottom on phones. */
+/* 100vw: across the whole window, also over the room a desktop scrollbar keeps while the page is locked. */
+@media (max-width: 640px) {
+  .modal.sheet {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 92dvh;
+    margin: auto 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .modal.sheet[open] {
+    animation: sheet-up 0.32s var(--ease);
+  }
+
+  .modal.sheet::backdrop {
+    opacity: calc(1 - var(--sheet-drag));
+  }
+
+  /* Compact, so it fits without scrolling: a small preview beside the title, the apps in rows of four. */
+  .share-body {
+    gap: 14px;
+    padding: 18px 16px 16px;
+  }
+
+  .share-head h2 {
+    font-size: 1.15rem;
+  }
+
+  .share-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .share-preview img {
+    flex-shrink: 0;
+    width: 112px;
+    border-radius: 8px;
+  }
+
+  .share-preview-text {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .share-preview-text strong {
+    font-size: 0.95rem;
+  }
+
+  .share-apps {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px 4px;
+  }
+
+  .share-app-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* The grab handle. */
+  .modal.sheet:not(.sheet-top) > :first-child::before {
+    content: '';
+    align-self: center;
+    width: 40px;
+    height: 4px;
+    margin: -8px 0 -6px;
+    border-radius: 2px;
+    background: var(--border-strong);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* Sheets from the top (the account sheet), on narrow screens (phones and tablets): the bottom sheets upside down. */
+@media (max-width: 1000px) {
+  .modal.sheet.sheet-top {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 92dvh;
+    margin: 0 0 auto;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 0 24px 24px;
+  }
+
+  .modal.sheet.sheet-top[open] {
+    animation: sheet-down 0.32s var(--ease);
+  }
+
+  .modal.sheet.sheet-top::backdrop {
+    opacity: calc(1 - var(--sheet-drag));
+  }
+
+  .modal.sheet-top > :last-child::after {
+    content: '';
+    align-self: center;
+    width: 40px;
+    height: 4px;
+    margin: -4px 0 -4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+  }
+}
+
+@keyframes sheet-down {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+/* ---------- Account sheet (phones): who's signed in, their pages and the settings ---------- */
+.account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 12px;
+}
+
+/* Tablets: the sheet spans the screen, its content doesn't. */
+@media (min-width: 641px) {
+  .account-body {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+  }
+}
+
+.account-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-user .user-card-text {
+  flex: 1;
+}
+
+.account-user .user-card-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-guest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-guest .google-btn {
+  width: 100%;
+}
+
+/* The pages, two to a row. */
+.account-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 8px;
+  padding: 8px 0;
+  border-block: 1px solid var(--border);
+}
+
+.account-links .menu-item {
+  min-height: 44px;
+}
+
+.menu-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-links .saved-pill-count {
+  margin-left: auto;
+}
+
+/* Theme, language, notifications: one line each, the name on the left and the control on the right. */
+.account-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.account-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 12px;
+  min-height: 44px;
+}
+
+.account-row .popover-heading {
+  margin: 0 4px;
+}
+
+.account-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.account-row-value {
+  margin: 0 4px;
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.account-row .segmented {
+  width: 150px;
+}
+
+.account-push .switch-field {
+  align-items: center;
+}
+
+.account-push .switch-text strong {
+  font-size: 0.9rem;
+}
+
+/* No notifications on this device: why, under the name. */
+.account-push .push-hint {
+  flex-basis: 100%;
+  margin: 0 4px;
+}
+
+/* The copyright and the terms, on one centred line (as in the footer). */
+.account-foot {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.account-legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+  padding: 4px 0;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.account-legal a {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* ---------- Image crop dialog: a fixed frame with the picture moving under it ---------- */
+.modal.crop-modal {
+  width: min(880px, calc(100vw - 32px));
+}
+
+.crop-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface-3) 0% 50%) 50% / 20px 20px;
+  cursor: grab;
+  touch-action: none; /* dragging moves the picture, not the page */
+  user-select: none;
+}
+
+.crop-frame:active {
+  cursor: grabbing;
+}
+
+.crop-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  object-fit: fill;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* Rule-of-thirds guides, while you're framing. */
+.crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, transparent calc(100% / 3 - 0.5px), rgb(255 255 255 / 0.4) 0 calc(100% / 3 + 0.5px), transparent 0 calc(200% / 3 - 0.5px), rgb(255 255 255 / 0.4) 0 calc(200% / 3 + 0.5px), transparent 0),
+    linear-gradient(to bottom, transparent calc(100% / 3 - 0.5px), rgb(255 255 255 / 0.4) 0 calc(100% / 3 + 0.5px), transparent 0 calc(200% / 3 - 0.5px), rgb(255 255 255 / 0.4) 0 calc(200% / 3 + 0.5px), transparent 0);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.crop-frame:hover .crop-grid,
+.crop-frame:focus-visible .crop-grid {
+  opacity: 1;
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crop-zoom input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.crop-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.crop-actions > .muted {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Round results (profile pictures): a smaller, square frame with the circle that's kept, and the picture as it
+   will show, at the sizes the site uses. */
+.modal.crop-modal-round {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.crop-frame.is-round {
+  width: min(100%, 360px);
+  align-self: center;
+}
+
+.crop-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.7),
+    0 0 0 100vmax rgb(8 6 20 / 0.55);
+  pointer-events: none;
+}
+
+.crop-previews {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 22px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.crop-previews-title {
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.crop-previews-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.crop-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.crop-preview figcaption {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.crop-preview-image {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--surface-3);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Phones: the result size on its own line, then the two buttons together. */
+@media (max-width: 520px) {
+  .crop-actions > .muted {
+    flex-basis: 100%;
+  }
+}
+
+/* ---------- Google button ---------- */
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #dadce0;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  color: #1f1f1f;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 18px rgb(66 133 244 / 0.16);
+  transition: box-shadow 0.2s, transform 0.2s var(--ease), background 0.2s;
+}
+
+.google-btn:hover {
+  color: #1f1f1f;
+  background: #f8faff;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.08), 0 10px 28px rgb(66 133 244 / 0.28);
+  transform: translateY(-1px);
+}
+
+/* One line always: the text shrinks with narrow screens (and big system font sizes) instead of wrapping. */
+.google-btn span {
+  white-space: nowrap;
+}
+
+.google-btn-large {
+  width: 100%;
+  padding: 15px 18px;
+  font-size: min(1.05rem, 4.6vw);
+}
+
+.google-btn-medium {
+  padding: 11px 22px;
+  font-size: 0.95rem;
+}
+
+/* ---------- Post card ---------- */
+.post-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 22px;
+}
+
+.post-grid-3 {
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+}
+
+.post-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s;
+}
+
+.post-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
+
+.post-card-media {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.post-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s var(--ease);
+}
+
+.post-card:hover .post-card-media img {
+  transform: scale(1.04);
+}
+
+.post-card-placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: var(--placeholder);
+}
+
+.post-card-placeholder span {
+  font-size: 3rem;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.post-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 18px 20px 16px;
+}
+
+.post-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.post-card-tags .chip,
+.post-card-actions button {
+  position: relative;
+  z-index: 1; /* above the card's stretched link */
+}
+
+.post-card-title {
+  font-size: 1.22rem;
+}
+
+.post-card-title a {
+  color: var(--text);
+}
+
+.post-card-title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.post-card-title a:hover {
+  color: var(--accent);
+}
+
+.post-card-excerpt {
+  color: var(--text-2);
+  font-size: 0.94rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.post-card-author {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.post-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.author-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.post-card-featured {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  margin-bottom: 22px;
+}
+
+.post-card-featured .post-card-media {
+  aspect-ratio: auto;
+  min-height: 320px;
+}
+
+.post-card-featured .post-card-body {
+  padding: 28px 30px 22px;
+  gap: 14px;
+}
+
+.post-card-featured .post-card-title {
+  font-size: 1.8rem;
+}
+
+.post-card-featured .post-card-excerpt {
+  font-size: 1rem;
+  -webkit-line-clamp: 4;
+}
+
+@media (max-width: 760px) {
+  .post-card-featured {
+    grid-template-columns: 1fr;
+  }
+
+  .post-card-featured .post-card-media {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .post-card-featured .post-card-title {
+    font-size: 1.4rem;
+  }
+}
+
+.post-card-skeleton:hover {
+  transform: none;
+}
+
+/* ---------- Reactions ---------- */
+.reaction-btn,
+.reaction-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.reaction-btn {
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+
+.reaction-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.like-btn.is-on {
+  color: var(--heart);
+}
+
+.like-btn.is-on:hover {
+  background: var(--heart-soft);
+  color: var(--heart);
+}
+
+.like-btn.is-on svg {
+  animation: heart-pop 0.4s var(--ease);
+}
+
+.bookmark-btn.is-on {
+  color: var(--accent);
+}
+
+.bookmark-btn.is-on svg {
+  animation: heart-pop 0.4s var(--ease);
+}
+
+@keyframes heart-pop {
+  40% {
+    transform: scale(1.35);
+  }
+}
+
+.reaction-btn-lg {
+  padding: 11px 18px;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+a.reaction-static:hover {
+  color: var(--text);
+}
+
+/* ---------- Category tree (sidebar) ---------- */
+.sidebar-title {
+  margin: 0 0 10px 8px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.category-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-children {
+  margin-left: 14px !important;
+  padding-left: 8px !important;
+  border-left: 1px dashed var(--border-strong);
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 12px;
+  transition: background 0.15s;
+}
+
+.tree-row:hover {
+  background: var(--surface-2);
+}
+
+.tree-row.is-active {
+  background: var(--accent-soft);
+}
+
+.tree-row.is-active .tree-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tree-toggle,
+.tree-toggle-spacer {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.tree-toggle {
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tree-toggle svg {
+  transition: transform 0.2s var(--ease);
+}
+
+.tree-toggle.is-open svg {
+  transform: rotate(90deg);
+}
+
+.tree-toggle:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.tree-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px 7px 2px;
+  color: var(--text-2);
+  font-size: 0.93rem;
+}
+
+.tree-link:hover {
+  color: var(--text);
+}
+
+.tree-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.tree-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.tree-empty {
+  padding: 4px 10px;
+}
+
+
+/* ---------- Notifications bell (authors and owners, top right) ---------- */
+.bell-btn {
+  position: relative;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--bg);
+  border-radius: var(--radius-pill);
+  background: var(--heart);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Push switches (settings menu, notifications page). */
+.push-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-popover .push-toggles .switch-text strong {
+  font-size: 0.92rem;
+}
+
+.push-test {
+  align-self: flex-start;
+}
+
+.push-hint {
+  line-height: 1.5;
+}
+
+/* ---------- Filters (the notifications page): one row of all/unread and fields that open a menu (a dialog on
+   narrow screens, a sheet on phones), with "Clear filters" at its end ---------- */
+.notif-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.notif-tabs {
+  flex: 0 0 250px;
+}
+
+.notif-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 8px;
+}
+
+.filter-count {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.notif-filters > .popover-root,
+.notif-filters > .filter-field {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 230px;
+}
+
+.notif-filters > .popover-root > .filter-field {
+  height: 100%;
+}
+
+.filter-reset {
+  align-self: center;
+  margin-left: auto;
+}
+
+/* A filter as a field: its name small above, its value under it. */
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px 7px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.filter-field:hover,
+.filter-field.is-active {
+  border-color: var(--accent);
+}
+
+.filter-field.is-active {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.filter-field > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.filter-field-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.filter-field-label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.filter-field-value {
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-field.has-value .filter-field-value {
+  color: var(--accent);
+}
+
+.popover.filter-popover {
+  width: 340px;
+  padding: 10px;
+}
+
+.filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-2);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-option:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.filter-option.is-selected {
+  background: var(--highlight);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filter-option-check {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.filter-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px 16px;
+}
+
+.filter-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filter-sheet-head h2 {
+  font-size: 1.15rem;
+}
+
+/* Tablets: a filter's menu in a dialog in the middle of the screen. */
+.modal.filter-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.filter-dialog .filter-sheet-body {
+  padding: 22px 20px 20px;
+}
+
+/* Narrow: two by two (all/unread with the type, the post with the period); the unread count as a badge. */
+@media (max-width: 760px) {
+  .notif-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .notif-filters > .popover-root,
+  .notif-filters > .filter-field {
+    max-width: none;
+  }
+
+  .notif-tabs .filter-count {
+    position: absolute;
+    top: -7px;
+    right: -3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.66rem;
+    box-shadow: 0 0 0 2px var(--surface-2);
+  }
+
+  .filter-reset {
+    grid-column: 1 / -1;
+    justify-self: end;
+    margin: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .filter-field {
+    padding: 7px 8px 7px 10px;
+  }
+
+  .filter-field-value {
+    font-size: 0.85rem;
+  }
+}
+
+/* ---------- The bell for guests: get new posts on this device ---------- */
+.bell-popover {
+  width: 300px;
+}
+
+.bell-guest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bell-guest .popover-heading {
+  margin-bottom: 0;
+}
+
+/* The post picker: a search, and a list that loads more as it scrolls. */
+.article-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.article-search.search-box {
+  width: 100%;
+  box-shadow: none;
+}
+
+.article-search input {
+  height: 36px;
+}
+
+.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.article-option-title {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.article-option-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.article-option-unread {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.68rem;
+}
+
+.article-status {
+  align-self: center;
+  padding: 8px 12px;
+}
+
+.article-end {
+  flex-shrink: 0;
+  height: 1px;
+}
+
+@media (max-width: 640px) {
+  .article-list {
+    max-height: 55dvh;
+  }
+}
+
+/* ---------- Date range picker: quick choices, a calendar, and the times ---------- */
+.date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.date-preset {
+  padding: 6px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.date-preset:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.date-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.date-month strong {
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  row-gap: 2px;
+}
+
+.date-weekday {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.date-day {
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.date-day:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.date-day.is-outside {
+  color: var(--muted);
+}
+
+.date-day:disabled {
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: default;
+}
+
+.date-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* The period: its days joined in one band, its ends filled. */
+.date-day.is-between,
+.date-day.is-between:hover:not(:disabled) {
+  border-radius: 0;
+  background: var(--highlight);
+}
+
+.date-day.is-edge,
+.date-day.is-edge:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.date-day.is-start {
+  border-radius: 10px 0 0 10px;
+}
+
+.date-day.is-end {
+  border-radius: 0 10px 10px 0;
+}
+
+.date-hint {
+  min-height: 1.45em;
+  text-align: center;
+}
+
+.date-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.date-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.date-time.is-open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.date-time-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.date-time-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-time-value svg {
+  color: var(--muted);
+}
+
+.time-columns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.time-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 76px;
+  height: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.time-column button {
+  flex-shrink: 0;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-2);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.time-column button:hover {
+  background: var(--surface-3);
+}
+
+.time-column button.is-selected {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.time-colon {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.date-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Phones (in a sheet): the quick choices in one row that scrolls, bigger days, wide buttons. */
+@media (max-width: 640px) {
+  .date-presets {
+    flex-wrap: nowrap;
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .date-presets::-webkit-scrollbar {
+    display: none;
+  }
+
+  .date-day {
+    height: 42px;
+    font-size: 0.95rem;
+  }
+
+  .date-actions .btn {
+    flex: 1;
+    min-height: 44px;
+  }
+}
+
+/* ---------- A form's select (SelectField): like the other fields, its options in a menu (MenuButton) ---------- */
+.select-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.select-field.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.select-field-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.select-field-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-field-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.select-field.is-active .select-field-chevron {
+  transform: rotate(180deg);
+}
+
+/* Wide screens: the options under the field, as wide as it. */
+.popover.select-popover {
+  right: 0;
+  min-width: 0;
+  padding: 6px;
+}

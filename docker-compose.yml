@@ -1,0 +1,21 @@
+# The MySQL server for both local/ (database google_login) and production/ (jurnal_production). Credentials must
+# match server/.env. The project name is fixed, so `docker compose` from either folder manages the same container
+# and data (volume newfolder3_mysql-data) instead of starting an empty one.
+name: newfolder3
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: google_login
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:

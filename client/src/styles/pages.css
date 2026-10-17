@@ -1,0 +1,4645 @@
+/* ---------- Shared page header ---------- */
+.page-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.page-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.page-hero h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+}
+
+.hero-icon {
+  color: var(--accent);
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.breadcrumbs a::after {
+  content: '›';
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(380px, 100%);
+  padding: 4px 6px 4px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--muted);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+}
+
+.search-box input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* ---------- Home ---------- */
+/* Search + Saved pill on top; feed on the left, category tree on the right. */
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-areas:
+    'search saved'
+    'feed sidebar';
+  gap: 24px 28px;
+  align-items: start;
+}
+
+.home-search {
+  grid-area: search;
+  width: 100%;
+}
+
+.feed {
+  grid-area: feed;
+  min-width: 0;
+}
+
+.saved-pill {
+  grid-area: saved;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 50px;
+  padding: 0 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s var(--ease);
+}
+
+.saved-pill svg {
+  color: var(--accent);
+}
+
+.saved-pill:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.saved-pill-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.feed-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.filter-chip > span:not(:first-child)::before {
+  content: '›';
+  margin-right: 8px;
+  color: var(--muted);
+}
+
+.filter-chip-current {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.filter-chip-clear {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+
+.filter-chip-clear:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.feed-description {
+  margin: -4px 0 18px;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 18px 12px;
+}
+
+.results-label {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 56px 24px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.empty-state h1 {
+  font-size: 1.8rem;
+}
+
+.empty-glyph {
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.empty-icon {
+  color: var(--accent);
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.error-details {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.error-details summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.error-details pre {
+  max-height: 260px;
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Narrow screens (phones and tablets, where the post page has its bottom bar too): the home page as a feed. The
+   search is in the top bar (HomePage), there are no categories, and Saved is in the account sheet. On phones the
+   posts run from edge to edge, one after another; on tablets they're cards in a column down the middle. */
+@media (max-width: 1000px) {
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'feed';
+  }
+
+  .home-layout .sidebar,
+  .saved-pill {
+    display: none;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1000px) {
+  .home-layout .feed {
+    width: 100%;
+    max-width: 620px;
+    margin-inline: auto;
+  }
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .feed-list {
+    gap: 8px;
+    margin-right: calc(-1 * max(16px, env(safe-area-inset-right)));
+    margin-left: calc(-1 * max(16px, env(safe-area-inset-left)));
+  }
+}
+
+.feed-post {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Phones: from edge to edge, as in the apps. */
+@media (max-width: 640px) {
+  .feed-post {
+    border-inline: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+.feed-post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.feed-post-byline {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.feed-post-author {
+  overflow: hidden;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-post-when {
+  display: flex;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Links and buttons sit above the stretched link that opens the post. Not the share sheet, a child here too: as
+   a dialog it must stay fixed to the screen. */
+.feed-post-category,
+.feed-post-actions > :not(dialog) {
+  position: relative;
+  z-index: 1;
+}
+
+.feed-post-category {
+  flex-shrink: 0;
+  max-width: 45%;
+}
+
+.feed-post-category-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-post-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0 16px;
+}
+
+.feed-post-title {
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.feed-post-title a {
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-post-title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.feed-post-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 0.94rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.feed-post-media {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.feed-post-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feed-post-media.skeleton {
+  border-radius: 0;
+}
+
+.feed-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.feed-post-actions .reaction-btn {
+  min-height: 40px;
+  padding: 8px 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-post-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.feed-post-skeleton {
+  padding-bottom: 0;
+}
+
+.feed-post-skeleton .skeleton-line {
+  margin: 4px 0;
+}
+
+.feed-post-skeleton-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+/* Reaching it loads the next posts (HomePage). */
+.feed-end {
+  height: 1px;
+}
+
+/* ---------- Post page: hero banner, then text beside a sticky sidebar ---------- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 22px;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 0.9rem;
+}
+
+.notice span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.post-page .back-link {
+  margin-bottom: 0;
+}
+
+/* "Înapoi la articole", and Edit on the right (the post's author and owners). */
+.post-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Taller than the link: it overlaps the gap below rather than pushing the page down. */
+.post-edit-link {
+  margin-block: -6px;
+}
+
+/* Shown only on narrow screens, where the sidebar is hidden. */
+.post-signature,
+.post-related,
+.post-bar {
+  display: none;
+}
+
+.post-hero {
+  position: relative;
+  isolation: isolate;
+  touch-action: manipulation; /* a double tap is a like, not a zoom */
+  display: flex;
+  align-items: flex-end;
+  min-height: clamp(360px, 42vw, 520px);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(800px 400px at 80% 0%, rgb(124 92 255 / 0.35), transparent 70%),
+    linear-gradient(160deg, #0b1236, #1b1150 60%, #2a0f3f);
+  box-shadow: var(--shadow-lg);
+}
+
+.post-hero-img {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Darkens the bottom so the title stays readable on any banner. */
+.post-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, transparent 20%, rgb(8 6 24 / 0.5) 58%, rgb(8 6 24 / 0.9));
+}
+
+.post-hero-glyph {
+  position: absolute;
+  top: 46%;
+  right: 7%;
+  z-index: -1;
+  transform: translateY(-50%);
+  color: rgb(255 255 255 / 0.09);
+  font-family: 'Segoe UI Symbol', 'Apple Symbols', 'Noto Sans Symbols 2', sans-serif;
+  font-size: clamp(8rem, 20vw, 16rem);
+  line-height: 1;
+}
+
+.post-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 880px;
+  padding: clamp(22px, 4vw, 44px);
+  color: #f6f3ff;
+}
+
+.post-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.post-hero .chip-link {
+  background: rgb(255 255 255 / 0.15);
+  color: #ffffff;
+  backdrop-filter: blur(6px);
+}
+
+.post-hero .chip-link:hover {
+  background: rgb(255 255 255 / 0.28);
+  color: #ffffff;
+}
+
+.post-title {
+  color: #ffffff;
+  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+/* Under the banner: when it was published and how long it takes to read. */
+.post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: -6px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.post-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 56px;
+  align-items: start;
+}
+
+.post-main {
+  min-width: 0;
+  max-width: 74ch;
+}
+
+.post-side {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+a.reaction-btn {
+  text-decoration: none;
+}
+
+/* The sidebar's actions: like, share and comments as three equal tiles, the icon above its label. */
+.side-actions .post-actions {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.side-actions .reaction-btn-lg {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px 9px;
+  border-radius: var(--radius);
+  font-size: 0.84rem;
+}
+
+/* Saving: a small card that is one wide button. */
+.side-save {
+  padding: 6px;
+}
+
+.side-save .reaction-btn-lg {
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 4px);
+  background: none;
+}
+
+.side-save .reaction-btn-lg:hover {
+  background: var(--surface-2);
+}
+
+.post-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 40px;
+  padding: 18px 20px;
+}
+
+.post-end-text {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.toc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc a {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 9px;
+  color: var(--text-2);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.toc a:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.toc-level-3 a {
+  padding-left: 24px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+/* The author (sidebar card, under "Was this helpful?" on narrow screens, profile preview): centred. */
+.author-signature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.author-signature .avatar {
+  margin-bottom: 8px;
+  box-shadow: var(--shadow-md);
+}
+
+.author-signature-name {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.author-signature-role {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.author-signature-quote {
+  max-width: 34ch;
+  margin-top: 10px;
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-style: italic;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.side-card .author-signature {
+  padding: 6px 0 2px;
+}
+
+.side-card .author-signature-quote {
+  font-size: 0.95rem;
+}
+
+.related {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.related-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+}
+
+.related-item:hover {
+  color: var(--text);
+}
+
+.related-item:hover .related-title {
+  color: var(--accent);
+}
+
+.related-thumb {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--placeholder);
+  color: var(--accent);
+  font-size: 1.2rem;
+}
+
+.related-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.related-title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.25;
+  transition: color 0.18s;
+}
+
+.related-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* The author under "Was this helpful?" (narrow screens): centred, no card. */
+.post-signature {
+  justify-content: center;
+  margin-top: 32px;
+}
+
+/* "Read next" above the discussion (narrow screens): one wide card per post. */
+.post-related {
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.post-related h2 {
+  font-size: 2rem;
+}
+
+.related-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.related-card {
+  display: grid;
+  grid-template-columns: clamp(112px, 26%, 210px) minmax(0, 1fr);
+  min-height: 100px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s;
+}
+
+.related-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  transform: translateY(-2px);
+}
+
+.related-card:hover .related-card-title {
+  color: var(--accent);
+}
+
+.related-card-media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: var(--placeholder);
+  color: var(--accent);
+  font-size: 1.6rem;
+}
+
+.related-card-media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.related-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 18px;
+}
+
+.related-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  transition: color 0.18s;
+}
+
+.related-card-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* The sidebar's actions as an app-style bar fixed to the bottom of the screen (narrow screens): Like and Save on
+   the left, Edit (owners) and Share on the right, and a round button in the middle that sits half above the bar,
+   in a notch that leaves a 5px see-through ring around it. */
+.post-bar {
+  --fab: 56px; /* the round button's diameter */
+  --notch: calc(var(--fab) / 2 + 5px);
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40; /* under the popovers (60) */
+  padding: 0 max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
+  transition: transform 0.32s var(--ease);
+}
+
+/* Scrolling down: out of the way, round button and all (PostPage brings it back on the way up and at the end). */
+.post-bar.is-hidden {
+  transform: translateY(calc(100% + var(--notch) + 12px));
+}
+
+/* The surface is notched with a mask on the inner layer, so the outer layer's 1px edge follows the notch's curve.
+   No soft shadow: it would fall into the notch and grey out the see-through ring. */
+.post-bar-bg {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 -1px 0 var(--border-strong));
+}
+
+.post-bar-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  -webkit-mask: radial-gradient(circle at 50% 0, transparent var(--notch), #000 calc(var(--notch) + 0.5px));
+  mask: radial-gradient(circle at 50% 0, transparent var(--notch), #000 calc(var(--notch) + 0.5px));
+}
+
+/* Five equal slots across the whole bar: two actions, the round button, two actions. The middle slot is never
+   narrower than the notch. */
+.post-bar-inner {
+  position: relative; /* above the surface, and the round button's reference */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(calc(var(--notch) * 2 + 8px), 1fr) repeat(2, minmax(0, 1fr));
+}
+
+.post-bar-group {
+  display: flex;
+  min-width: 0;
+}
+
+.post-bar-left {
+  grid-column: 1 / 3;
+}
+
+.post-bar-right {
+  grid-column: 4 / 6;
+}
+
+/* Each action fills one slot; a lone Share fills both of its side's slots and sits in their middle. (The share
+   sheet's dialog is a child too, and isn't a slot.) */
+.post-bar-group > :not(dialog) {
+  flex: 1 1 0;
+}
+
+.post-bar-home {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--fab);
+  height: var(--fab);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #ff7a9a);
+  color: #ffffff; /* white in every theme (the dark ones' accent text is dark) */
+  box-shadow: 0 3px 8px -2px var(--accent-ring); /* tight, so the ring around it stays clear */
+  transform: translate(-50%, -50%);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s var(--ease);
+}
+
+.post-bar-home:hover {
+  color: #ffffff;
+}
+
+/* Keeps the white icon crisp on the light end of the gradient (the midnight theme's gold). */
+.post-bar-home svg {
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.3));
+}
+
+.post-bar-home:active {
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+/* At the end of the text it becomes "next article". */
+.post-bar-home.is-next {
+  animation: next-pop 0.45s var(--ease);
+}
+
+@keyframes next-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6) rotate(-45deg);
+  }
+}
+
+/* Reading progress: a ring in the see-through gap around the round button, filling as the text is read
+   (--progress, 0 to 1, set by PostPage). */
+.post-bar-progress {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: calc(var(--fab) + 10px);
+  height: calc(var(--fab) + 10px);
+  overflow: visible;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.post-bar-progress circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 * (1 - var(--progress, 0)));
+  opacity: min(1, calc(var(--progress, 0) * 40)); /* no dot before any reading */
+  transition: stroke-dashoffset 0.15s linear;
+}
+
+/* "Up next", above the bar once the text is read. */
+.post-bar-next {
+  position: absolute;
+  bottom: calc(100% + var(--notch) + 12px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 9px 14px 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  text-decoration: none;
+  transform: translateX(-50%);
+  -webkit-tap-highlight-color: transparent;
+  animation: next-in 0.35s var(--ease);
+}
+
+.post-bar-next:hover {
+  color: var(--text);
+}
+
+.post-bar-next > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.post-bar-next-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.post-bar-next-label {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.post-bar-next-title {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes next-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+
+.post-bar .reaction-btn {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s, transform 0.15s var(--ease);
+}
+
+/* No hover fill: on touch screens it would stay after a tap. */
+.post-bar .reaction-btn,
+.post-bar .reaction-btn:hover {
+  background: none;
+}
+
+.post-bar .reaction-btn:active {
+  transform: scale(0.92);
+}
+
+.post-bar .reaction-btn span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post-skeleton {
+  padding-top: 40px;
+}
+
+/* Narrow screens: one full-width column and no sidebar. Its actions become the bottom bar, the author
+   sits under "Was this helpful?", "Read next" moves above the discussion, and the contents list is dropped. */
+@media (max-width: 1000px) {
+  .post-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .post-main {
+    max-width: none;
+  }
+
+  .post-side,
+  .post-edit-link,
+  .post-topbar {
+    display: none;
+  }
+
+  /* The banner runs from edge to edge, not as a card; its text lines up with the page's. */
+  .post-hero {
+    margin-right: calc(-1 * max(24px, env(safe-area-inset-right)));
+    margin-left: calc(-1 * max(24px, env(safe-area-inset-left)));
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .post-hero-text {
+    padding: 28px max(24px, env(safe-area-inset-right)) 26px max(24px, env(safe-area-inset-left));
+  }
+
+  .post-signature {
+    display: flex;
+  }
+
+  .post-related {
+    display: flex;
+  }
+
+  .post-bar {
+    display: block;
+  }
+
+  /* Hidden while typing, when the on-screen keyboard leaves little room. */
+  .post-page:has(:is(input, textarea):focus) .post-bar,
+  body:has(.header-slot input:focus) .home-bar {
+    display: none;
+  }
+
+  /* Room under the footer, so the bar and its round button never cover the end of the page. */
+  body:has(.post-bar) {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  html:has(.post-bar) {
+    scroll-padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 640px) {
+  .post-hero {
+    margin-right: calc(-1 * max(16px, env(safe-area-inset-right)));
+    margin-left: calc(-1 * max(16px, env(safe-area-inset-left)));
+  }
+
+  .post-hero-text {
+    padding: 24px max(16px, env(safe-area-inset-right)) 22px max(16px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 560px) {
+  .related-card-excerpt {
+    display: none;
+  }
+
+  .related-card-body {
+    padding: 12px 14px;
+  }
+
+  .related-card-title {
+    font-size: 1rem;
+  }
+}
+
+/* ---------- Auth ---------- */
+.auth-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12px;
+}
+
+.auth-page .back-link {
+  width: min(460px, 100%);
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  padding: 36px 34px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.auth-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.auth-header h1 {
+  font-size: 1.9rem;
+}
+
+/* Signing up: agreeing to the Terms (needed for Google and for email). */
+.auth-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.auth-terms.is-missing {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.check-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.check-field input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.check-field a {
+  font-weight: 600;
+}
+
+.auth-legal {
+  margin-top: -8px;
+  text-align: center;
+}
+
+/* Google is the highlighted, recommended way in. */
+.auth-google {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 20px 18px;
+  border: 1.5px solid var(--accent-ring);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(400px 160px at 50% 0%, var(--accent-soft), transparent 75%),
+    var(--surface-2);
+  text-align: center;
+}
+
+.auth-recommended {
+  position: absolute;
+  top: -11px;
+  padding: 2px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-switch {
+  text-align: center;
+  font-size: 0.92rem;
+}
+
+.auth-switch a {
+  font-weight: 600;
+}
+
+/* Phones: a screen of its own, like an app's sign-in: no top controls, no back link, no card, and on most phones
+   nothing to scroll. The fields are named by their placeholders (the labels stay, for screen readers). */
+@media (max-width: 640px) {
+  body:has(.auth-page) {
+    min-height: 100dvh; /* the visible height, so the browser's bars don't make it scroll */
+  }
+
+  body:has(.auth-page) .site-header {
+    display: none;
+  }
+
+  body:has(.auth-page) .site-main {
+    padding: 0;
+  }
+
+  .auth-page {
+    justify-content: center;
+    min-height: 100dvh;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  .auth-page .back-link {
+    display: none;
+  }
+
+  .auth-card {
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .auth-header {
+    gap: 4px;
+  }
+
+  .auth-header h1 {
+    font-size: 1.6rem;
+  }
+
+  .auth-header p {
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .auth-terms {
+    padding: 10px 12px;
+  }
+
+  /* More room for "Continue with Google" (and above its badge); the hint under it goes. */
+  .auth-google {
+    margin-top: 6px;
+    padding: 20px 12px 14px;
+  }
+
+  .auth-card .divider {
+    line-height: 1.2;
+  }
+
+  .auth-google > p {
+    display: none;
+  }
+
+  .auth-form {
+    gap: 10px;
+  }
+
+  .auth-form .field {
+    position: relative;
+  }
+
+  .auth-form .field-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .auth-form .field-hint {
+    display: none;
+  }
+
+  .auth-form .btn-block {
+    margin-top: 4px;
+  }
+
+  .auth-legal {
+    margin-top: -4px;
+  }
+}
+
+/* Short screens (an iPhone SE with Safari's bars): the subtitle goes too. */
+@media (max-width: 640px) and (max-height: 600px) {
+  .auth-header p {
+    display: none;
+  }
+}
+
+/* The placeholders only stand in for the labels on phones. */
+@media (min-width: 641px) {
+  .auth-form .input::placeholder {
+    color: transparent;
+  }
+}
+
+/* ---------- Editor page ---------- */
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.editor-topbar .back-link {
+  margin-bottom: 0;
+}
+
+.editor-topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.saved-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success);
+  font-size: 0.88rem;
+  font-weight: 600;
+  animation: popover-in 0.2s var(--ease);
+}
+
+/* An on/off switch with its label on the left (comments on a post). */
+.switch-field {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-text strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  margin: 2px 0 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  cursor: pointer;
+  appearance: none;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.2s var(--ease);
+}
+
+.switch:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch:checked::after {
+  transform: translateX(18px);
+}
+
+.field-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.field-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.editor-main {
+  padding: 22px 26px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.title-input {
+  width: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.title-input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.editor-side {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.side-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.side-title {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: border-color 0.18s, background 0.18s, color 0.18s;
+}
+
+.mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-option:hover {
+  background: var(--surface-2);
+}
+
+.mode-option.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mode-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.banner-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 170px;
+  padding: 24px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--accent);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.banner-drop strong {
+  color: var(--text);
+}
+
+.banner-drop:hover,
+.banner-drop.is-dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.banner-preview {
+  position: relative;
+}
+
+.banner-preview > img {
+  width: 100%;
+  max-height: 340px;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.banner-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+/* The post's settings in a sheet (narrow screens): a dialog on tablets, from the bottom on phones. */
+@media (min-width: 641px) {
+  .modal.editor-sheet {
+    width: min(520px, calc(100vw - 32px));
+  }
+}
+
+.editor-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px 20px;
+}
+
+.editor-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-sheet-head h2 {
+  font-size: 1.25rem;
+}
+
+.editor-sheet .side-card {
+  box-shadow: none;
+}
+
+/* Narrow screens: the editor as an app screen. No site header; a top bar that stays (back, status, settings, save);
+   the settings in a sheet (EditorPage); the formatting tools in one row under the bar (editor.css). */
+@media (max-width: 980px) {
+  /* minmax(0, …): the toolbar's row of tools must scroll, not stretch the column. */
+  .editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-side {
+    position: static;
+  }
+
+  body:has(.editor-page) .site-header {
+    display: none;
+  }
+
+  .editor-page {
+    --gutter: 24px;
+    --editor-bar: 58px;
+  }
+
+  .editor-page .editor-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    min-height: var(--editor-bar);
+    margin: 0 calc(-1 * var(--gutter)) 14px;
+    padding: max(8px, env(safe-area-inset-top)) var(--gutter) 8px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .editor-topbar-status {
+    gap: 8px;
+  }
+
+  .editor-save {
+    white-space: nowrap;
+  }
+
+  .editor-error {
+    margin: -4px 0 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-page {
+    --gutter: 16px;
+  }
+
+  /* Back is just the arrow (its name stays for screen readers). */
+  .editor-page .back-text {
+    display: none;
+  }
+
+  .editor-page .back-link {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: -8px;
+    border-radius: 50%;
+  }
+
+  .editor-page .back-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Writing edge to edge: no card around the text. */
+  .editor-main {
+    gap: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .editor-main .toolbar {
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 6px var(--gutter);
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .editor-main .title-input {
+    font-size: 1.75rem;
+  }
+
+  .editor-main .editor-content {
+    min-height: 55vh;
+    padding-top: 16px;
+  }
+
+  .banner-drop {
+    min-height: 120px;
+  }
+}
+
+/* ---------- Manage posts ---------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.manage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manage-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.manage-item:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+/* Deleted (owners only): see-through and dashed, the badge at full strength. */
+.manage-item.is-deleted {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
+.manage-item.is-deleted > :not(.manage-main),
+.manage-item.is-deleted .manage-main > :not(.manage-tags),
+.manage-item.is-deleted .manage-tags > :not(.badge-deleted) {
+  opacity: 0.55;
+}
+
+.manage-thumb {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 92px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--placeholder);
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.manage-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.manage-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.manage-main .muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.manage-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.manage-title {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-actions {
+  display: flex;
+  gap: 2px;
+}
+
+@media (max-width: 600px) {
+  .manage-thumb {
+    display: none;
+  }
+}
+
+/* ---------- Profile ---------- */
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+.profile-layout.is-single {
+  grid-template-columns: minmax(0, 760px);
+}
+
+/* Members: their one column in the middle, under a centred title. */
+.profile-page.is-single .profile-shell {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.profile-page.is-single .page-hero {
+  justify-content: center;
+  text-align: center;
+}
+
+.profile-page.is-single .page-hero-text {
+  align-items: center;
+  margin-inline: auto;
+}
+
+.profile-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-card {
+  padding: 22px 24px;
+}
+
+.profile-picture {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.profile-picture .avatar {
+  flex-shrink: 0;
+  box-shadow: var(--shadow-md);
+}
+
+.profile-picture-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-picture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.profile-readonly {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.profile-count {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.profile-preview {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px 24px 28px;
+}
+
+@media (max-width: 860px) {
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-preview {
+    position: static;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-picture {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .profile-actions .saved-indicator {
+    justify-content: center;
+  }
+}
+
+/* ---------- Users (owners) ---------- */
+.users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.users-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.users-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.users-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-meta {
+  white-space: nowrap;
+}
+
+.users-role.segmented button {
+  padding: 6px 12px;
+}
+
+.users-role.badge {
+  justify-self: end;
+}
+
+@media (max-width: 720px) {
+  .users-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .users-meta,
+  .users-role {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .users-role.badge {
+    justify-self: start;
+  }
+}
+
+/* ---------- Categories admin ---------- */
+.cat-tree,
+.cat-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cat-tree {
+  margin-top: 6px;
+}
+
+.cat-children {
+  margin: 10px 0 0 26px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.cat-row.is-editing {
+  border-color: var(--accent);
+}
+
+.cat-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.cat-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.cat-info .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.category-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  margin: 10px 0;
+  border-color: var(--accent-ring);
+}
+
+.category-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.symbol-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.symbol {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.symbol:hover {
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+
+.symbol.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.symbol-input {
+  width: 72px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .cat-row {
+    flex-wrap: wrap;
+  }
+
+  .cat-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .cat-children {
+    margin-left: 8px;
+    padding-left: 10px;
+  }
+}
+
+/* ---------- Statistics (administrators: the site; authors: their posts) ---------- */
+.stats-page {
+  --chart-2: #ff7a9a;
+  --chart-3: #5aa9ff;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 24px;
+}
+
+.stats-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 24px;
+}
+
+.stats-head h1 {
+  font-size: 2rem;
+}
+
+.stats-head p {
+  margin-top: 4px;
+}
+
+.stats-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.stats-author {
+  width: 230px;
+}
+
+.stats-period {
+  min-width: 270px;
+}
+
+.stats-period button {
+  white-space: nowrap;
+}
+
+.stats-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: opacity 0.2s;
+}
+
+.stats-body.is-loading {
+  opacity: 0.55;
+}
+
+/* The four main numbers, each with how it changed and (views, visitors) its days. */
+.stats-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stats-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px 18px 12px;
+  overflow: hidden;
+}
+
+.stats-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.stats-kpi-label svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.stats-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.stats-kpi-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stats-kpi-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stats-spark {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: auto;
+}
+
+.stats-spark-area {
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.stats-spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+/* How a number moved since the period before. */
+.stats-change {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stats-change.is-up {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.stats-change.is-down {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.stats-change.is-flat {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* The chart, with the interactions beside it. */
+.stats-main {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px 20px;
+}
+
+.stats-card .side-title {
+  margin: 0;
+}
+
+.stats-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.stats-keys {
+  display: flex;
+  gap: 14px;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+.stats-keys span,
+.stats-tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.stats-key {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.stats-key.is-views {
+  background: var(--accent);
+}
+
+.stats-key.is-visitors {
+  background: var(--chart-2);
+}
+
+/* Views and visitors by day: pointing at a day (or touching it) shows its numbers. */
+.stats-traffic {
+  position: relative;
+  color: var(--accent);
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.stats-traffic svg {
+  display: block;
+  overflow: visible;
+}
+
+/* The area under the views: the accent, fading down. */
+.stats-traffic stop {
+  stop-color: var(--accent);
+}
+
+.stats-grid-line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.stats-axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-line-views,
+.stats-line-visitors {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stats-line-views {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+.stats-line-visitors {
+  stroke: var(--chart-2);
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.stats-cursor {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+
+.stats-dot-views,
+.stats-dot-visitors {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.stats-dot-views {
+  fill: var(--accent);
+}
+
+.stats-dot-visitors {
+  fill: var(--chart-2);
+}
+
+.stats-tooltip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text-2);
+  font-size: 0.82rem;
+  pointer-events: none;
+}
+
+.stats-tooltip strong {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+/* Interactions: four rows (how many, and how it changed), then the reading before a like or a comment. */
+.stats-engage-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-engage-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+}
+
+.stats-engage-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.stats-engage-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stats-engage-name {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-2);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.stats-engage-name small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.stats-engage-list strong {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-engage-times {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.stats-engage-times span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.stats-engage-times svg {
+  flex: none;
+}
+
+.stats-engage-times strong {
+  margin-left: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The posts: rank, the title with its views' bar, then the numbers (in columns on wide screens). */
+.stats-posts-head,
+.stats-post {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 96px 86px 96px 100px 52px 52px 52px;
+  align-items: center;
+  gap: 0 10px;
+}
+
+.stats-posts-head {
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stats-posts-head > span:nth-child(n + 3) {
+  text-align: right;
+}
+
+.stats-posts-head svg {
+  vertical-align: -2px;
+}
+
+.stats-posts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-post {
+  padding: 10px 4px;
+}
+
+.stats-post + .stats-post {
+  border-top: 1px solid var(--border);
+}
+
+.stats-post-rank {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.stats-post-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stats-post-title {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-post-title:hover {
+  color: var(--accent);
+}
+
+.stats-post-bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.stats-post-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--chart-2));
+}
+
+/* Wide screens: each number in its column (the columns are named in the head). */
+.stats-post-nums {
+  display: contents;
+}
+
+.stats-post-num {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-post-num svg {
+  display: none;
+}
+
+.stats-post-num.is-main {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.stats-more {
+  align-self: center;
+}
+
+/* What readers do, where they come from, on what. */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  font-size: 0.88rem;
+}
+
+.stats-bar-label {
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-bar-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-bar-value small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stats-bar-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+.stats-bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #ff7a9a);
+}
+
+/* Devices: a ring and the shares. */
+.stats-donut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+
+.stats-donut svg {
+  flex: none;
+}
+
+.stats-donut-track,
+.stats-donut-part {
+  fill: none;
+  stroke-width: 16;
+}
+
+.stats-donut-track {
+  stroke: var(--surface-2);
+}
+
+.stats-donut-part.is-0 {
+  stroke: var(--accent);
+}
+
+.stats-donut-part.is-1 {
+  stroke: var(--chart-2);
+}
+
+.stats-donut-part.is-2 {
+  stroke: var(--chart-3);
+}
+
+.stats-donut-part.is-3 {
+  stroke: var(--muted);
+}
+
+.stats-donut-total {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.stats-donut-caption {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.stats-donut-legend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 140px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-donut-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+}
+
+.stats-donut-legend .muted {
+  grid-column: 2 / -1;
+}
+
+.stats-donut-name {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.stats-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.stats-swatch.is-0 {
+  background: var(--accent);
+}
+
+.stats-swatch.is-1 {
+  background: var(--chart-2);
+}
+
+.stats-swatch.is-2 {
+  background: var(--chart-3);
+}
+
+.stats-swatch.is-3 {
+  background: var(--muted);
+}
+
+/* The community (administrators): small tiles. */
+.stats-community {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.stats-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.stats-tile-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.stats-tile-value {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-tile-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stats-note {
+  max-width: 85ch;
+}
+
+/* Narrower: the interactions under the chart, in two columns. */
+@media (max-width: 1100px) {
+  .stats-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats-engage-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+  }
+
+  .stats-engage-list li + li {
+    border-top: 0;
+  }
+
+  .stats-engage-list li:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
+  .stats-engage-times {
+    flex-direction: row;
+    flex-wrap: wrap;
+    column-gap: 28px;
+  }
+
+  .stats-engage-times span {
+    flex: 1 1 260px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .stats-kpis,
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The posts as short entries: the title, then its numbers on a line, with their icons. */
+@media (max-width: 820px) {
+  .stats-posts-head {
+    display: none;
+  }
+
+  .stats-post {
+    grid-template-columns: 22px minmax(0, 1fr);
+    row-gap: 8px;
+    align-items: start;
+  }
+
+  .stats-post-title {
+    white-space: normal;
+  }
+
+  .stats-post-nums {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 2;
+    gap: 4px 14px;
+  }
+
+  .stats-post-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.84rem;
+  }
+
+  .stats-post-num svg {
+    display: inline;
+    color: var(--muted);
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-head h1 {
+    font-size: 1.6rem;
+  }
+
+  .stats-controls,
+  .stats-author,
+  .stats-period {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .stats-kpis {
+    gap: 10px;
+  }
+
+  .stats-kpi {
+    padding: 12px 14px 10px;
+  }
+
+  .stats-kpi-value {
+    font-size: 1.55rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats-card {
+    padding: 16px;
+  }
+
+  .stats-engage-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats-engage-list li + li {
+    border-top: 1px solid var(--border);
+  }
+
+  .stats-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+/* ---------- Notifications (authors and owners) ---------- */
+.notif-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 32px;
+}
+
+/* The title and subtitle, with "Mark all as read" at the other end. */
+.notif-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.notif-title {
+  font-size: 2rem;
+}
+
+.notif-subtitle {
+  margin-top: 4px;
+}
+
+.notif-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* To the Settings page: small, its icon in the accent colour so it's still seen. */
+.notif-settings-link svg {
+  color: var(--accent);
+}
+
+.notif-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* A day's notifications under its date. */
+.notif-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notif-day {
+  margin: 4px 6px 0;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.notif-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+/* Unread: tinted, with a "read" button at the end. */
+.notif-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s;
+}
+
+.notif-item + .notif-item {
+  border-top: 1px solid var(--border);
+}
+
+.notif-item:hover {
+  background: var(--surface-2);
+}
+
+.notif-item.is-unread {
+  background: var(--highlight);
+}
+
+.notif-link {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 12px 14px 16px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.notif-link:hover {
+  color: var(--text-2);
+}
+
+.notif-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.notif-glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+/* The kind of notification, as a small badge on the picture (as on Facebook), and named under the text. */
+.notif-type {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  color: #fff;
+}
+
+.notif-type-comment,
+.notif-type-reply {
+  background: #2f8cff;
+}
+
+.notif-type-like {
+  background: var(--heart);
+}
+
+.notif-type-share {
+  background: #25b875;
+}
+
+.notif-type-views {
+  background: #f2a93b;
+}
+
+.notif-type-new_post {
+  background: #8b5cf6;
+}
+
+.notif-type-comment_reply {
+  background: #2f8cff;
+}
+
+.notif-type-comment_reaction,
+.notif-type-post_reaction {
+  background: #f97316;
+}
+
+.notif-type-milestone {
+  background: #d4a017;
+}
+
+.notif-type-support {
+  background: #14b8a6;
+}
+
+.notif-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.notif-text {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.notif-post {
+  font-weight: 600;
+}
+
+/* The comment, quoted. */
+.notif-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-2);
+  font-size: 0.9rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.notif-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.notif-kind {
+  font-weight: 600;
+}
+
+.notif-kind-comment,
+.notif-kind-reply {
+  color: #2f8cff;
+}
+
+.notif-kind-like {
+  color: var(--heart);
+}
+
+.notif-kind-share {
+  color: #25b875;
+}
+
+.notif-kind-views {
+  color: #e39a2c;
+}
+
+.notif-kind-new_post {
+  color: #8b5cf6;
+}
+
+.notif-kind-comment_reply {
+  color: #2f8cff;
+}
+
+.notif-kind-comment_reaction,
+.notif-kind-post_reaction {
+  color: #f97316;
+}
+
+.notif-kind-milestone {
+  color: #d4a017;
+}
+
+.notif-kind-support {
+  color: #14b8a6;
+}
+
+.notif-item.is-unread time {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.notif-read {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin-right: 8px;
+  border-radius: 50%;
+  color: var(--accent);
+}
+
+.notif-skeleton {
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.notif-skeleton:hover {
+  background: none;
+}
+
+.notif-skeleton-avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.notif-skeleton .notif-body {
+  flex: 1;
+  justify-content: center;
+}
+
+.notif-skeleton .skeleton-line {
+  margin: 4px 0;
+}
+
+/* Reaching it loads more. */
+.notif-end {
+  height: 1px;
+}
+
+.notif-more-status {
+  align-self: center;
+}
+
+/* Phones: the list from edge to edge, rows split by lines, as in the apps. */
+@media (max-width: 640px) {
+  .notif-page {
+    gap: 16px;
+  }
+
+  .notif-title {
+    font-size: 1.6rem;
+  }
+
+  .notif-day {
+    margin-inline: 0;
+  }
+
+  .notif-list {
+    margin-right: calc(-1 * max(16px, env(safe-area-inset-right)));
+    margin-left: calc(-1 * max(16px, env(safe-area-inset-left)));
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .notif-link {
+    gap: 12px;
+    padding: 12px 6px 12px max(16px, env(safe-area-inset-left));
+  }
+
+  .notif-read {
+    margin-right: max(10px, env(safe-area-inset-right));
+  }
+
+  .notif-skeleton {
+    padding: 12px max(16px, env(safe-area-inset-left));
+  }
+}
+
+/* ---------- Settings: push on this device and what to be notified of ---------- */
+.prefs-page,
+.support-page,
+.support-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 32px;
+}
+
+.prefs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 20px;
+}
+
+.prefs-head h1,
+.support-head h1 {
+  font-size: 2rem;
+}
+
+.prefs-head p,
+.support-head p {
+  margin-top: 4px;
+}
+
+.prefs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 1.5em;
+  color: var(--success);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.prefs-status.is-error {
+  color: var(--danger);
+}
+
+.prefs-grid {
+  columns: 2 420px;
+  column-gap: 20px;
+}
+
+.prefs-grid > * {
+  break-inside: avoid;
+  margin-bottom: 20px;
+}
+
+.prefs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.prefs-card .side-title {
+  margin: 0;
+}
+
+.prefs-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prefs-row + .prefs-row {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* "A notification every [10] views". */
+.prefs-every {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+
+.prefs-every .input {
+  width: 96px;
+}
+
+.prefs-every.is-off {
+  opacity: 0.55;
+}
+
+.prefs-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prefs-metric {
+  font-weight: 600;
+}
+
+.prefs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prefs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-2);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.prefs-chip.is-on {
+  border-color: var(--accent);
+  background: var(--highlight);
+  color: var(--text);
+}
+
+.prefs-chip svg {
+  color: var(--accent);
+}
+
+/* ---------- Support: the contact form, and the administrators' tickets ---------- */
+.support-head {
+  max-width: 760px;
+}
+
+/* The form in the middle, under a centred title. */
+.support-page .support-head {
+  width: 100%;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.support-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 24px;
+}
+
+.support-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.support-body {
+  min-height: 160px;
+}
+
+/* For robots only. */
+.support-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.support-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-files li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.support-files li > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.support-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-add {
+  align-self: flex-start;
+}
+
+.support-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.support-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 24px auto 0;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.support-sent > svg {
+  color: var(--success);
+}
+
+.support-sent h1 {
+  font-size: 1.6rem;
+}
+
+.ticket-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.ticket-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.ticket-list li.is-new {
+  background: var(--highlight);
+}
+
+.ticket-row {
+  display: flex;
+  padding: 14px 18px;
+  color: var(--text-2);
+}
+
+.ticket-row:hover {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.ticket-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ticket-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ticket-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.92rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.ticket-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.ticket-meta svg {
+  vertical-align: -2px;
+}
+
+.support-more {
+  align-self: center;
+}
+
+.ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 860px;
+  padding: 24px;
+}
+
+.ticket-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ticket-head h1 {
+  font-size: 1.6rem;
+}
+
+.ticket-body {
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ticket-files {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticket-file-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ticket-image,
+.ticket-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+.ticket-image img {
+  width: 100%;
+  height: 120px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.ticket-image span,
+.ticket-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-file {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  max-width: 280px;
+  padding: 10px 12px;
+}
+
+.ticket-file svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.ticket-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .prefs-head h1,
+  .support-head h1 {
+    font-size: 1.6rem;
+  }
+
+  .prefs-card,
+  .support-form,
+  .ticket {
+    padding: 18px 16px;
+  }
+
+  .support-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .support-actions .btn,
+  .ticket-actions .btn {
+    width: 100%;
+  }
+
+  .ticket-image {
+    width: calc(50% - 5px);
+  }
+}
+
+/* ---------- Series: its parts above the text, the next one after it ---------- */
+.series-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.series-box-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.series-box-label {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.series-box-head strong {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.series-box-part {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.series-box-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 1.4em;
+  font-size: 0.95rem;
+}
+
+.series-box-parts a {
+  color: var(--text-2);
+}
+
+.series-box-parts a:hover {
+  color: var(--accent);
+}
+
+.series-box-parts .is-current {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.series-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding: 16px 20px;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.18s, transform 0.18s var(--ease);
+}
+
+.series-next:hover {
+  border-color: var(--accent-ring);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.series-next-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.series-next-label {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.series-next strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.series-next > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* The editor: naming a new series. */
+.series-new {
+  display: flex;
+  gap: 8px;
+}
+
+.series-new .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Editor top bar: autosave state (wide screens; the save button tells on phones). */
+.autosave-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.autosave-status.is-failed {
+  color: var(--danger);
+}
+
+.editor-restore {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.editor-restore-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .autosave-status {
+    display: none;
+  }
+
+  .series-box-part {
+    margin-left: 0;
+  }
+}
+
+/* ---------- Administration: the hub (/admin), a card per section with its numbers ---------- */
+.admin-page {
+  padding-bottom: 32px;
+}
+
+.admin-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.admin-hub-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s var(--ease);
+}
+
+.admin-hub-card:hover {
+  border-color: var(--accent-ring);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  transform: translateY(-2px);
+}
+
+.admin-hub-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.admin-hub-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.admin-hub-go {
+  color: var(--muted);
+  transition: color 0.18s, transform 0.18s;
+}
+
+.admin-hub-card:hover .admin-hub-go {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+.admin-hub-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.admin-hub-hint {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.admin-hub-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.admin-hub-value {
+  color: var(--text-2);
+}
+
+.admin-hub-value strong {
+  margin-right: 4px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-hub-more {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+/* Something waiting (new tickets). */
+.admin-hub-card.is-alert .admin-hub-icon {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.admin-hub-card.is-alert .admin-hub-value strong {
+  color: var(--accent);
+}
+
+.admin-hub-skeleton {
+  display: block;
+  width: 60%;
+  height: 22px;
+}
+
+/* Phones: a compact list, each section on a row (its picture, name and numbers). */
+@media (max-width: 640px) {
+  .admin-hub {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .admin-hub-card {
+    display: grid;
+    grid-template-areas:
+      'icon title go'
+      'icon numbers go';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 14px;
+    padding: 14px 16px;
+  }
+
+  .admin-hub-top {
+    display: contents;
+  }
+
+  .admin-hub-icon {
+    grid-area: icon;
+  }
+
+  .admin-hub-go {
+    grid-area: go;
+  }
+
+  .admin-hub-title {
+    grid-area: title;
+    font-size: 1.05rem;
+  }
+
+  .admin-hub-hint {
+    display: none;
+  }
+
+  .admin-hub-numbers {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 10px;
+    grid-area: numbers;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .admin-hub-value strong {
+    font-size: 1.1rem;
+  }
+}
+
+/* ---------- A person's pages (/{username}/articole, /{username}/articole-salvate) ---------- */
+.person-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 20px;
+  padding: 22px 24px 0;
+  margin-bottom: 16px;
+}
+
+.person-head > .avatar,
+.person-head-avatar {
+  box-shadow: var(--shadow-md);
+}
+
+.person-head > .avatar,
+.person-head-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  font-size: 1.9rem;
+}
+
+.person-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.person-head-text .skeleton-line {
+  display: block;
+}
+
+.person-head h1 {
+  font-size: clamp(1.45rem, 3.2vw, 2rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.person-role {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.person-quote {
+  max-width: 60ch;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-style: italic;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.person-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Their lists, as tabs along the bottom of the card. */
+.person-lists {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.person-lists a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 0 11px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.93rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.person-lists a:hover {
+  color: var(--text);
+}
+
+.person-lists a.is-selected {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.person-head.is-loading {
+  padding-bottom: 22px;
+}
+
+.person-privacy {
+  justify-content: space-between;
+  margin: -4px 0 18px;
+}
+
+.person-privacy span svg {
+  flex: none;
+  color: var(--accent);
+}
+
+/* Settings: the public list's address. */
+.prefs-link {
+  align-self: flex-start;
+  max-width: 100%;
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .person-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 14px;
+    padding: 18px 16px 0;
+  }
+
+  .person-head > .avatar,
+  .person-head-avatar {
+    align-self: start;
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+  }
+
+  .person-head-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+
+  .person-head-actions:empty {
+    display: none;
+  }
+}
+
+/* ---------- Profile: the account (email, Google, password) ---------- */
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.signin-card .side-title {
+  margin-bottom: 6px;
+}
+
+.signin-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 0;
+}
+
+.signin-row + .signin-row {
+  border-top: 1px solid var(--border);
+}
+
+.signin-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.signin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.signin-text strong {
+  font-size: 0.92rem;
+}
+
+.signin-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.signin-on {
+  flex: none;
+  color: var(--success);
+}
+
+.signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.signin-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.signin-dialog .field-warning {
+  margin: 0;
+}
+
+/* The Google account picked to connect, in its confirmation. */
+.signin-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.signin-pick div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.signin-pick span {
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+
+/* The username's check, under its field. */
+.username-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.username-status svg {
+  flex: none;
+}
+
+.username-status.is-ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.username-status.is-bad {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .signin-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .signin-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+
+/* ---------- TEMPORARY: the variants of the top of a saved-posts page (components/SavedHeader.tsx) ---------- */
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin-bottom: 24px;
+}
+
+.list-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.list-head h1 {
+  font-size: clamp(1.7rem, 3.6vw, 2.3rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.list-head.is-centred {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.list-head.is-centred .list-head-text {
+  align-items: center;
+}
+
+.list-head.is-centred .avatar {
+  box-shadow: var(--shadow-md);
+}
+
+.list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.list-head.is-centred .list-meta {
+  justify-content: center;
+}
+
+.list-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* Their own list: who sees it, a small link to Settings. */
+.list-privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.list-privacy:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.list-privacy.is-public svg {
+  color: var(--success);
+}
+
+.list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.list-other {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* C: a slim strip. */
+.list-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+}
+
+.list-band-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.list-band h1 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.list-band .list-meta {
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .list-head {
+    margin-bottom: 18px;
+  }
+
+  .list-band .list-actions {
+    width: 100%;
+  }
+}
+
+/* The switcher, at the bottom of the page (development only). */
+.variant-switcher {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 14px 8px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.85rem;
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+}
+
+.variant-switcher-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.variant-switcher-options {
+  display: flex;
+  gap: 4px;
+}
+
+.variant-switcher-options button {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.variant-switcher-options button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.variant-switcher-hint {
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Room under the page for the switcher, so it never covers the last posts. */
+.person-page:has(.variant-switcher) {
+  padding-bottom: 110px;
+}
+
+@media (max-width: 640px) {
+  .variant-switcher {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: max-content;
+    border-radius: 18px;
+  }
+
+  .variant-switcher-hint {
+    flex-basis: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+}

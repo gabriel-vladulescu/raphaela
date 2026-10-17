@@ -1,0 +1,925 @@
+/* ---------- Discussion: comment cards on a connected reply tree ---------- */
+.discussion {
+  --col: 12px; /* gap between the avatar column and the card */
+  --gap: 10px; /* space between replies */
+  --r: 12px; /* corner radius where a line turns into a reply (the corner path below assumes 12px) */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.discussion-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.discussion-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 2rem;
+}
+
+.discussion-head .segmented button {
+  padding: 6px 12px;
+}
+
+/* Laid out by the card's own width, since that changes with the sidebar as well as the screen. */
+.discussion-join {
+  container: join / inline-size;
+  padding: 16px 20px;
+  background: radial-gradient(420px 140px at 100% 0%, var(--accent-soft), transparent 70%), var(--card-bg);
+}
+
+.discussion-join-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+}
+
+.discussion-join-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Narrow card: one centred column, with the Google button as wide as the card. */
+@container join (max-width: 540px) {
+  .discussion-join-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 6px 0 2px;
+    text-align: center;
+  }
+
+  .discussion-join-body p {
+    margin-top: 4px;
+  }
+
+  .discussion-join-actions {
+    gap: 10px;
+  }
+
+  .discussion-join-actions .google-btn {
+    align-self: stretch;
+  }
+}
+
+.discussion-composer {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+}
+
+.discussion-empty {
+  padding: 4px 0;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Replies open under the comment, in the same form as an edit (padding, not margin, so it's part of the slide). */
+.t-reply-form {
+  padding-top: 10px;
+}
+
+.comment-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.comment-form-count {
+  margin-right: auto;
+}
+
+/* ---------- The tree ---------- */
+.t-list,
+.t-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.t-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: opacity 0.2s;
+}
+
+/* Re-sorting: the current threads stay, dimmed, until the new order arrives. */
+.t-list.is-loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Threads fade in as they arrive (first load, and each page while scrolling). */
+.t-list > .t-item {
+  animation: t-in 0.35s var(--ease) backwards;
+}
+
+@keyframes t-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.t-sentinel {
+  height: 1px;
+}
+
+.t-loading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+
+.t-item {
+  --av: 30px;
+  position: relative;
+}
+
+.t-list > .t-item {
+  --av: 38px;
+}
+
+.t-gutter > .avatar {
+  width: var(--av);
+  height: var(--av);
+  font-size: calc(var(--av) * 0.4);
+}
+
+.t-row {
+  display: grid;
+  grid-template-columns: var(--av) minmax(0, 1fr);
+  column-gap: var(--col);
+}
+
+.t-gutter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Straight lines are filled 1px boxes, so every line has the same weight in any browser and at any zoom.
+   The rail runs from under the avatar to the bottom of the card... */
+.t-rail {
+  flex: 1;
+  align-self: flex-start;
+  width: 1px;
+  min-height: 8px;
+  margin-top: 6px;
+  margin-left: calc(var(--av) / 2);
+  background: var(--line);
+  transition: opacity 0.3s;
+}
+
+/* Replies hidden: the line fades out while they slide closed. */
+.t-rail.is-hidden {
+  opacity: 0;
+}
+
+/* ...and each reply continues it, then curves into the reply's avatar. */
+.t-children {
+  --pav: var(--av);
+  --x: calc(-1 * (var(--pav) / 2 + var(--col))); /* where the parent's line runs, relative to a reply */
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-left: calc(var(--pav) + var(--col));
+  padding-top: var(--gap);
+}
+
+.t-children > .t-item::before,
+.t-children > .t-item::after,
+.t-children > .t-item > .t-row::before {
+  content: '';
+  position: absolute;
+}
+
+/* Vertical line down the side of the replies... */
+.t-children > .t-item::before {
+  top: calc(-1 * var(--gap));
+  bottom: 0;
+  left: var(--x);
+  width: 1px;
+  background: var(--line);
+}
+
+/* ...stopping at the corner on the last reply. */
+.t-children > .t-item:last-child::before {
+  bottom: auto;
+  height: calc(var(--gap) + var(--av) / 2 + 1px - var(--r));
+}
+
+/* The corner, as a filled shape: a 12px-radius outer curve and a flatter inner one through the same
+   end points, so it is 1px where it meets the straight lines and ~1.9px through the bend. */
+.t-children > .t-item::after {
+  top: calc(var(--av) / 2 + 1px - var(--r));
+  left: var(--x);
+  width: var(--r);
+  height: var(--r);
+  background: var(--line);
+  clip-path: path('M 0 0 A 12 12 0 0 0 12 12 L 12 11 A 14 14 0 0 1 1 0 Z');
+}
+
+/* Horizontal line from the corner into the avatar. */
+.t-children > .t-item > .t-row {
+  position: relative;
+}
+
+.t-children > .t-item > .t-row::before {
+  top: calc(var(--av) / 2);
+  left: calc(var(--x) + var(--r));
+  width: calc(-1 * var(--x) - var(--r));
+  height: 1px;
+  background: var(--line);
+}
+
+/* ---------- Comment cards ---------- */
+.t-main {
+  min-width: 0;
+  padding: 10px 14px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.t-list > .t-item > .t-row > .t-main {
+  padding: 12px 16px 11px;
+  box-shadow: var(--shadow-md);
+}
+
+.t-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+/* "View more replies": the last item on the thread line, with how many are left in the line's bubble. */
+.t-children > .t-item.t-more {
+  --av: 26px;
+}
+
+.t-more-count {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.t-more-main {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+}
+
+.t-more-main .text-btn {
+  color: var(--accent);
+}
+
+.text-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Edit / delete: shown on hover with a mouse, always on touch screens. */
+.t-tools {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.t-main:hover .t-tools,
+.t-tools:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .t-tools {
+    opacity: 1;
+  }
+}
+
+/* Deleted comments (owners only): see-through and dashed, with their "Deleted" badge at full strength. */
+.t-item > .t-row > .t-main.is-deleted {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
+.t-main.is-deleted > :not(.t-bubble),
+.t-main.is-deleted .t-bubble > :not(.t-meta),
+.t-main.is-deleted .t-meta > :not(.badge-deleted),
+.t-row.is-deleted > .t-gutter > .avatar {
+  opacity: 0.55;
+}
+
+.t-row.is-deleted > .t-gutter > .avatar {
+  filter: grayscale(0.6);
+}
+
+.discussion-off {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  color: var(--muted);
+}
+
+.discussion-off p {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.t-text {
+  margin-top: 2px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.t-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Phone-only parts of a comment: the short time under it, and "⋯" (see the end of this file). */
+.t-when-below,
+.t-more-btn {
+  display: none;
+}
+
+.author-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.emoji {
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.text-btn {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ---------- Reactions: "React" opens a dock of emoji; the chip on the right sums them up ---------- */
+.rx-dock-root,
+.rx-summary-root {
+  position: relative;
+}
+
+.rx-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rx-trigger.is-mine {
+  color: var(--accent);
+}
+
+.rx-trigger-emoji {
+  font-size: 1rem;
+}
+
+.rx-dock {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -6px;
+  z-index: 60;
+  display: flex;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  transform-origin: 30px 100%;
+  animation: rx-pop 0.22s var(--ease);
+}
+
+@keyframes rx-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.85);
+  }
+}
+
+.rx-dock-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 1.45rem;
+  cursor: pointer;
+  transition: transform 0.18s var(--ease), background 0.18s;
+  /* "backwards", so the hover lift isn't held back once the entrance is over */
+  animation: rx-emoji-in 0.3s var(--ease) backwards;
+  animation-delay: calc(var(--i) * 30ms);
+}
+
+@keyframes rx-emoji-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+}
+
+.rx-dock-btn:hover,
+.rx-dock-btn:focus-visible {
+  z-index: 1;
+  transform: translateY(-6px) scale(1.3);
+}
+
+.rx-dock-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+}
+
+/* The emoji's name, above it while it's hovered. */
+.rx-dock-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(3px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.rx-dock-btn:hover::after,
+.rx-dock-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+.rx-summary-root {
+  margin-left: auto;
+}
+
+.rx-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, color 0.18s;
+}
+
+.rx-summary:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.rx-summary.is-mine {
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+
+.rx-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.rx-bubble {
+  font-size: 0.95rem;
+}
+
+.rx-total {
+  animation: rx-count 0.3s var(--ease);
+}
+
+@keyframes rx-count {
+  from {
+    opacity: 0.3;
+    transform: translateY(-4px);
+  }
+}
+
+.rx-details {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  transform-origin: 100% 100%;
+  animation: rx-pop 0.18s var(--ease);
+}
+
+.rx-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+button.rx-row {
+  cursor: pointer;
+}
+
+button.rx-row:hover {
+  background: var(--surface-2);
+}
+
+.rx-row[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.rx-row .emoji {
+  font-size: 1.15rem;
+  text-align: center;
+}
+
+.rx-row-count {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rx-row[aria-pressed='true'] .rx-row-count {
+  color: var(--accent);
+}
+
+.rx-hint {
+  padding: 4px 8px 2px;
+}
+
+/* ---------- Phones: comments as on Facebook — the name and text in a bubble, small actions under it ---------- */
+@media (max-width: 640px) {
+  .discussion {
+    --col: 8px;
+    --gap: 12px;
+    gap: 14px;
+  }
+
+  /* "Discuție" and the sort stay on one line (with very large text, the title gives way first). */
+  .discussion-head {
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .discussion-head h2 {
+    gap: 8px;
+    min-width: 0;
+    font-size: 1.5rem;
+    white-space: nowrap;
+  }
+
+  .discussion-title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .discussion-head .count-pill {
+    flex-shrink: 0;
+  }
+
+  .discussion-head .segmented {
+    flex-shrink: 0;
+    padding: 3px;
+    border-radius: 10px;
+  }
+
+  .discussion-head .segmented button {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+  }
+
+  /* Writing: no card around the box, and a rounded field like the bubbles. */
+  .discussion-composer {
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .comment-form .textarea {
+    min-height: 44px;
+    max-height: 50vh;
+    padding: 9px 14px;
+    border-color: transparent;
+    border-radius: 18px;
+    background: var(--surface-3);
+    font-size: 1rem; /* under 16px, iOS zooms in on focus */
+    resize: none;
+    field-sizing: content; /* grows with the text, where supported */
+  }
+
+  .comment-form .textarea:focus {
+    border-color: var(--accent);
+  }
+
+  /* No counter, as on Facebook (the field still stops at the limit). */
+  .comment-form-count {
+    display: none;
+  }
+
+  .t-list {
+    gap: 18px;
+  }
+
+  .t-item {
+    --av: 26px;
+  }
+
+  .t-list > .t-item {
+    --av: 34px;
+  }
+
+  /* No card: the bubble, then the actions under it. */
+  .t-main,
+  .t-list > .t-item > .t-row > .t-main,
+  .t-item > .t-row > .t-main.is-deleted {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .t-bubble {
+    width: fit-content;
+    max-width: 100%;
+    padding: 7px 13px 8px;
+    border-radius: 18px;
+    background: var(--surface-3);
+  }
+
+  .t-main.is-deleted .t-bubble {
+    border: 1px dashed var(--border-strong);
+    background: none;
+  }
+
+  /* Editing: the form takes the bubble's place. */
+  .t-bubble.is-editing {
+    width: auto;
+    padding: 0;
+    background: none;
+  }
+
+  .t-bubble.is-editing .t-meta,
+  .t-bubble.is-editing + .t-actions {
+    display: none;
+  }
+
+  .t-meta {
+    gap: 2px 6px;
+    font-size: 0.84rem;
+  }
+
+  .t-meta .author-badge {
+    padding: 1px 6px;
+    font-size: 0.6rem;
+  }
+
+  .t-when,
+  .t-tools {
+    display: none;
+  }
+
+  .t-text {
+    margin-top: 1px;
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.42;
+  }
+
+  /* "3 h   ☺+   Răspunde   ⋯          ❤️✨ 4" */
+  .t-actions {
+    position: relative; /* the emoji dock opens from here */
+    gap: 0 10px;
+    margin-top: 2px;
+    padding-left: 13px;
+  }
+
+  .t-when-below {
+    display: inline;
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 500;
+  }
+
+  .t-actions .text-btn {
+    min-height: 26px;
+    padding: 0;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .t-actions .text-btn:hover,
+  .t-actions .text-btn.is-active {
+    background: none;
+  }
+
+  .t-actions .text-btn.is-active {
+    color: var(--accent);
+  }
+
+  /* React: the icon alone (or your emoji, once you've reacted), so the row fits deep in a thread. */
+  .t-actions .rx-trigger {
+    justify-content: center;
+    min-width: 26px;
+  }
+
+  .rx-trigger-label {
+    display: none;
+  }
+
+  .rx-trigger > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .rx-trigger-emoji {
+    font-size: 1.05rem;
+  }
+
+  /* Replies stay open, as on Facebook: a closed thread still offers "Show N replies". */
+  .t-thread-toggle[aria-expanded='true'] {
+    display: none;
+  }
+
+  .t-actions .t-more-btn {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+  }
+
+  /* The emoji dock opens over the bubble from its left edge; deeper in a thread, from the right, to stay on screen. */
+  .t-actions .rx-dock-root {
+    position: static;
+    display: flex;
+  }
+
+  .t-actions .rx-dock {
+    left: 4px;
+  }
+
+  .t-children .t-children .rx-dock {
+    right: 0;
+    left: auto;
+    transform-origin: calc(100% - 30px) 100%;
+  }
+
+  .rx-dock-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.35rem;
+  }
+
+  /* The reactions so far, plain at the end of the row. */
+  .rx-summary {
+    height: 26px;
+    gap: 4px;
+    padding: 0 2px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 0.76rem;
+  }
+
+  .rx-summary:hover {
+    box-shadow: none;
+  }
+
+  .rx-summary.is-mine {
+    color: var(--accent);
+  }
+
+  .rx-stack {
+    gap: 0;
+  }
+
+  /* The two most used, to keep the row on one line. */
+  .rx-stack > :nth-child(n + 3) {
+    display: none;
+  }
+
+  .rx-bubble {
+    font-size: 0.85rem;
+  }
+
+  .t-reply-form {
+    padding-top: 8px;
+  }
+
+  .t-more-main .text-btn {
+    padding: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .t-more-main .text-btn:hover {
+    background: none;
+  }
+}
+
+/* Edit / delete for a comment on phones: big rows, within reach of a thumb. */
+.comment-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 12px 14px;
+}
+
+.comment-sheet .menu-item {
+  gap: 14px;
+  padding: 14px 12px;
+  font-size: 1rem;
+}
