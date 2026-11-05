@@ -4,11 +4,14 @@ import { shrinkIfTooBig } from '@/lib/images';
 export class ApiError extends Error {
   code: string;
   status: number;
+  /** The rest of the server's answer (e.g. when a deleted account will be gone: `purgeOn`). */
+  data: Record<string, unknown>;
 
-  constructor(code: string, status: number) {
+  constructor(code: string, status: number, data: Record<string, unknown> = {}) {
     super(code);
     this.code = code;
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -20,7 +23,7 @@ async function parse<T>(responsePromise: Promise<Response>): Promise<T> {
     throw new ApiError('network', 0);
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(data.error ?? 'request_failed', response.status);
+  if (!response.ok) throw new ApiError(data.error ?? 'request_failed', response.status, data);
   return data as T;
 }
 

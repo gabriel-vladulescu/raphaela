@@ -7,9 +7,10 @@ import { slugify } from '@/lib/slug';
 /** Words the site uses at the start of its own addresses (and a few it may): never a username. */
 export const RESERVED = new Set([
   'admin', 'api', 'articole', 'articles', 'assets', 'auth', 'autor', 'autori', 'ajutor', 'cautare', 'categorii',
-  'contact', 'despre', 'edit', 'editor', 'help', 'home', 'icons', 'login', 'logout', 'manifest', 'new', 'notificari',
-  'notifications', 'nou', 'posts', 'profil', 'profile', 'raphaela', 'register', 'rss', 'saved', 'search', 'settings',
-  'setari', 'sitemap', 'src', 'statistici', 'stats', 'support', 'suport', 'u', 'uploads', 'user', 'users', 'www',
+  'contact', 'despre', 'edit', 'editor', 'eticheta', 'etichete', 'help', 'home', 'icons', 'invitatie', 'login', 'logout',
+  'manifest', 'new', 'newsletter', 'notificari', 'notifications', 'nou', 'posts', 'preview', 'previzualizare', 'profil',
+  'profile', 'raphaela', 'register', 'rss', 'saved', 'search', 'settings', 'setari', 'setup', 'sitemap', 'src',
+  'statistici', 'stats', 'support', 'suport', 'tags', 'u', 'uploads', 'user', 'users', 'www',
 ]);
 
 /** 3 to 30 lowercase letters and digits; words joined by single dots, never at the start or the end. */
@@ -58,6 +59,6 @@ export async function assignUsername(db: Pool, userId: number, name: string) {
 
 /** At start-up: every account has a username (the ones made before usernames existed get theirs now). */
 export async function ensureUsernames(db: Pool) {
-  const [rows] = await db.query<RowDataPacket[]>('SELECT id, name FROM users WHERE username IS NULL ORDER BY id');
+  const [rows] = await db.query<RowDataPacket[]>('SELECT id, name FROM users WHERE username IS NULL AND purged_at IS NULL ORDER BY id');
   for (const row of rows) await assignUsername(db, row.id as number, row.name as string);
 }

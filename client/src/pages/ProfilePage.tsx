@@ -4,6 +4,8 @@ import { Check, ImageUp, LoaderCircle, Trash2, X } from 'lucide-react';
 import { AccountCard } from '@/components/AccountCard';
 import { AuthorSignature } from '@/components/AuthorSignature';
 import { Avatar } from '@/components/Avatar';
+import { DataExportCard } from '@/components/DataExportCard';
+import { DeleteAccountCard } from '@/components/DeleteAccountCard';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
 import { ImageCropper } from '@/components/ImageCropper';
 import type { CropSpec } from '@/components/ImageCropper';
@@ -277,6 +279,8 @@ export function ProfilePage() {
             </form>
 
             <AccountCard />
+            <DataExportCard />
+            <DeleteAccountCard />
           </div>
 
           {/* Authors see how they appear at the end of their posts, as they type. */}

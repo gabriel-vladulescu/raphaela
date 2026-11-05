@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bell, Check, ChevronDown, Eye, Heart, LifeBuoy, MessageCircle, Reply, Search, Share2, SmilePlus, Sparkles, Trophy, X } from 'lucide-react';
+import { AtSign, Bell, Check, ChevronDown, Clock, Eye, Flag, Heart, LifeBuoy, MessageCircle, Reply, Search, Share2, SmilePlus, Sparkles, Trophy, UserX, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { MenuButton } from '@/components/MenuButton';
@@ -13,20 +13,40 @@ export type NotificationKind =
   | 'new_posts'
   | 'replies_to_me'
   | 'reactions_to_me'
+  | 'mentions'
   | 'comments'
   | 'reactions'
   | 'likes'
   | 'shares'
   | 'views'
   | 'milestones'
-  | 'support';
-export const KINDS: NotificationKind[] = ['new_posts', 'replies_to_me', 'reactions_to_me', 'comments', 'reactions', 'likes', 'shares', 'views', 'milestones', 'support'];
+  | 'support'
+  | 'reports'
+  | 'accounts'
+  | 'held';
+export const KINDS: NotificationKind[] = [
+  'new_posts',
+  'replies_to_me',
+  'reactions_to_me',
+  'mentions',
+  'comments',
+  'reactions',
+  'likes',
+  'shares',
+  'views',
+  'milestones',
+  'support',
+  'reports',
+  'accounts',
+  'held',
+];
 
-/** What an account can get, by role (lib/notifications.ts on the server): members hear about new posts and their
- *  own comments, authors also about their posts, administrators only about support. */
+/** What an account can get, by role (lib/notifications.ts on the server): members hear about new posts, their own
+ *  comments and being mentioned, authors also about their posts, administrators only about support, reports,
+ *  comments waiting for approval and accounts to delete. */
 export function kindsFor(role: 'member' | 'author' | 'owner'): NotificationKind[] {
-  if (role === 'owner') return ['support'];
-  const forEveryone: NotificationKind[] = ['new_posts', 'replies_to_me', 'reactions_to_me'];
+  if (role === 'owner') return ['support', 'reports', 'held', 'accounts'];
+  const forEveryone: NotificationKind[] = ['new_posts', 'replies_to_me', 'reactions_to_me', 'mentions'];
   return role === 'author' ? [...forEveryone, 'comments', 'reactions', 'likes', 'shares', 'views', 'milestones'] : forEveryone;
 }
 
@@ -45,6 +65,7 @@ const KIND_ICONS: Record<NotificationKind, LucideIcon> = {
   new_posts: Sparkles,
   replies_to_me: Reply,
   reactions_to_me: SmilePlus,
+  mentions: AtSign,
   comments: MessageCircle,
   reactions: SmilePlus,
   likes: Heart,
@@ -52,6 +73,9 @@ const KIND_ICONS: Record<NotificationKind, LucideIcon> = {
   views: Eye,
   milestones: Trophy,
   support: LifeBuoy,
+  reports: Flag,
+  accounts: UserX,
+  held: Clock,
 };
 
 /** A filter, as a field: its name and current value, opening a menu (MenuButton: a panel, a dialog or a sheet). */

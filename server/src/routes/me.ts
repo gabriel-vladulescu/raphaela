@@ -1,11 +1,16 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
+import { createEmailToken, deleteAccount, hasPosts, sendVerification } from '@/lib/accounts';
+import { exportAccount } from '@/lib/dataExport';
+import { changeEmail, langOf, siteLink } from '@/lib/emails';
 import { requireUser } from '@/lib/guards';
+import { canSendMail, sendMail } from '@/lib/mail';
 import { importLikes, likedPostIds } from '@/lib/likes';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { VISIBLE_POST } from '@/lib/posts';
-import { canClaimEmail, endOtherSessions, getGoogleLink, loadUser, roleOverrideFor, setGoogleLink } from '@/lib/session';
+import { canClaimEmail, endOtherSessions, endSession, getGoogleLink, loadUser, roleOverrideFor, setGoogleLink } from '@/lib/session';
 import { usernameProblemFor } from '@/lib/usernames';
+import { keepVisitor } from '@/lib/visitor';
 import { removeUpload, saveImage } from '@/lib/uploads';
 
 const AVATAR_PREFIX = 'avatar-';
@@ -25,6 +30,8 @@ async function getReactions(db: Pool, req: FastifyRequest) {
 const idList = { type: 'array', maxItems: 500, items: { type: 'integer', minimum: 1 } } as const;
 
 const newPasswordSchema = { type: 'string', minLength: 8, maxLength: 200 } as const;
+/** The language the page was in, for the email it makes the server send. */
+const langSchema = { type: 'string', enum: ['ro', 'en'] } as const;
 /** Changing how an account signs in: a few tries a minute (they check the current password). */
 const accountRateLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
@@ -103,9 +110,11 @@ const meRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // A new email. It stops signing in with Google (whose address is always the account's), so an account without a
-  // password sets one here; one with a password confirms with it. It isn't checked by email: there's no email
-  // service yet. Administrator addresses only through Google (canClaimEmail).
-  app.put<{ Body: { email: string; currentPassword?: string; newPassword?: string } }>(
+  // password sets one here; one with a password confirms with it. The new address gets a link, and becomes the
+  // account's once it's followed (routes/auth.ts, /auth/verify-email); until then `pending` is it. Without a way to
+  // send email (production without SMTP), it changes at once, unconfirmed. An address another account has (even a
+  // deleted one, kept for a while) can't be taken; administrator addresses only through Google (canClaimEmail).
+  app.put<{ Body: { email: string; currentPassword?: string; newPassword?: string; lang?: string } }>(
     '/me/email',
     {
       preHandler: requireUser,
@@ -119,6 +128,7 @@ const meRoutes: FastifyPluginAsync = async (app) => {
             email: { type: 'string', format: 'email', maxLength: 255 },
             currentPassword: { type: 'string', maxLength: 200 },
             newPassword: newPasswordSchema,
+            lang: langSchema,
           },
         },
       },
@@ -126,7 +136,7 @@ const meRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const user = req.user!;
       const email = req.body.email.trim().toLowerCase();
-      if (email === user.email) return { user };
+      if (email === user.email) return { user, pending: null };
       const [[row]] = await db.execute<RowDataPacket[]>('SELECT password_hash FROM users WHERE id = ?', [user.id]);
       let newHash: string | null = null;
       if (row!.password_hash) {
@@ -138,17 +148,103 @@ const meRoutes: FastifyPluginAsync = async (app) => {
         newHash = await hashPassword(req.body.newPassword);
       }
       if (!canClaimEmail(email, user.role)) return reply.code(400).send({ error: 'email_google_only' });
+      const [used] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ? AND id <> ?', [email, user.id]);
+      if (used[0]) return reply.code(409).send({ error: 'email_in_use' });
+
+      if (canSendMail()) {
+        if (newHash) await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
+        const token = await createEmailToken(db, user.id, 'change', email);
+        void sendMail(changeEmail(email, langOf(req.body.lang), user.name, siteLink(`/confirmare-email?token=${token}`)));
+        return { user: await loadUser(db, user.id), pending: email };
+      }
       try {
-        await db.execute('UPDATE users SET email = ?, google_id = NULL, password_hash = COALESCE(?, password_hash) WHERE id = ?', [
-          email,
-          newHash,
-          user.id,
-        ]);
+        await db.execute(
+          'UPDATE users SET email = ?, email_verified_at = NULL, google_id = NULL, password_hash = COALESCE(?, password_hash) WHERE id = ?',
+          [email, newHash, user.id],
+        );
       } catch (err) {
         if (duplicateOf(err)) return reply.code(409).send({ error: 'email_in_use' });
         throw err;
       }
-      return { user: await loadUser(db, user.id) };
+      return { user: await loadUser(db, user.id), pending: null };
+    },
+  );
+
+  // Gives up a new address waiting for confirmation (its link stops working).
+  app.delete('/me/email/pending', { preHandler: requireUser }, async (req) => {
+    await db.execute("DELETE FROM email_tokens WHERE user_id = ? AND purpose = 'change'", [req.user!.id]);
+    return { user: await loadUser(db, req.user!.id) };
+  });
+
+  // Sends the link that confirms the account's address again.
+  app.post<{ Body: { lang?: string } }>(
+    '/me/verify-email',
+    {
+      preHandler: requireUser,
+      config: { rateLimit: { max: 3, timeWindow: '10 minutes' } },
+      schema: { body: { type: 'object', additionalProperties: false, properties: { lang: langSchema } } },
+    },
+    async (req, reply) => {
+      const user = req.user!;
+      if (user.emailVerified) return { ok: true };
+      if (!canSendMail()) return reply.code(503).send({ error: 'email_unavailable' });
+      if (!(await sendVerification(db, user, langOf(req.body?.lang)))) return reply.code(502).send({ error: 'email_failed' });
+      return { ok: true };
+    },
+  );
+
+  // Everything kept about the account, as a JSON file to download (Profile, "Descarcă datele mele").
+  app.get('/me/export', { preHandler: requireUser, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (req, reply) => {
+    const data = await exportAccount(db, req.user!.id);
+    const day = new Date().toISOString().slice(0, 10);
+    reply
+      .type('application/json; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="raphaela-${req.user!.username || 'cont'}-${day}.json"`)
+      .header('Cache-Control', 'no-store');
+    return JSON.stringify(data, null, 2);
+  });
+
+  // What deleting the account will ask: whether they have posts (then they choose what happens to them).
+  app.get('/me/deletion', { preHandler: requireUser }, async (req) => ({ hasPosts: await hasPosts(db, req.user!.id) }));
+
+  // Deletes the account (after a confirmation dialog; with the password when it has one), as they chose: their
+  // comments (with the replies under them) and an author's posts kept or deleted. It's signed out and kept at least
+  // 3 months (it can be restored through support), then an administrator deletes it for good (lib/accounts.ts).
+  // Administrators can't.
+  app.delete<{ Body: { password?: string; lang?: string; comments: 'keep' | 'delete'; posts?: 'keep' | 'delete' } }>(
+    '/me',
+    {
+      preHandler: requireUser,
+      config: accountRateLimit,
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['comments'],
+          properties: {
+            password: { type: 'string', maxLength: 200 },
+            lang: langSchema,
+            comments: { type: 'string', enum: ['keep', 'delete'] },
+            posts: { type: 'string', enum: ['keep', 'delete'] },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const user = req.user!;
+      if (user.role === 'owner') return reply.code(403).send({ error: 'owner_cannot_delete' });
+      const withPosts = await hasPosts(db, user.id);
+      if (withPosts && !req.body.posts) return reply.code(400).send({ error: 'posts_choice_required' });
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT password_hash FROM users WHERE id = ?', [user.id]);
+      if (row!.password_hash && !(req.body?.password && (await verifyPassword(req.body.password, row!.password_hash as string)))) {
+        return reply.code(400).send({ error: 'wrong_password' });
+      }
+      const purgeOn = await deleteAccount(db, user.id, langOf(req.body.lang), {
+        comments: req.body.comments,
+        posts: withPosts ? req.body.posts! : null,
+      });
+      await endSession(db, req, reply);
+      return { ok: true, purgeOn };
     },
   );
 
@@ -212,13 +308,14 @@ const meRoutes: FastifyPluginAsync = async (app) => {
     if (!link) return reply.code(400).send({ error: 'link_expired' });
     await setGoogleLink(db, req, null);
     try {
-      await db.execute('UPDATE users SET google_id = ?, email = ?, picture = COALESCE(?, picture), role = COALESCE(?, role) WHERE id = ?', [
-        link.sub,
-        link.email,
-        link.picture,
-        roleOverrideFor(link.email),
-        user.id,
-      ]);
+      await db.execute(
+        `UPDATE users SET google_id = ?, email = ?, email_verified_at = UTC_TIMESTAMP(), picture = COALESCE(?, picture),
+                role = COALESCE(?, role)
+          WHERE id = ?`,
+        [link.sub, link.email, link.picture, roleOverrideFor(link.email), user.id],
+      );
+      // A new address waiting for its link is dropped: this one, proven by Google, replaced it.
+      await db.execute("DELETE FROM email_tokens WHERE user_id = ? AND purpose IN ('change', 'verify')", [user.id]);
     } catch (err) {
       const duplicate = duplicateOf(err);
       if (duplicate) return reply.code(409).send({ error: duplicate });
@@ -259,7 +356,8 @@ const meRoutes: FastifyPluginAsync = async (app) => {
   app.post('/me/avatar', { preHandler: requireUser, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const file = await req.file({ limits: { fileSize: 2 * 1024 * 1024 } });
     if (!file) return reply.code(400).send({ error: 'file_missing' });
-    const saved = await saveImage(file, { prefix: AVATAR_PREFIX, maxSide: 512 });
+    // At least 256 × 256, as the profile page asks (it explains it before uploading).
+    const saved = await saveImage(file, { prefix: AVATAR_PREFIX, maxSide: 512, minSide: 256 });
     if ('error' in saved) return reply.code(400).send(saved);
     const userId = req.user!.id;
     const [[previous]] = await db.execute<RowDataPacket[]>('SELECT avatar_url FROM users WHERE id = ?', [userId]);
@@ -287,8 +385,11 @@ const meRoutes: FastifyPluginAsync = async (app) => {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: { body: { type: 'object', required: ['likes'], additionalProperties: false, properties: { likes: idList } } },
     },
-    async (req) => {
-      if (!req.visitor.bot) await importLikes(db, req, req.body.likes);
+    async (req, reply) => {
+      if (!req.visitor.bot && req.body.likes.length) {
+        keepVisitor(req, reply);
+        await importLikes(db, req, req.body.likes);
+      }
       return getReactions(db, req);
     },
   );

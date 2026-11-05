@@ -10,9 +10,10 @@ const unreadCount = async (app: Parameters<FastifyPluginAsync>[0], userId: numbe
 
 /** The page's "type" filter. */
 const KINDS = {
-  new_posts: ['new_post'],
+  new_posts: ['new_post', 'followed_post'],
   replies_to_me: ['comment_reply'],
   reactions_to_me: ['comment_reaction'],
+  mentions: ['mention'],
   comments: ['comment', 'reply'],
   likes: ['like'],
   shares: ['share'],
@@ -20,6 +21,9 @@ const KINDS = {
   views: ['views'],
   milestones: ['milestone'],
   support: ['support'],
+  reports: ['report'],
+  accounts: ['account_due'],
+  held: ['comment_held'],
 } as const;
 type Kind = keyof typeof KINDS;
 
@@ -93,11 +97,12 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
                 p.id AS post_id, p.title AS post_title, p.slug AS post_slug,
                 c.id AS comment_id, c.body AS comment_body, c.deleted_at AS comment_deleted_at,
                 a.id AS actor_id, a.name AS actor_name, COALESCE(a.avatar_url, a.picture) AS actor_picture,
-                t.id AS ticket_id, t.title AS ticket_title, t.email AS ticket_email
+                t.id AS ticket_id, t.title AS ticket_title, t.email AS ticket_email, acc.id AS account_ref, acc.name AS account_name
            FROM notifications n
            LEFT JOIN posts p ON p.id = n.post_id
            LEFT JOIN comments c ON c.id = n.comment_id
-           LEFT JOIN users a ON a.id = n.actor_id
+           LEFT JOIN users a ON a.id = n.actor_id AND a.deleted_at IS NULL
+           LEFT JOIN users acc ON acc.id = n.account_id
            LEFT JOIN support_tickets t ON t.id = n.ticket_id
           WHERE ${where.join(' AND ')}
           ORDER BY n.created_at DESC, n.id DESC
@@ -130,6 +135,8 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
             : null,
           actor: row.actor_id ? { id: row.actor_id as number, name: row.actor_name as string, picture: row.actor_picture as string | null } : null,
           ticket: row.ticket_id ? { id: row.ticket_id as number, title: row.ticket_title as string, email: row.ticket_email as string } : null,
+          /** A deleted account waiting to be deleted for good (administrators). */
+          account: row.account_ref ? { id: row.account_ref as number, name: row.account_name as string } : null,
         })),
         /** Pass as `before` for the next page; null at the end. */
         next: rows.length > limit && last ? `${(last.created_at as Date).toISOString()}_${last.id}` : null,

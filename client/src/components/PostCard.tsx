@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Eye, MessageCircle } from 'lucide-react';
+import { Eye, MessageCircle, Pin } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { BookmarkButton, LikeButton } from '@/components/ReactionButtons';
 import { ShareButton } from '@/components/ShareSheet';
@@ -8,6 +8,19 @@ import type { PostSummary } from '@/lib/types';
 
 /** Newer than this, a feed post says how long ago it came out ("3 h", "2 z"); older ones show the date. */
 const RECENT_MS = 7 * 86_400_000;
+
+/** Pinned by an administrator (they stay first on the home page), else "Featured" on the home page's first post. */
+function FeaturedBadge({ post, featured }: { post: PostSummary; featured?: boolean }) {
+  const { t } = useI18n();
+  if (post.featured) {
+    return (
+      <span className="badge badge-featured badge-pinned">
+        <Pin size={12} aria-hidden="true" /> {t('home.pinned')}
+      </span>
+    );
+  }
+  return featured ? <span className="badge badge-featured">{t('home.featured')}</span> : null;
+}
 
 /** The whole card links to the post (via the title's stretched link); buttons and chips stay clickable. */
 export function PostCard({ post, featured }: { post: PostSummary; featured?: boolean }) {
@@ -27,7 +40,7 @@ export function PostCard({ post, featured }: { post: PostSummary; featured?: boo
 
       <div className="post-card-body">
         <div className="post-card-tags">
-          {featured && <span className="badge badge-featured">{t('home.featured')}</span>}
+          <FeaturedBadge post={post} featured={featured} />
           {post.category && (
             <Link to={`/?category=${post.category.slug}`} className="chip chip-link">
               {post.category.icon && <span aria-hidden="true">{post.category.icon}</span>}
@@ -117,7 +130,7 @@ export function FeedPost({ post, featured }: { post: PostSummary; featured?: boo
       </header>
 
       <div className="feed-post-text">
-        {featured && <span className="badge badge-featured">{t('home.featured')}</span>}
+        <FeaturedBadge post={post} featured={featured} />
         <h2 className="feed-post-title">
           <Link to={`/posts/${post.slug}`}>{post.title}</Link>
         </h2>

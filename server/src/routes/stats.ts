@@ -193,8 +193,8 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
       const [communityRows] = authorId
         ? [[] as RowDataPacket[]]
         : await db.query<RowDataPacket[]>(
-            `SELECT (SELECT COUNT(*) FROM users) AS accounts,
-                    (SELECT COUNT(*) FROM users WHERE role <> 'member') AS writers,
+            `SELECT (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS accounts,
+                    (SELECT COUNT(*) FROM users WHERE role <> 'member' AND deleted_at IS NULL) AS writers,
                     (SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?) AS new_accounts,
                     (SELECT COUNT(*) FROM push_subscriptions WHERE new_posts = 1) AS push_readers,
                     (SELECT COUNT(*) FROM push_subscriptions WHERE activity = 1) AS push_writers,

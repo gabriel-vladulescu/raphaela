@@ -6,7 +6,8 @@ import type { PushMessage } from '@/lib/push';
 // Notifications: in the app (the bell, /notificari) and, on the devices where an account turned it on, as push
 // notifications. Each account picks what it hears about (users.notify_settings, the Settings page). By role:
 // members hear about new posts and about replies and reactions to their own comments; authors also about what
-// happens on their posts, and its milestones; administrators (owners) only about new support tickets.
+// happens on their posts, and its milestones; administrators (owners) only about new support tickets, reported
+// comments and deleted accounts waiting to be deleted for good.
 
 export type NotificationType =
   | 'comment'
@@ -19,7 +20,12 @@ export type NotificationType =
   | 'comment_reaction'
   | 'post_reaction'
   | 'milestone'
-  | 'support';
+  | 'support'
+  | 'report'
+  | 'account_due'
+  | 'comment_held'
+  | 'mention'
+  | 'followed_post';
 
 /** What a post's comments, likes and views are celebrated at. Comments count all of them: replies, and the
  *  author's own, too. */
@@ -48,6 +54,16 @@ export interface NotifySettings {
   milestones: Record<Metric, number[]>;
   /** Administrators: a new support ticket. */
   support: boolean;
+  /** Administrators: a comment was reported. */
+  reports: boolean;
+  /** Administrators: a deleted account's 3 months are up (to delete it for good). */
+  accountDeletions: boolean;
+  /** Administrators: a comment waits for approval (the comment filters). */
+  heldComments: boolean;
+  /** Everyone: someone wrote @their-username in a comment. */
+  mentions: boolean;
+  /** Everyone: an author they follow published a post (instead of the general "new post"). */
+  followedAuthors: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotifySettings = {
@@ -63,6 +79,11 @@ export const DEFAULT_SETTINGS: NotifySettings = {
   viewsEvery: 10,
   milestones: { comments: [...MILESTONES], likes: [...MILESTONES], views: [...MILESTONES] },
   support: true,
+  reports: true,
+  accountDeletions: true,
+  heldComments: true,
+  mentions: true,
+  followedAuthors: true,
 };
 
 const SWITCHES = [
@@ -76,6 +97,11 @@ const SWITCHES = [
   'postReactions',
   'views',
   'support',
+  'reports',
+  'accountDeletions',
+  'heldComments',
+  'mentions',
+  'followedAuthors',
 ] as const;
 
 /** Stored settings over the defaults; anything missing or malformed takes the default. */
@@ -109,7 +135,8 @@ interface Recipient {
 }
 
 async function recipient(db: Pool, userId: number): Promise<Recipient | null> {
-  const [rows] = await db.execute<RowDataPacket[]>('SELECT id, role, notify_settings FROM users WHERE id = ?', [userId]);
+  // A deleted account hears about nothing.
+  const [rows] = await db.execute<RowDataPacket[]>('SELECT id, role, notify_settings FROM users WHERE id = ? AND deleted_at IS NULL', [userId]);
   const row = rows[0];
   return row ? { id: row.id as number, role: row.role as Recipient['role'], settings: readSettings(row.notify_settings) } : null;
 }
@@ -126,13 +153,19 @@ const SETTING: Partial<Record<NotificationType, (typeof SWITCHES)[number]>> = {
   comment_reaction: 'myCommentReactions',
   post_reaction: 'postReactions',
   support: 'support',
+  report: 'reports',
+  account_due: 'accountDeletions',
+  comment_held: 'heldComments',
+  mention: 'mentions',
+  followed_post: 'followedAuthors',
 };
+/** Only administrators hear about these (and administrators about nothing else). */
+const OWNERS_ONLY = new Set<NotificationType>(['support', 'report', 'account_due', 'comment_held']);
 /** About an author's own posts. */
 const AUTHORS_ONLY = new Set<NotificationType>(['comment', 'reply', 'like', 'share', 'views', 'post_reaction', 'milestone']);
 
 function wants(to: Recipient, event: Event) {
-  if (to.role === 'owner') return event.type === 'support' && to.settings.support;
-  if (event.type === 'support') return false;
+  if (to.role === 'owner' || OWNERS_ONLY.has(event.type)) return to.role === 'owner' && OWNERS_ONLY.has(event.type) && to.settings[SETTING[event.type]!];
   if (AUTHORS_ONLY.has(event.type) && to.role !== 'author') return false;
   if (event.type === 'milestone') return to.settings.milestones[event.detail as Metric]?.includes(event.value ?? 0) ?? false;
   const setting = SETTING[event.type];
@@ -151,6 +184,8 @@ interface Event {
   post?: PostRef | null;
   commentId?: number | null;
   ticketId?: number | null;
+  /** The account it's about (a deleted one waiting to be deleted for good). */
+  accountId?: number | null;
   /** Who did it (null: a guest, or nobody). */
   actorId?: number | null;
   /** Shares: the app; reactions: the emoji; milestones: the metric. */
@@ -233,6 +268,21 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
       return { title: `Articol nou: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: `/posts/${post?.slug}`, tag: `post-${post?.id}` };
     case 'support':
       return { title: event.title ?? 'Tichet nou la suport', body: event.excerpt ?? '', url: `/admin/suport/${event.ticketId}`, tag: `support-${event.ticketId}` };
+    case 'report':
+      return { title: `Comentariu raportat la ${title}`, body: event.excerpt ?? '', url: '/admin/comentarii?filter=reported', tag: `report-${event.commentId}` };
+    case 'comment_held':
+      return { title: `Un comentariu așteaptă aprobarea la ${title}`, body: event.excerpt ?? '', url: '/admin/comentarii?filter=held', tag: `held-${event.commentId}` };
+    case 'mention':
+      return { title: `${who} te-a menționat la ${title}`, body: event.excerpt ?? '', url: discussion, tag: `mention-${event.commentId}` };
+    case 'followed_post':
+      return { title: `${who} a publicat: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: `/posts/${post?.slug}`, tag: `post-${post?.id}` };
+    case 'account_due':
+      return {
+        title: event.title ?? 'Un cont așteaptă ștergerea definitivă',
+        body: 'Cele 3 luni au trecut. Vezi ce a ales persoana, în administrare.',
+        url: `/admin/utilizatori?status=deleted&id=${event.accountId}`,
+        tag: `account-${event.accountId}`,
+      };
   }
 }
 
@@ -241,11 +291,11 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
  * with push on. Never about what they did themselves. Grouped kinds add to their unread notification instead of
  * starting a new one (the first one pushes, the next ones don't). Never throws.
  */
-async function notify(db: Pool, userId: number, event: Event) {
+async function notify(db: Pool, userId: number, event: Event): Promise<boolean> {
   try {
-    if (event.actorId && event.actorId === userId) return;
+    if (event.actorId && event.actorId === userId) return false;
     const to = await recipient(db, userId);
-    if (!to || !wants(to, event)) return;
+    if (!to || !wants(to, event)) return false;
     const postId = event.post?.id ?? null;
 
     if (event.group) {
@@ -255,20 +305,42 @@ async function notify(db: Pool, userId: number, event: Event) {
           ORDER BY id DESC LIMIT 1`,
         [event.actorId ?? null, event.detail ?? null, userId, event.type, event.group === 'post' ? postId : (event.commentId ?? null)],
       );
-      if (grouped.affectedRows > 0) return;
+      if (grouped.affectedRows > 0) return true;
     }
 
     await db.execute(
-      `INSERT INTO notifications (user_id, type, post_id, comment_id, ticket_id, actor_id, detail, value, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [userId, event.type, postId, event.commentId ?? null, event.ticketId ?? null, event.actorId ?? null, event.detail ?? null, event.value ?? null],
+      `INSERT INTO notifications (user_id, type, post_id, comment_id, ticket_id, account_id, actor_id, detail, value, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())`,
+      [
+        userId,
+        event.type,
+        postId,
+        event.commentId ?? null,
+        event.ticketId ?? null,
+        event.accountId ?? null,
+        event.actorId ?? null,
+        event.detail ?? null,
+        event.value ?? null,
+      ],
     );
-    const [actors] = event.actorId ? await db.execute<RowDataPacket[]>('SELECT name FROM users WHERE id = ?', [event.actorId]) : [[]];
+    const [actors] = event.actorId ? await db.execute<RowDataPacket[]>('SELECT name FROM users WHERE id = ? AND deleted_at IS NULL', [event.actorId]) : [[]];
     const actor = (actors[0]?.name as string | undefined) ?? null;
     await pushTo(db, 'user_id = ? AND activity = 1', [userId], pushMessage(event, actor));
+    return true;
   } catch (err) {
     console.warn('Notification failed:', (err as Error).message);
+    return false;
   }
+}
+
+/** The usernames written as @username in a comment (at most 10). */
+export function mentionedUsernames(body: string) {
+  const names = new Set<string>();
+  for (const match of body.matchAll(/(?:^|[^\w.@])@([a-z0-9]+(?:\.[a-z0-9]+)*)/gi)) {
+    names.add(match[1]!.toLowerCase());
+    if (names.size >= 10) break;
+  }
+  return [...names];
 }
 
 /** A milestone, once per post, metric and threshold (counts can drop and rise again). */
@@ -287,7 +359,8 @@ async function milestone(db: Pool, post: PostRef, metric: Metric, total: number)
  * A comment on a post: the post's author hears about it (a comment, or a reply in its discussion), the person
  * replied to too (a reply to their comment), and the post's comments may reach a milestone.
  */
-export async function notifyComment(db: Pool, input: { postId: number; commentId: number; actorId: number; parentId: number | null; excerpt: string }) {
+export async function notifyComment(db: Pool, input: { postId: number; commentId: number; actorId: number; parentId: number | null; body: string }) {
+  const excerpt = input.body.slice(0, 140);
   try {
     const post = await postRef(db, input.postId);
     if (!post) return;
@@ -296,10 +369,19 @@ export async function notifyComment(db: Pool, input: { postId: number; commentId
       const [rows] = await db.execute<RowDataPacket[]>('SELECT user_id FROM comments WHERE id = ?', [input.parentId]);
       repliedTo = (rows[0]?.user_id as number | undefined) ?? null;
     }
-    const base = { post, commentId: input.commentId, actorId: input.actorId, excerpt: input.excerpt };
+    const base = { post, commentId: input.commentId, actorId: input.actorId, excerpt };
     if (repliedTo) await notify(db, repliedTo, { ...base, type: 'comment_reply' });
     // The author replied to (above) already heard about it.
     if (post.authorId !== repliedTo) await notify(db, post.authorId, { ...base, type: input.parentId ? 'reply' : 'comment' });
+    // Everyone else written as @username (the two above already heard about it).
+    const names = mentionedUsernames(input.body);
+    if (names.length) {
+      const [mentioned] = await db.query<RowDataPacket[]>('SELECT id FROM users WHERE username IN (?) AND deleted_at IS NULL', [names]);
+      for (const row of mentioned) {
+        const id = row.id as number;
+        if (id !== repliedTo && id !== post.authorId) await notify(db, id, { ...base, type: 'mention' });
+      }
+    }
     const [[row]] = await db.execute<RowDataPacket[]>('SELECT COUNT(*) AS n FROM comments WHERE post_id = ? AND deleted_at IS NULL', [post.id]);
     await milestone(db, post, 'comments', Number(row!.n));
   } catch (err) {
@@ -356,12 +438,60 @@ export async function notifyViews(db: Pool, input: { postId: number; total: numb
   }
 }
 
+/** Every administrator account (they hear about support, reports and accounts to delete). */
+async function owners(db: Pool) {
+  const [rows] = await db.execute<RowDataPacket[]>("SELECT id FROM users WHERE role = 'owner' AND deleted_at IS NULL");
+  return rows.map((row) => row.id as number);
+}
+
+/** A reported comment: administrators hear about it, once per comment while unread (more reports count up). */
+export async function notifyReport(db: Pool, input: { commentId: number; postId: number; reporterId: number; reason: string; excerpt: string }) {
+  try {
+    const post = await postRef(db, input.postId);
+    for (const id of await owners(db)) {
+      await notify(db, id, {
+        type: 'report',
+        post,
+        commentId: input.commentId,
+        actorId: input.reporterId,
+        detail: input.reason,
+        excerpt: input.excerpt,
+        group: 'comment',
+      });
+    }
+  } catch (err) {
+    console.warn('Report notification failed:', (err as Error).message);
+  }
+}
+
+/** A comment the filters held: administrators hear it waits for their approval. */
+export async function notifyHeld(db: Pool, input: { commentId: number; postId: number; actorId: number; excerpt: string }) {
+  try {
+    const post = await postRef(db, input.postId);
+    for (const id of await owners(db)) {
+      await notify(db, id, { type: 'comment_held', post, commentId: input.commentId, actorId: input.actorId, excerpt: input.excerpt });
+    }
+  } catch (err) {
+    console.warn('Held comment notification failed:', (err as Error).message);
+  }
+}
+
+/** A deleted account's 3 months are up: administrators hear they can delete it for good (lib/accounts.ts). */
+export async function notifyAccountDue(db: Pool, input: { accountId: number; name: string }) {
+  try {
+    for (const id of await owners(db)) {
+      await notify(db, id, { type: 'account_due', accountId: input.accountId, title: `Cont de șters definitiv: ${input.name}` });
+    }
+  } catch (err) {
+    console.warn('Account notification failed:', (err as Error).message);
+  }
+}
+
 /** A new support ticket: the administrators hear about it. */
 export async function notifySupport(db: Pool, ticket: { id: number; title: string; email: string; userId: number | null }) {
   try {
-    const [owners] = await db.execute<RowDataPacket[]>("SELECT id FROM users WHERE role = 'owner'");
-    for (const owner of owners) {
-      await notify(db, owner.id as number, {
+    for (const owner of await owners(db)) {
+      await notify(db, owner, {
         type: 'support',
         ticketId: ticket.id,
         actorId: ticket.userId,
@@ -374,6 +504,9 @@ export async function notifySupport(db: Pool, ticket: { id: number; title: strin
   }
 }
 
+/** A post is new news for this long after it went public; older ones aren't announced (see announceNewPosts). */
+const ANNOUNCE_DAYS = 7;
+
 /**
  * New posts, once they're public (published now, or a scheduled time that has come), announced once: in the app to
  * the accounts that want to hear about them (and pushed to their devices with push on), and pushed to the signed-out
@@ -381,6 +514,12 @@ export async function notifySupport(db: Pool, ticket: { id: number; title: strin
  */
 export async function announceNewPosts(db: Pool) {
   try {
+    // Posts that went public long ago and were never announced (imported, or from before announcing existed) are
+    // old news: marked as announced, without telling anyone.
+    await db.query(
+      `UPDATE posts p SET p.announced_at = UTC_TIMESTAMP(), p.newsletter_at = COALESCE(p.newsletter_at, UTC_TIMESTAMP())
+        WHERE p.announced_at IS NULL AND ${VISIBLE_POST} AND p.published_at < UTC_TIMESTAMP() - INTERVAL ${ANNOUNCE_DAYS} DAY`,
+    );
     const [posts] = await db.query<RowDataPacket[]>(
       `SELECT p.id, p.author_id, p.title, p.slug, p.excerpt, ${TEXT_START} FROM posts p WHERE p.announced_at IS NULL AND ${VISIBLE_POST}`,
     );
@@ -390,10 +529,17 @@ export async function announceNewPosts(db: Pool) {
       if (claimed.affectedRows === 0) continue;
       const post: PostRef = { id: row.id as number, authorId: row.author_id as number, title: row.title as string, slug: row.slug as string };
       const summary = summaryOf(row);
-      const [readers] = await db.execute<RowDataPacket[]>("SELECT id FROM users WHERE role IN ('member', 'author') AND id <> ?", [post.authorId]);
+      const [readers] = await db.execute<RowDataPacket[]>("SELECT id FROM users WHERE role IN ('member', 'author') AND id <> ? AND deleted_at IS NULL", [post.authorId]);
+      const [follows] = await db.execute<RowDataPacket[]>('SELECT user_id FROM author_follows WHERE author_id = ?', [post.authorId]);
+      const followers = new Set(follows.map((f) => f.user_id as number));
       for (const reader of readers) {
-        await notify(db, reader.id as number, { type: 'new_post', post, actorId: post.authorId, excerpt: summary });
+        const id = reader.id as number;
+        // Those who follow the author hear it as such; if they turned that off, as any new post.
+        const told = followers.has(id) && (await notify(db, id, { type: 'followed_post', post, actorId: post.authorId, excerpt: summary }));
+        if (!told) await notify(db, id, { type: 'new_post', post, actorId: post.authorId, excerpt: summary });
       }
+      // The newsletter takes it from here (lib/newsletter.ts).
+      await db.execute('UPDATE posts SET newsletter_at = COALESCE(newsletter_at, UTC_TIMESTAMP()) WHERE id = ?', [post.id]);
       await pushTo(db, 'new_posts = 1 AND user_id IS NULL', [], pushMessage({ type: 'new_post', post, excerpt: summary }, null));
     }
   } catch (err) {

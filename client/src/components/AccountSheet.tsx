@@ -10,6 +10,7 @@ import { LanguagePicker, ThemePicker } from '@/components/Preferences';
 import { site, TERMS_PATH } from '@/config';
 import { useAuth } from '@/context/auth';
 import { useReactions } from '@/context/reactions';
+import { openConsent } from '@/lib/consent';
 import { useI18n } from '@/lib/i18n';
 import { articlesPath, newArticlePath, savedPath } from '@/lib/paths';
 import { useTheme } from '@/lib/theme';
@@ -118,6 +119,12 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
               ·
             </span>
             <Link to={TERMS_PATH}>{t('footer.terms')}</Link>
+            <span className="muted" aria-hidden="true">
+              ·
+            </span>
+            <button type="button" className="link-btn" onClick={openConsent}>
+              {t('footer.cookies')}
+            </button>
           </p>
         </div>
       </div>

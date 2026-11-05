@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { Check } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
 import { PushToggles } from '@/components/PushToggles';
+import { FollowingCard, NewsletterCard } from '@/components/SubscriptionCards';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -29,13 +30,19 @@ interface NotifySettings {
   viewsEvery: number;
   milestones: Record<Metric, number[]>;
   support: boolean;
+  reports: boolean;
+  accountDeletions: boolean;
+  heldComments: boolean;
+  mentions: boolean;
+  followedAuthors: boolean;
 }
 type Switch = Exclude<keyof NotifySettings, 'viewsEvery' | 'milestones'>;
 
 /**
  * Settings (any signed-in account): push on this device, and what to be notified of, by role. Members: new posts,
  * replies and reactions to their comments. Authors: also their posts' likes, shares, comments, replies, reactions,
- * views (every N) and milestones. Administrators: only support tickets. And who may see their lists (privacy).
+ * views (every N) and milestones. Administrators: support tickets, reported comments and accounts to delete for good.
+ * And who may see their lists (privacy).
  * Saved as they change.
  */
 export function SettingsPage() {
@@ -177,15 +184,23 @@ export function SettingsPage() {
             <h2 className="side-title">{t('nav.notifications')}</h2>
             <p className="muted small">{t('prefs.adminNote')}</p>
             {row('support', 'prefs.support', 'prefs.supportHint')}
+            {row('reports', 'prefs.reports', 'prefs.reportsHint')}
+            {row('accountDeletions', 'prefs.accountDeletions', 'prefs.accountDeletionsHint')}
+            {row('heldComments', 'prefs.heldComments', 'prefs.heldCommentsHint')}
           </section>
         ) : (
           <>
             <section className="card prefs-card">
               <h2 className="side-title">{t('prefs.forYou')}</h2>
               {row('newPosts', 'prefs.newPosts', 'prefs.newPostsHint')}
+              {row('followedAuthors', 'prefs.followedAuthors', 'prefs.followedAuthorsHint')}
               {row('myCommentReplies', 'prefs.myCommentReplies', 'prefs.myCommentRepliesHint')}
               {row('myCommentReactions', 'prefs.myCommentReactions', 'prefs.myCommentReactionsHint')}
+              {row('mentions', 'prefs.mentions', 'prefs.mentionsHint')}
             </section>
+
+            <NewsletterCard />
+            <FollowingCard />
 
             {canWrite && (
               <section className="card prefs-card">

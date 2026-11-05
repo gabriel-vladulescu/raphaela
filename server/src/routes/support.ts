@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { RETENTION_MONTHS, SUSPENDED_NOW } from '@/lib/accounts';
 import { parseId, requireOwner } from '@/lib/guards';
 import { notifySupport } from '@/lib/notifications';
 
@@ -130,6 +131,14 @@ const supportRoutes: FastifyPluginAsync = async (app) => {
     await db.execute('UPDATE support_tickets SET seen_at = UTC_TIMESTAMP() WHERE id = ? AND seen_at IS NULL', [row.id]);
     await db.execute('UPDATE notifications SET read_at = UTC_TIMESTAMP() WHERE ticket_id = ? AND user_id = ? AND read_at IS NULL', [row.id, req.user!.id]);
     const [files] = await db.execute<RowDataPacket[]>('SELECT id, file_name, mime, size FROM support_attachments WHERE ticket_id = ? ORDER BY id', [row.id]);
+    // The account with the sender's address, when it isn't the one that sent it (someone whose account was deleted or
+    // suspended writes signed out): to find it, and restore it, from the ticket.
+    const [byEmail] = await db.execute<RowDataPacket[]>(
+      `SELECT u.id, u.name, u.role, u.deleted_at, DATE_ADD(u.deleted_at, INTERVAL ${RETENTION_MONTHS} MONTH) AS purge_on, ${SUSPENDED_NOW} AS suspended
+         FROM users u WHERE u.email = ? AND u.purged_at IS NULL`,
+      [row.email],
+    );
+    const match = byEmail[0];
     return {
       ticket: {
         id: row.id as number,
@@ -140,6 +149,17 @@ const supportRoutes: FastifyPluginAsync = async (app) => {
         body: row.body as string,
         createdAt: row.created_at as Date,
         user: row.user_id ? { id: row.user_id as number, name: row.user_name as string, role: row.user_role as string } : null,
+        /** The account with the sender's address (deleted, suspended or not), whoever sent it. */
+        account: match
+          ? {
+              id: match.id as number,
+              name: match.name as string,
+              role: match.role as string,
+              deletedAt: match.deleted_at as Date | null,
+              purgeOn: match.purge_on as Date | null,
+              suspended: Boolean(Number(match.suspended)),
+            }
+          : null,
         files: files.map((file) => ({ id: file.id as number, name: file.file_name as string, mime: file.mime as string, size: file.size as number })),
       },
     };

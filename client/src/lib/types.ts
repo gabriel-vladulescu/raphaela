@@ -26,6 +26,10 @@ export interface User {
   google: boolean;
   /** Has a password (accounts made with Google don't, until they set one). */
   hasPassword: boolean;
+  /** The address was confirmed (the link emailed to it, a new password through it, or Google). */
+  emailVerified: boolean;
+  /** A new address waiting for its confirmation link; the email stays the old one until then. */
+  pendingEmail: string | null;
 }
 
 export interface Author {
@@ -53,6 +57,8 @@ export interface PostSummary {
   updatedAt: string;
   /** Soft-deleted: only owners ever receive these. */
   deleted: boolean;
+  /** Picked by an administrator for the top of the home page. */
+  featured: boolean;
   readingMinutes: number;
   likeCount: number;
   /** Views: each visitor counts once a day. */
@@ -77,10 +83,16 @@ export interface SeriesPart {
 }
 
 /** The public post page. */
+export interface Tag {
+  name: string;
+  slug: string;
+}
+
 export interface Post extends PostSummary {
   contentHtml: string;
-  author: PostAuthor;
+  author: PostAuthor & { followers: number };
   series: (NonNullable<PostSummary['series']> & { parts: SeriesPart[] }) | null;
+  tags: Tag[];
 }
 
 /** A post as the editor loads it. */
@@ -88,6 +100,14 @@ export interface EditablePost extends PostSummary {
   contentHtml: string;
   /** Comments that exist even while they're turned off (for the "they'll be hidden" warning). */
   existingComments: number;
+  /** For search engines and link previews instead of the title and summary (empty: those). */
+  seoTitle: string;
+  seoDescription: string;
+  /** The link previews' image instead of the one made from the banner. */
+  socialImageUrl: string | null;
+  tags: string[];
+  /** The secret preview link's token (/previzualizare/{token}), if one was made. */
+  previewToken: string | null;
 }
 
 export interface Category {
@@ -115,7 +135,10 @@ export interface Comment {
   deletedAt: string | null;
   /** Who deleted it (owners only). */
   deletedBy: string | null;
-  author: Author;
+  /** Waits for an administrator's approval (the comment filters): only its writer sees it. */
+  held?: boolean;
+  /** `deleted`: the account was deleted (no name or picture then). */
+  author: Pick<Author, 'id' | 'name' | 'picture'> & { deleted?: boolean };
   /** Reaction counts by emoji, in the order they were first used. */
   reactions: Record<string, number>;
   /** The emojis the viewer added. */

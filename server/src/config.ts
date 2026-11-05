@@ -23,6 +23,7 @@ export const config = {
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
   uploadsDir: path.resolve(process.env.UPLOADS_DIR ?? 'uploads'),
+  production: process.env.NODE_ENV === 'production',
   // In production this server also serves the built app (client/dist), with each page's tags put in.
   serveClient: process.env.NODE_ENV === 'production',
   clientDist: path.resolve(process.env.CLIENT_DIST ?? '../client/dist'),

@@ -1,5 +1,9 @@
+import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { getRevision, keepRevision, listRevisions } from '@/lib/revisions';
+import { setPostTags, tagsOf } from '@/lib/tags';
+import { logAdmin } from '@/lib/adminLog';
 import { parseId, requireOwner, requireUser } from '@/lib/guards';
 import { findPerson } from '@/lib/people';
 import { editablePost, findEditable, POST_COLUMNS, postBodySchema, preparePost } from '@/lib/postEditing';
@@ -89,7 +93,10 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
         `INSERT INTO posts (author_id, ${POST_COLUMNS}) VALUES (?, ${prepared.values.map(() => '?').join(', ')})`,
         [person.id, ...prepared.values],
       );
-      const [[row]] = await db.execute<RowDataPacket[]>('SELECT slug FROM posts WHERE id = ?', [result.insertId]);
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT slug, title FROM posts WHERE id = ?', [result.insertId]);
+      await setPostTags(db, result.insertId, req.body.tags ?? []);
+      await db.execute('DELETE FROM post_redirects WHERE old_slug = ?', [row!.slug]);
+      if (admin) void logAdmin(db, viewer, 'post.create', { type: 'post', id: result.insertId, label: row!.title as string }, { author: person.name });
       return { id: result.insertId, slug: row!.slug as string, username: person.username };
     },
   );
@@ -98,7 +105,7 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: Params & { id: string } }>('/u/:username/articole/:id', { preHandler: requireUser }, async (req, reply) => {
     const row = await findEditable(db, req.user, parseId(req.params.id));
     if (!row) return reply.code(404).send({ error: 'not_found' });
-    return { post: editablePost(row) };
+    return { post: editablePost(row, (await tagsOf(db, [row.id as number])).get(row.id as number)) };
   });
 
   // Saves an article. Administrators may give it to another author (authorId); a post that isn't an author's
@@ -119,9 +126,28 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
       const id = post.id as number;
       const prepared = await preparePost(db, req.body, id);
       if ('error' in prepared) return reply.code(400).send(prepared);
+      await keepRevision(db, id, req.user!.id, prepared.revision, req.body.restoredVersion === true);
       const assignments = POST_COLUMNS.split(', ').map((column) => `${column} = ?`).join(', ');
       await db.execute<ResultSetHeader>(`UPDATE posts SET ${assignments}, author_id = ? WHERE id = ?`, [...prepared.values, authorId, id]);
-      const [[row]] = await db.execute<RowDataPacket[]>('SELECT slug FROM posts WHERE id = ?', [id]);
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT slug, title FROM posts WHERE id = ?', [id]);
+      if (req.body.tags !== undefined) await setPostTags(db, id, req.body.tags);
+      // A new address: the old one keeps leading here (shared links, search engines), and nothing else leads from
+      // the new one any more.
+      if (row!.slug !== post.slug) {
+        await db.execute('INSERT INTO post_redirects (old_slug, post_id, created_at) VALUES (?, ?, UTC_TIMESTAMP()) AS new ON DUPLICATE KEY UPDATE post_id = new.post_id', [
+          post.slug,
+          id,
+        ]);
+      }
+      await db.execute('DELETE FROM post_redirects WHERE old_slug = ?', [row!.slug]);
+      // An administrator changing someone's post (once per half hour per post: saving often isn't news), or moving it.
+      if (req.user!.role === 'owner') {
+        if (authorId !== post.author_id) {
+          void logAdmin(db, req.user!, 'post.author', { type: 'post', id, label: row!.title as string }, { from: post.author_id, to: authorId });
+        } else if (post.author_id !== req.user!.id) {
+          void logAdmin(db, req.user!, 'post.update', { type: 'post', id, label: row!.title as string }, null, 30);
+        }
+      }
       return { id, slug: row!.slug as string, username: authors[0]!.username as string };
     },
   );
@@ -131,7 +157,45 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
     const post = await findEditable(db, req.user, parseId(req.params.id));
     if (!post) return reply.code(404).send({ error: 'not_found' });
     await db.execute('UPDATE posts SET deleted_at = UTC_TIMESTAMP() WHERE id = ?', [post.id]);
+    if (req.user!.role === 'owner' && post.author_id !== req.user!.id) {
+      void logAdmin(db, req.user!, 'post.delete', { type: 'post', id: post.id as number, label: post.title as string });
+    }
     return { ok: true };
+  });
+
+  // An article's earlier versions (lib/revisions.ts), newest first; one of them in full, to compare or restore.
+  app.get<{ Params: Params & { id: string } }>('/u/:username/articole/:id/versions', { preHandler: requireUser }, async (req, reply) => {
+    const post = await findEditable(db, req.user, parseId(req.params.id));
+    if (!post) return reply.code(404).send({ error: 'not_found' });
+    return { versions: await listRevisions(db, post.id as number) };
+  });
+
+  app.get<{ Params: Params & { id: string; version: string } }>(
+    '/u/:username/articole/:id/versions/:version',
+    { preHandler: requireUser },
+    async (req, reply) => {
+      const post = await findEditable(db, req.user, parseId(req.params.id));
+      const version = post ? await getRevision(db, post.id as number, parseId(req.params.version) ?? 0) : null;
+      if (!version) return reply.code(404).send({ error: 'not_found' });
+      return { version };
+    },
+  );
+
+  // A secret link to show the article before it's public (/previzualizare/{token}); again: a new link (the old one
+  // stops working). DELETE: no link.
+  app.post<{ Params: Params & { id: string } }>('/u/:username/articole/:id/preview', { preHandler: requireUser }, async (req, reply) => {
+    const post = await findEditable(db, req.user, parseId(req.params.id));
+    if (!post) return reply.code(404).send({ error: 'not_found' });
+    const token = crypto.randomBytes(16).toString('hex');
+    await db.execute('UPDATE posts SET preview_token = ? WHERE id = ?', [token, post.id]);
+    return { token };
+  });
+
+  app.delete<{ Params: Params & { id: string } }>('/u/:username/articole/:id/preview', { preHandler: requireUser }, async (req, reply) => {
+    const post = await findEditable(db, req.user, parseId(req.params.id));
+    if (!post) return reply.code(404).send({ error: 'not_found' });
+    await db.execute('UPDATE posts SET preview_token = NULL WHERE id = ?', [post.id]);
+    return { token: null };
   });
 
   // The posts they saved, most recent first: theirs to see, or anyone's if they made them public.
@@ -154,7 +218,7 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   // Administrators: the authors they can write in the name of.
   app.get('/authors', { preHandler: requireOwner }, async () => {
     const [rows] = await db.query<RowDataPacket[]>(
-      "SELECT id, name, username, COALESCE(avatar_url, picture) AS picture FROM users WHERE role = 'author' ORDER BY name",
+      "SELECT id, name, username, COALESCE(avatar_url, picture) AS picture FROM users WHERE role = 'author' AND deleted_at IS NULL ORDER BY name",
     );
     return {
       authors: rows.map((row) => ({ id: row.id as number, name: row.name as string, username: row.username as string, picture: row.picture as string | null })),

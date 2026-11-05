@@ -356,4 +356,223 @@ export const migrations: string[][] = [
     `UPDATE users SET username = REPLACE(username, '-', '.') WHERE username LIKE '%-%'`,
     `ALTER TABLE sessions ADD COLUMN google_link JSON NULL`,
   ],
+
+  // 12: confirmed emails, deleted accounts (kept 3 months, then anonymised: purged_at), suspensions, reported
+  // comments, the links sent by email, and longer settings (the SMTP server's, as JSON)
+  [
+    `ALTER TABLE users
+      ADD COLUMN email_verified_at DATETIME NULL AFTER email,
+      ADD COLUMN deleted_at DATETIME NULL,
+      ADD COLUMN purged_at DATETIME NULL,
+      ADD COLUMN suspended_at DATETIME NULL,
+      ADD COLUMN suspended_until DATETIME NULL,
+      ADD COLUMN suspension_reason VARCHAR(500) NULL,
+      ADD COLUMN suspended_by INT UNSIGNED NULL,
+      ADD INDEX users_deleted (deleted_at),
+      ADD CONSTRAINT users_suspended_by FOREIGN KEY (suspended_by) REFERENCES users(id) ON DELETE SET NULL`,
+    // Google proved these addresses; the seed's (@seed.local) can't receive mail, so they count as confirmed too.
+    `UPDATE users SET email_verified_at = created_at WHERE google_id IS NOT NULL OR email LIKE '%@seed.local'`,
+    // A link sent by email: confirm the address (verify), a new password (reset), a new address (change, to `email`).
+    // Only its hash is kept; it's deleted once used.
+    `CREATE TABLE email_tokens (
+      id         CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+      user_id    INT UNSIGNED NOT NULL,
+      purpose    ENUM('verify', 'reset', 'change') NOT NULL,
+      email      VARCHAR(255) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME NOT NULL,
+      INDEX email_tokens_user (user_id, purpose),
+      INDEX (expires_at),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+    // One open report per person and comment; resolved ones stay as history (kept: the comment stays; removed: it was deleted).
+    `CREATE TABLE comment_reports (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      comment_id  INT UNSIGNED NOT NULL,
+      reporter_id INT UNSIGNED NULL,
+      reason      ENUM('spam', 'harassment', 'hate', 'inappropriate', 'other') NOT NULL,
+      details     VARCHAR(500) NULL,
+      created_at  DATETIME NOT NULL,
+      resolved_at DATETIME NULL,
+      resolved_by INT UNSIGNED NULL,
+      resolution  ENUM('kept', 'removed') NULL,
+      is_open     TINYINT GENERATED ALWAYS AS (IF(resolved_at IS NULL, 1, NULL)) STORED,
+      UNIQUE INDEX comment_reports_open (comment_id, reporter_id, is_open),
+      INDEX comment_reports_queue (resolved_at, created_at),
+      FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+      FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `ALTER TABLE app_settings MODIFY value TEXT NOT NULL`,
+  ],
+
+  // 13: what a person chose when deleting their account (their comments, an author's posts: kept or deleted), the
+  // comments and posts its deletion took away (restored with the account, gone for good with it), and administrators'
+  // notifications about reported comments and accounts waiting to be deleted for good (account_id)
+  [
+    `ALTER TABLE users
+      ADD COLUMN deletion_comments ENUM('keep', 'delete') NULL AFTER deleted_at,
+      ADD COLUMN deletion_posts ENUM('keep', 'delete') NULL AFTER deletion_comments,
+      ADD COLUMN deletion_due_notified_at DATETIME NULL AFTER deletion_posts`,
+    `ALTER TABLE comments
+      ADD COLUMN deleted_with_account INT UNSIGNED NULL AFTER deleted_by,
+      ADD INDEX comments_deleted_with_account (deleted_with_account)`,
+    `ALTER TABLE posts
+      ADD COLUMN deleted_with_account INT UNSIGNED NULL AFTER deleted_at,
+      ADD INDEX posts_deleted_with_account (deleted_with_account)`,
+    // Accounts deleted before the choice existed kept their comments and posts.
+    `UPDATE users SET deletion_comments = 'keep', deletion_posts = IF(role = 'author', 'keep', NULL) WHERE deleted_at IS NOT NULL`,
+    `ALTER TABLE notifications
+      MODIFY type ENUM('comment', 'reply', 'like', 'share', 'views', 'new_post', 'comment_reply', 'comment_reaction',
+                       'post_reaction', 'milestone', 'support', 'report', 'account_due') NOT NULL,
+      ADD COLUMN account_id INT UNSIGNED NULL AFTER ticket_id,
+      ADD CONSTRAINT notifications_account FOREIGN KEY (account_id) REFERENCES users(id) ON DELETE CASCADE`,
+  ],
+
+  // 14: every email the site tried to send and how it went (the admin panel's history; SMTP servers limit how many a
+  // day), and what administrators did (who changed what, and when)
+  [
+    `CREATE TABLE email_log (
+      id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      created_at DATETIME NOT NULL,
+      to_email   VARCHAR(255) NOT NULL,
+      kind       VARCHAR(30) CHARACTER SET ascii NOT NULL,
+      subject    VARCHAR(255) NOT NULL,
+      status     ENUM('sent', 'failed', 'logged') NOT NULL,
+      error      VARCHAR(1000) NULL,
+      INDEX email_log_time (created_at),
+      INDEX email_log_status (status, created_at),
+      INDEX email_log_to (to_email)
+    )`,
+    `CREATE TABLE admin_log (
+      id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      created_at   DATETIME NOT NULL,
+      admin_id     INT UNSIGNED NULL,
+      admin_name   VARCHAR(80) NOT NULL,
+      action       VARCHAR(40) CHARACTER SET ascii NOT NULL,
+      target_type  VARCHAR(20) CHARACTER SET ascii NOT NULL,
+      target_id    INT UNSIGNED NULL,
+      target_label VARCHAR(255) NOT NULL,
+      details      JSON NULL,
+      INDEX admin_log_time (created_at, id),
+      INDEX admin_log_target (target_type, target_id),
+      INDEX admin_log_admin (admin_id, created_at),
+      FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+  ],
+
+  // 15: the blog as a base for others. Posts: old addresses that lead to them, search and share fields, tags, saved
+  // versions, a secret preview link, featured on the home page, when the newsletter announced them. Comments waiting
+  // for approval. Following authors. The newsletter (subscribers, what each got). Invitations to become an author.
+  // What readers search for (counted per day, nothing about who).
+  [
+    `CREATE TABLE post_redirects (
+      old_slug   VARCHAR(220) PRIMARY KEY,
+      post_id    INT UNSIGNED NOT NULL,
+      created_at DATETIME NOT NULL,
+      INDEX (post_id),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    )`,
+    `ALTER TABLE posts
+      ADD COLUMN seo_title VARCHAR(200) NULL AFTER excerpt,
+      ADD COLUMN seo_description VARCHAR(300) NULL AFTER seo_title,
+      ADD COLUMN social_image_url VARCHAR(500) NULL AFTER banner_url,
+      ADD COLUMN preview_token CHAR(32) CHARACTER SET ascii NULL,
+      ADD COLUMN featured_at DATETIME NULL,
+      ADD COLUMN newsletter_at DATETIME NULL,
+      ADD UNIQUE INDEX posts_preview (preview_token),
+      ADD INDEX posts_featured (featured_at)`,
+    // Posts already public aren't sent to subscribers who join later.
+    `UPDATE posts SET newsletter_at = UTC_TIMESTAMP() WHERE status = 'published' AND published_at <= UTC_TIMESTAMP()`,
+    `CREATE TABLE tags (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name       VARCHAR(60) NOT NULL,
+      slug       VARCHAR(80) NOT NULL UNIQUE,
+      created_at DATETIME NOT NULL
+    )`,
+    `CREATE TABLE post_tags (
+      post_id INT UNSIGNED NOT NULL,
+      tag_id  INT UNSIGNED NOT NULL,
+      PRIMARY KEY (post_id, tag_id),
+      INDEX (tag_id),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE post_revisions (
+      id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      post_id      INT UNSIGNED NOT NULL,
+      saved_at     DATETIME NOT NULL,
+      saved_by     INT UNSIGNED NULL,
+      title        VARCHAR(200) NOT NULL,
+      excerpt      VARCHAR(500) NOT NULL,
+      content_html MEDIUMTEXT NOT NULL,
+      banner_url   VARCHAR(500) NULL,
+      INDEX post_revisions_post (post_id, saved_at),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (saved_by) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `ALTER TABLE comments
+      ADD COLUMN held_at DATETIME NULL AFTER deleted_with_account,
+      ADD COLUMN held_reason VARCHAR(40) CHARACTER SET ascii NULL AFTER held_at,
+      ADD INDEX comments_held (held_at)`,
+    `CREATE TABLE author_follows (
+      user_id    INT UNSIGNED NOT NULL,
+      author_id  INT UNSIGNED NOT NULL,
+      created_at DATETIME NOT NULL,
+      PRIMARY KEY (user_id, author_id),
+      INDEX (author_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE newsletter_subscribers (
+      id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      email           VARCHAR(255) NOT NULL UNIQUE,
+      user_id         INT UNSIGNED NULL,
+      frequency       ENUM('instant', 'weekly') NOT NULL DEFAULT 'instant',
+      lang            ENUM('ro', 'en') NOT NULL DEFAULT 'ro',
+      token           CHAR(43) CHARACTER SET ascii NOT NULL UNIQUE,
+      created_at      DATETIME NOT NULL,
+      confirmed_at    DATETIME NULL,
+      unsubscribed_at DATETIME NULL,
+      last_digest_at  DATETIME NULL,
+      INDEX newsletter_active (confirmed_at, unsubscribed_at, frequency),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE newsletter_deliveries (
+      subscriber_id INT UNSIGNED NOT NULL,
+      post_id       INT UNSIGNED NOT NULL,
+      sent_at       DATETIME NOT NULL,
+      PRIMARY KEY (subscriber_id, post_id),
+      INDEX (post_id),
+      FOREIGN KEY (subscriber_id) REFERENCES newsletter_subscribers(id) ON DELETE CASCADE,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE invites (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      token_hash       CHAR(64) CHARACTER SET ascii NOT NULL UNIQUE,
+      email            VARCHAR(255) NOT NULL,
+      role             ENUM('author') NOT NULL DEFAULT 'author',
+      message          VARCHAR(500) NULL,
+      invited_by       INT UNSIGNED NULL,
+      created_at       DATETIME NOT NULL,
+      expires_at       DATETIME NOT NULL,
+      accepted_at      DATETIME NULL,
+      accepted_user_id INT UNSIGNED NULL,
+      revoked_at       DATETIME NULL,
+      INDEX (email),
+      FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (accepted_user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE search_log (
+      day      DATE NOT NULL,
+      query    VARCHAR(100) NOT NULL,
+      searches INT UNSIGNED NOT NULL DEFAULT 0,
+      no_results INT UNSIGNED NOT NULL DEFAULT 0,
+      PRIMARY KEY (day, query)
+    )`,
+    `ALTER TABLE notifications
+      MODIFY type ENUM('comment', 'reply', 'like', 'share', 'views', 'new_post', 'comment_reply', 'comment_reaction',
+                       'post_reaction', 'milestone', 'support', 'report', 'account_due', 'comment_held', 'mention',
+                       'followed_post') NOT NULL`,
+  ],
 ];

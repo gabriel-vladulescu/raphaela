@@ -22,6 +22,15 @@ export interface PostBody {
   seriesPart?: number | null;
   /** Administrators: the author the post is (re)assigned to. */
   authorId?: number;
+  /** For search engines and link previews, instead of the title and the summary (empty: those). */
+  seoTitle?: string;
+  seoDescription?: string;
+  /** The image link previews show, instead of the one made from the banner. */
+  socialImageUrl?: string | null;
+  /** Free words besides the category (lib/tags.ts). */
+  tags?: string[];
+  /** An earlier version was brought back (the editor's history): the text it replaces is kept as a version too. */
+  restoredVersion?: boolean;
 }
 
 export const postBodySchema = {
@@ -41,6 +50,11 @@ export const postBodySchema = {
     seriesId: { type: ['integer', 'null'], minimum: 1 },
     seriesPart: { type: ['integer', 'null'], minimum: 1, maximum: 999 },
     authorId: { type: 'integer', minimum: 1 },
+    seoTitle: { type: 'string', maxLength: 200 },
+    seoDescription: { type: 'string', maxLength: 300 },
+    socialImageUrl: { type: ['string', 'null'], maxLength: 500 },
+    tags: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
+    restoredVersion: { type: 'boolean' },
   },
 } as const;
 
@@ -49,8 +63,11 @@ export async function preparePost(db: Pool, body: PostBody, postId?: number) {
   const title = body.title.trim();
   if (!title) return { error: 'title_required' } as const;
 
+  const imageUrl = /^(\/uploads\/[\w.-]+|https:\/\/\S+)$/;
   const bannerUrl = body.bannerUrl?.trim() || null;
-  if (bannerUrl && !/^(\/uploads\/[\w.-]+|https:\/\/\S+)$/.test(bannerUrl)) return { error: 'banner_invalid' } as const;
+  if (bannerUrl && !imageUrl.test(bannerUrl)) return { error: 'banner_invalid' } as const;
+  const socialImageUrl = body.socialImageUrl?.trim() || null;
+  if (socialImageUrl && !imageUrl.test(socialImageUrl)) return { error: 'banner_invalid' } as const;
 
   const categoryId = body.categoryId ?? null;
   if (categoryId) {
@@ -94,25 +111,40 @@ export async function preparePost(db: Pool, body: PostBody, postId?: number) {
       body.commentsEnabled === false ? 0 : 1,
       seriesId,
       seriesPart,
+      body.seoTitle?.trim() || null,
+      body.seoDescription?.trim() || null,
+      socialImageUrl,
     ],
+    /** For the version kept before the save (lib/revisions.ts). */
+    revision: { title, excerpt: body.excerpt?.trim() ?? '', contentHtml, bannerUrl },
   };
 }
 
 export const POST_COLUMNS =
-  'category_id, title, slug, excerpt, content_html, content_text, reading_minutes, banner_url, status, published_at, comments_enabled, series_id, series_part';
+  'category_id, title, slug, excerpt, content_html, content_text, reading_minutes, banner_url, status, published_at, comments_enabled, series_id, series_part, ' +
+  'seo_title, seo_description, social_image_url';
 
 /** The post (not deleted) if this user may edit it. */
 export async function findEditable(db: Pool, user: SessionUser | null, id: number | null) {
   if (!id) return null;
-  const [rows] = await db.query<RowDataPacket[]>(`${postSelect(', p.content_html')} WHERE p.id = ? AND p.deleted_at IS NULL`, [id]);
+  const [rows] = await db.query<RowDataPacket[]>(
+    `${postSelect(', p.content_html, p.seo_title, p.seo_description, p.social_image_url, p.preview_token')} WHERE p.id = ? AND p.deleted_at IS NULL`,
+    [id],
+  );
   const row = rows[0];
   return row && canEditPost(user, row.author_id as number) ? row : null;
 }
 
-/** A post as the editor opens it. */
-export function editablePost(row: RowDataPacket) {
+/** A post as the editor opens it (with its tags, from tagsOf). */
+export function editablePost(row: RowDataPacket, tags: { name: string; slug: string }[] = []) {
   return {
     ...toPostSummary(row),
+    seoTitle: (row.seo_title as string | null) ?? '',
+    seoDescription: (row.seo_description as string | null) ?? '',
+    socialImageUrl: (row.social_image_url as string | null) ?? null,
+    tags: tags.map((tag) => tag.name),
+    /** The secret preview link's token, if one was made (/previzualizare/{token}). */
+    previewToken: (row.preview_token as string | null) ?? null,
     // What the author wrote, empty if nothing (the lists show the start of the text instead).
     excerpt: String(row.excerpt ?? ''),
     contentHtml: row.content_html as string,

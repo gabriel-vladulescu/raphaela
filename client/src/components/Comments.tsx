@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
-import { LoaderCircle, MessageCircleOff, MoreHorizontal, Pencil, Send, Trash2 } from 'lucide-react';
+import { Clock, Flag, LoaderCircle, MessageCircleOff, MoreHorizontal, Pencil, Send, Trash2 } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { Collapse, slide } from '@/components/Collapse';
 import { CommentReactions } from '@/components/CommentReactions';
 import { GoogleButton } from '@/components/GoogleButton';
 import { ConfirmModal, Modal } from '@/components/Modal';
+import { ReportCommentModal } from '@/components/ReportCommentModal';
 import { useAuth } from '@/context/auth';
 import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { showToast } from '@/lib/toast';
 import type { Comment } from '@/lib/types';
 
 const MAX_LENGTH = 2000;
@@ -23,6 +25,8 @@ type Sort = 'top' | 'new';
 
 interface CommentPage {
   enabled: boolean;
+  /** Only accounts with a confirmed address comment and reply (the admin panel's setting). */
+  requireVerifiedEmail: boolean;
   /** Live comments on the post, replies included. */
   total: number;
   /** This page's threads (their first comment's id), in display order. */
@@ -47,8 +51,43 @@ function buildTree(list: Comment[]): Map<number, CommentNode> {
 
 const countAll = (list: CommentNode[]): number => list.reduce((n, c) => n + 1 + countAll(c.replies), 0);
 
+/** @username, as the server finds mentions (mentionedUsernames, server/src/lib/notifications.ts). */
+const MENTION = /(^|[^\w.@])@([a-z0-9]+(?:\.[a-z0-9]+)*)/gi;
+
+/** A comment's text, with its @mentions marked. */
+function CommentText({ body }: { body: string }) {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of body.matchAll(MENTION)) {
+    const start = match.index! + match[1]!.length;
+    parts.push(body.slice(last, start));
+    parts.push(
+      <span key={start} className="mention">
+        @{match[2]}
+      </span>,
+    );
+    last = start + match[2]!.length + 1;
+  }
+  parts.push(body.slice(last));
+  return <p className="t-text">{parts}</p>;
+}
+
+interface Mentionable {
+  username: string;
+  name: string;
+  picture: string | null;
+}
+
+/** The "@na" being typed just before the caret, if any. */
+function mentionAt(text: string, caret: number) {
+  const match = /(?:^|[^\w.@])@([a-z0-9.]{0,30})$/i.exec(text.slice(0, caret));
+  return match ? { query: match[1]!, start: caret - match[1]!.length - 1 } : null;
+}
+
 /** The form for a new comment, a reply, or an edit (`initialBody`). */
 function CommentForm(props: {
+  /** The post: whom @ suggests (its author and those in its discussion). */
+  postId: number;
   placeholder: string;
   submitLabel: string;
   onSubmit: (body: string) => Promise<void>;
@@ -62,6 +101,44 @@ function CommentForm(props: {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const editing = props.initialBody !== undefined;
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  /** @-suggestions: the word being typed, the people it matches, the highlighted one. */
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [people, setPeople] = useState<Mentionable[]>([]);
+  const [picked, setPicked] = useState(0);
+
+  useEffect(() => {
+    if (!mention) return setPeople([]);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api<{ people: Mentionable[] }>(`/posts/${props.postId}/mentionable?q=${encodeURIComponent(mention.query)}`)
+        .then((data) => {
+          if (cancelled) return;
+          setPeople(data.people);
+          setPicked(0);
+        })
+        .catch(() => undefined);
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mention?.query, props.postId]);
+
+  const follow = (el: HTMLTextAreaElement) => setMention(mentionAt(el.value, el.selectionStart ?? el.value.length));
+
+  function pick(person: Mentionable) {
+    if (!mention) return;
+    const caret = textRef.current?.selectionStart ?? body.length;
+    const next = `${body.slice(0, mention.start)}@${person.username} ${body.slice(caret)}`;
+    setBody(next.slice(0, MAX_LENGTH));
+    setMention(null);
+    const at = mention.start + person.username.length + 2;
+    requestAnimationFrame(() => {
+      textRef.current?.focus();
+      textRef.current?.setSelectionRange(at, at);
+    });
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -81,6 +158,7 @@ function CommentForm(props: {
   return (
     <form className="comment-form" onSubmit={submit}>
       <textarea
+        ref={textRef}
         className="input textarea"
         rows={editing || props.onCancel ? 3 : 2}
         maxLength={MAX_LENGTH}
@@ -89,12 +167,56 @@ function CommentForm(props: {
         autoFocus={props.autoFocus}
         // Editing: start with the caret after the existing text.
         onFocus={(event) => editing && event.currentTarget.setSelectionRange(event.currentTarget.value.length, event.currentTarget.value.length)}
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => {
+          setBody(event.target.value);
+          follow(event.target);
+        }}
+        onSelect={(event) => follow(event.currentTarget)}
+        onBlur={() => setTimeout(() => setMention(null), 150)}
+        aria-autocomplete="list"
+        aria-expanded={people.length > 0 && mention !== null}
         onKeyDown={(event) => {
+          if (mention && people.length > 0) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              setPicked((index) => (index + (event.key === 'ArrowDown' ? 1 : people.length - 1)) % people.length);
+              return;
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+              event.preventDefault();
+              pick(people[picked]!);
+              return;
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setMention(null);
+              return;
+            }
+          }
           if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.form?.requestSubmit();
           if (event.key === 'Escape' && props.onCancel) props.onCancel();
         }}
       />
+      {mention && people.length > 0 && (
+        <ul className="mention-list" role="listbox" aria-label={t('comments.mention')}>
+          {people.map((person, index) => (
+            <li key={person.username} role="option" aria-selected={index === picked}>
+              <button
+                type="button"
+                className={index === picked ? 'is-active' : ''}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  pick(person);
+                }}
+              >
+                <Avatar name={person.name} picture={person.picture} size={24} />
+                <span className="mention-name">{person.name}</span>
+                <span className="muted small">@{person.username}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="comment-form-actions">
         <span className="muted small comment-form-count">
           {body.length}/{MAX_LENGTH}
@@ -131,6 +253,7 @@ export function Comments(props: {
   const [hasMore, setHasMore] = useState(false);
   const [status, setStatus] = useState<'loading' | 'idle' | 'more' | 'error'>('loading');
   const [enabled, setEnabled] = useState(props.commentsEnabled);
+  const [requireVerified, setRequireVerified] = useState(false);
   const [sort, setSort] = useState<Sort>('top');
   /** The one open form (a reply or an edit); opening another closes it. */
   const [active, setActive] = useState<{ kind: 'reply' | 'edit'; id: number } | null>(null);
@@ -140,6 +263,7 @@ export function Comments(props: {
   /** The comment whose options sheet is open (phones), and the one waiting for a delete confirmation. */
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [reporting, setReporting] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   const listRef = useRef<HTMLOListElement>(null);
@@ -160,6 +284,7 @@ export function Comments(props: {
         if (id !== request.current) return; // a newer request (another sort, or signing in) won
         loadedFromServer.current = offset + page.order.length;
         setEnabled(page.enabled);
+        setRequireVerified(page.requireVerifiedEmail);
         setTotal(page.total);
         setHasMore(page.hasMore);
         // Pages can overlap when comments were added meanwhile; keep each thread once.
@@ -205,6 +330,13 @@ export function Comments(props: {
   // Members and authors manage only their own comments; owners can also remove anyone's.
   const canEdit = (c: Comment) => user?.id === c.author.id && c.deletedAt === null;
   const canDelete = (c: Comment) => (user?.id === c.author.id || isOwner) && c.deletedAt === null;
+  /** Signed in, but commenting waits for a confirmed address (the admin panel's setting). */
+  const mustVerify = Boolean(user) && requireVerified && !user!.emailVerified && !isOwner;
+  const canWriteComments = Boolean(user) && !mustVerify;
+  // Anyone signed in can report someone else's comment (administrators delete it instead).
+  const canReport = (c: Comment) => Boolean(user) && !isOwner && user?.id !== c.author.id && c.deletedAt === null;
+  /** A deleted account's comments stay, without its name. */
+  const nameOf = (c: Comment) => (c.author.deleted ? t('comments.deletedAccount') : c.author.name);
 
   const updateComment = (id: number, fn: (c: Comment) => Comment) => setComments((list) => list.map((c) => (c.id === id ? fn(c) : c)));
   const toggleForm = (kind: 'reply' | 'edit', id: number) => setActive((current) => (current?.kind === kind && current.id === id ? null : { kind, id }));
@@ -214,6 +346,7 @@ export function Comments(props: {
     entering.current.add(comment.id);
     setComments((list) => [...list, comment]);
     track(comment.parentId === null ? 'comment' : 'reply', postId);
+    if (comment.held) showToast({ message: t('comments.heldNotice') });
     setTotal((n) => n + 1);
     if (comment.parentId === null) {
       setOrder((list) => [comment.id, ...list]); // your new comment shows first
@@ -231,8 +364,9 @@ export function Comments(props: {
   }
 
   async function saveEdit(comment: Comment, body: string) {
-    const result = await api<{ body: string; editedAt: string }>(`/comments/${comment.id}`, { method: 'PATCH', body: { body } });
+    const result = await api<{ body: string; editedAt: string; held: boolean }>(`/comments/${comment.id}`, { method: 'PATCH', body: { body } });
     updateComment(comment.id, (c) => ({ ...c, ...result }));
+    if (result.held && !comment.held) showToast({ message: t('comments.heldNotice') });
     setActive(null);
   }
 
@@ -305,6 +439,7 @@ export function Comments(props: {
     const deleted = node.deletedAt !== null;
     const editable = canEdit(node);
     const deletable = canDelete(node);
+    const reportable = canReport(node);
     const editing = active?.kind === 'edit' && active.id === node.id;
     const replying = active?.kind === 'reply' && active.id === node.id;
     const limit = shown.get(node.id) ?? REPLIES_STEP;
@@ -322,14 +457,14 @@ export function Comments(props: {
         <div className={`t-row${deleted ? ' is-deleted' : ''}`}>
           <div className="t-gutter">
             {/* Sized by the tree's --av (smaller on phones). */}
-            <Avatar name={node.author.name} picture={node.author.picture} size={null} />
+            <Avatar name={nameOf(node)} picture={node.author.picture} size={null} />
             {node.replies.length > 0 && <span className={`t-rail${isCollapsed ? ' is-hidden' : ''}`} aria-hidden="true" />}
           </div>
           <div className={`t-main${deleted ? ' is-deleted' : ''}`}>
             {/* A card on wider screens; on phones, the grey bubble around the name and text. */}
             <div className={`t-bubble${editing ? ' is-editing' : ''}`}>
               <div className="t-meta">
-                <strong>{node.author.name}</strong>
+                <strong className={node.author.deleted ? 't-gone' : undefined}>{nameOf(node)}</strong>
                 {node.author.id === postAuthorId && <span className="author-badge">{t('comments.author')}</span>}
                 <span className="muted small t-when">
                   <time dateTime={node.createdAt} title={formatDateTime(node.createdAt)}>
@@ -337,12 +472,17 @@ export function Comments(props: {
                   </time>
                   {edited && <> · {edited}</>}
                 </span>
+                {node.held && !deleted && (
+                  <span className="badge badge-held" title={t('comments.heldHint')}>
+                    <Clock size={12} aria-hidden="true" /> {t('comments.held')}
+                  </span>
+                )}
                 {deleted && (
                   <span className="badge badge-deleted" title={t('comments.deletedBy', { name: node.deletedBy ?? '?', date: formatDateTime(node.deletedAt!) })}>
                     {t('comments.deleted')}
                   </span>
                 )}
-                {(editable || deletable) && (
+                {(editable || deletable || reportable) && (
                   <span className="t-tools">
                     {editable && (
                       <button
@@ -361,11 +501,17 @@ export function Comments(props: {
                         <Trash2 size={14} />
                       </button>
                     )}
+                    {reportable && (
+                      <button type="button" className="icon-btn icon-btn-sm t-report" aria-label={t('report.action')} title={t('report.action')} onClick={() => setReporting(node.id)}>
+                        <Flag size={14} />
+                      </button>
+                    )}
                   </span>
                 )}
               </div>
               {editing ? (
                 <CommentForm
+                  postId={postId}
                   autoFocus
                   initialBody={node.body}
                   placeholder={t('comments.placeholder')}
@@ -374,7 +520,7 @@ export function Comments(props: {
                   onCancel={() => setActive(null)}
                 />
               ) : (
-                <p className="t-text">{node.body}</p>
+                <CommentText body={node.body} />
               )}
             </div>
             <div className="t-actions">
@@ -389,14 +535,14 @@ export function Comments(props: {
                 threadToggle
               ) : (
                 <CommentReactions reactions={node.reactions} mine={node.mine} canReact={Boolean(user)} onToggle={(emoji) => void react(node, emoji)}>
-                  {user && (
+                  {canWriteComments && (
                     <button type="button" className={`text-btn${replying ? ' is-active' : ''}`} aria-expanded={replying} onClick={() => toggleForm('reply', node.id)}>
                       {t('comments.reply')}
                     </button>
                   )}
                   {threadToggle}
-                  {/* Phones: edit and delete sit behind "⋯", in a sheet (wider screens show them as icons). */}
-                  {(editable || deletable) && (
+                  {/* Phones: edit, delete and report sit behind "⋯", in a sheet (wider screens show them as icons). */}
+                  {(editable || deletable || reportable) && (
                     <button type="button" className="text-btn t-more-btn" aria-label={t('comments.options')} title={t('comments.options')} aria-haspopup="dialog" onClick={() => setMenuFor(node.id)}>
                       <MoreHorizontal size={17} />
                     </button>
@@ -408,8 +554,9 @@ export function Comments(props: {
             <Collapse open={replying}>
               <div className="t-reply-form">
                 <CommentForm
+                  postId={postId}
                   autoFocus
-                  placeholder={t('comments.replyTo', { name: node.author.name.split(' ')[0]! })}
+                  placeholder={t('comments.replyTo', { name: nameOf(node).split(' ')[0]! })}
                   submitLabel={t('comments.send')}
                   onSubmit={(body) => addComment(body, node.id)}
                   onCancel={() => setActive(null)}
@@ -481,10 +628,12 @@ export function Comments(props: {
         </div>
       </div>
 
-      {user ? (
+      {mustVerify ? (
+        <VerifyToComment email={user!.email} />
+      ) : user ? (
         <div className="discussion-composer card">
           <Avatar name={user.name} picture={user.picture} size={38} />
-          <CommentForm placeholder={t('comments.placeholder')} submitLabel={t('comments.submit')} onSubmit={(body) => addComment(body, null)} />
+          <CommentForm postId={postId} placeholder={t('comments.placeholder')} submitLabel={t('comments.submit')} onSubmit={(body) => addComment(body, null)} />
         </div>
       ) : (
         <div className="discussion-join card">
@@ -558,10 +707,23 @@ export function Comments(props: {
                   <Trash2 size={18} /> {t('comments.delete')}
                 </button>
               )}
+              {canReport(menuNode) && (
+                <button
+                  type="button"
+                  className="menu-item"
+                  onClick={() => {
+                    setMenuFor(null);
+                    setReporting(menuNode.id);
+                  }}
+                >
+                  <Flag size={18} /> {t('report.action')}
+                </button>
+              )}
             </div>
           </div>
         </Modal>
       )}
+      {reporting !== null && <ReportCommentModal commentId={reporting} onClose={() => setReporting(null)} />}
       {deleteNode && (
         <ConfirmModal
           title={t('comments.delete')}
@@ -576,5 +738,41 @@ export function Comments(props: {
         />
       )}
     </section>
+  );
+}
+
+/** Instead of the composer, when commenting needs a confirmed address and this account's isn't yet. */
+function VerifyToComment({ email }: { email: string }) {
+  const { t, lang, errorMessage } = useI18n();
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState('');
+  async function resend() {
+    setState('sending');
+    setError('');
+    try {
+      await api('/me/verify-email', { method: 'POST', body: { lang } });
+      setState('sent');
+    } catch (err) {
+      setError(errorMessage(err));
+      setState('idle');
+    }
+  }
+  return (
+    <div className="discussion-join card discussion-verify">
+      <div className="discussion-join-body">
+        <div>
+          <strong>{t('comments.verifyTitle')}</strong>
+          <p className="muted small">{state === 'sent' ? t('verify.sent', { email }) : t('comments.verifyBody', { email })}</p>
+          {error && <p className="form-error small">{error}</p>}
+        </div>
+        {state !== 'sent' && (
+          <div className="discussion-join-actions">
+            <button type="button" className="btn btn-secondary btn-sm" disabled={state === 'sending'} onClick={() => void resend()}>
+              {state === 'sending' ? t('common.loading') : t('verify.resend')}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

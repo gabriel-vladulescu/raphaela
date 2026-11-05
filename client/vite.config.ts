@@ -10,9 +10,9 @@ import { site } from './src/config';
 const api = 'http://127.0.0.1:3000';
 
 /** The logo's version, as server/src/seo/brand.ts works it out: in the addresses of the images made from it. */
-const brand = crypto.createHash('sha1').update(fs.readFileSync(new URL('../logo.png', import.meta.url))).digest('hex').slice(0, 8);
+const brand = crypto.createHash('sha1').update(fs.readFileSync(new URL('../server/assets/logo.png', import.meta.url))).digest('hex').slice(0, 8);
 
-/** Fills %SITE_NAME% and %BRAND% in index.html from site.config.ts and logo.png, so they're set in one place. */
+/** Fills %SITE_NAME% and %BRAND% in index.html from site.config.ts and server/assets/logo.png, so they're set in one place. */
 const siteName = (): Plugin => ({
   name: 'site-name',
   transformIndexHtml: (html) =>
@@ -53,6 +53,7 @@ export default defineConfig({
       '/uploads': api,
       '/icons': api,
       '/manifest.webmanifest': api,
+      '/favicon.ico': api,
       '/robots.txt': api,
       '/sitemap.xml': api,
       '/rss.xml': api,

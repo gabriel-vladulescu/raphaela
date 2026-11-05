@@ -1,27 +1,19 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import {
-  Bell,
   Bookmark,
   BookOpenCheck,
-  Check,
-  ChevronDown,
   Clock,
   Eye,
   Heart,
   MessageCircle,
-  MessageCircleX,
-  PenLine,
   Share2,
-  SmilePlus,
   Timer,
-  UserPlus,
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
-import { MenuButton } from '@/components/MenuButton';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -427,19 +419,16 @@ function PostsList({ posts }: { posts: Stats['posts'] }) {
 /**
  * The statistics, for a period of 7, 30 or 90 days compared with the one before it: the four main numbers, views and
  * visitors by day, what readers do (likes, comments, shares, saves), the posts, what they click, where they come from,
- * on what. `admin`: the whole site's (administrators), which can be narrowed to one author (?author=, kept in the
- * address), with the site's other pages and its community; otherwise an author's own posts.
+ * on what, for an author's own posts. (Administrators have the whole site's in the admin panel, src/admin.)
  */
-function StatsView({ admin }: { admin: boolean }) {
+function StatsView() {
   const { t, plural, formatDate, formatNumber: n } = useI18n();
-  const [params, setParams] = useSearchParams();
   const [days, setDays] = useState<Days>(30);
   const [stats, setStats] = useState<Stats | null>(null);
   /** The request the statistics on screen answer; while another is on its way, they're dimmed. */
   const [shown, setShown] = useState('');
   const [error, setError] = useState(false);
-  const authorId = admin ? Number(params.get('author')) || null : null;
-  const request = `/stats?days=${days}${authorId ? `&author=${authorId}` : ''}`;
+  const request = `/stats?days=${days}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -456,28 +445,16 @@ function StatsView({ admin }: { admin: boolean }) {
     };
   }, [request]);
 
-  const pickAuthor = (id: number | null) =>
-    setParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        if (id) next.set('author', String(id));
-        else next.delete('author');
-        return next;
-      },
-      { replace: true },
-    );
-
   const label = (key: string) => t(`stats.action.${key}` as MessageKey);
   const totals = stats?.totals;
   const previous = stats?.previous;
-  const authorName = stats?.authors?.find((author) => author.id === authorId)?.name;
 
   return (
     <div className="container stats-page">
-      {admin ? <HeaderBackLink to="/admin" label={t('admin.back')} /> : <HeaderBackLink />}
+      <HeaderBackLink />
       <div className="stats-head">
         <div className="stats-head-text">
-          <h1>{t(admin ? 'stats.adminTitle' : 'stats.mine')}</h1>
+          <h1>{t('stats.mine')}</h1>
           {stats && (
             <p className="muted">
               {formatDate(stats.from)} – {formatDate(stats.to)} · {plural('stats.comparedWith', stats.days)}
@@ -486,44 +463,6 @@ function StatsView({ admin }: { admin: boolean }) {
           )}
         </div>
         <div className="stats-controls">
-          {admin && stats?.authors && stats.authors.length > 0 && (
-            <MenuButton
-              title={t('stats.author')}
-              buttonClassName={`filter-field stats-author${authorId ? ' has-value' : ''}`}
-              panelClassName="filter-popover"
-              button={
-                <>
-                  <span className="filter-field-text">
-                    <span className="filter-field-label">{t('stats.author')}</span>
-                    <span className="filter-field-value">{authorName ?? t('stats.allAuthors')}</span>
-                  </span>
-                  <ChevronDown size={16} aria-hidden="true" />
-                </>
-              }
-            >
-              {(close) => (
-                <div className="filter-options" role="listbox" aria-label={t('stats.author')}>
-                  {[{ id: null, name: t('stats.allAuthors'), posts: null }, ...stats.authors!].map((author) => (
-                    <button
-                      key={author.id ?? 'all'}
-                      type="button"
-                      role="option"
-                      aria-selected={author.id === authorId}
-                      className={`filter-option${author.id === authorId ? ' is-selected' : ''}`}
-                      onClick={() => {
-                        pickAuthor(author.id);
-                        close();
-                      }}
-                    >
-                      {author.name}
-                      {author.posts !== null && <span className="muted small">{t('stats.postsCount', { n: author.posts })}</span>}
-                      {author.id === authorId && <Check size={16} className="filter-option-check" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </MenuButton>
-          )}
           <div className="segmented stats-period" role="group" aria-label={t('stats.period')}>
             {([7, 30, 90] as const).map((option) => (
               <button key={option} type="button" className={days === option ? 'is-selected' : ''} aria-pressed={days === option} onClick={() => setDays(option)}>
@@ -634,36 +573,6 @@ function StatsView({ admin }: { admin: boolean }) {
             </section>
           </div>
 
-          {/* The whole site's statistics (administrators): its other pages and its community. */}
-          {!stats.author && stats.pages.length > 0 && (
-            <Bars title={t('stats.pages')} rows={stats.pages.map((p) => ({ key: p.path, label: p.path, value: p.views, note: t('stats.people', { n: n(p.visitors) }) }))} />
-          )}
-          {stats.community && (
-            <section className="stats-community">
-              <h2 className="side-title">{t('admin.community')}</h2>
-              <div className="stats-tiles">
-                {(
-                  [
-                    [Users, t('admin.accounts'), stats.community.accounts, t('admin.writers', { n: n(stats.community.writers) })],
-                    [UserPlus, t('admin.newAccounts'), stats.community.newAccounts, null],
-                    [Bell, t('admin.pushReaders'), stats.community.pushReaders, t('admin.pushWriters', { n: n(stats.community.pushWriters) })],
-                    [SmilePlus, t('admin.reactions'), stats.community.reactions, null],
-                    [Heart, t('admin.likesTakenBack'), stats.community.likesTakenBack, null],
-                    [PenLine, t('admin.commentEdits'), stats.community.commentEdits, null],
-                    [MessageCircleX, t('admin.commentsDeleted'), stats.community.commentsDeleted, null],
-                  ] as const
-                ).map(([Icon, name, value, note]) => (
-                  <div key={name} className="stats-tile card">
-                    <span className="stats-tile-label">
-                      <Icon size={15} aria-hidden="true" /> {name}
-                    </span>
-                    <strong className="stats-tile-value">{n(value)}</strong>
-                    {note && <span className="stats-tile-note">{note}</span>}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
           <p className="muted small stats-note">{t('stats.note')}</p>
         </div>
       )}
@@ -671,13 +580,8 @@ function StatsView({ admin }: { admin: boolean }) {
   );
 }
 
-/** /statistici: an author's own statistics. Administrators have the whole site's, in the administration. */
+/** /statistici: an author's own statistics. Administrators have the whole site's, in the admin panel. */
 export function StatsPage() {
   const { isOwner } = useAuth();
-  return isOwner ? <Navigate to="/admin/statistici" replace /> : <StatsView admin={false} />;
-}
-
-/** /admin/statistici: the whole site's statistics (administrators). */
-export function AdminStatsPage() {
-  return <StatsView admin />;
+  return isOwner ? <Navigate to="/admin/statistici" replace /> : <StatsView />;
 }

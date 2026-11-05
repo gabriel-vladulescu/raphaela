@@ -65,9 +65,15 @@ export function sanitizePostHtml(html: string): string {
 const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
 
 export function htmlToText(html: string): string {
-  const spaced = html.replace(/<\/(p|h\d|li|blockquote|pre|td|th|div)>|<br\s*\/?>/gi, '$& ');
+  // A heading, list item or table cell ends its sentence (so "Section" + "Text…" doesn't read "Section Text…" in a
+  // summary): marked here (\u0001), and a full stop added below where it has no punctuation of its own.
+  const spaced = html
+    .replace(/<\/(h\d|li|td|th)>/gi, '$&\u0001 ')
+    .replace(/<\/(p|blockquote|pre|div)>|<br\s*\/?>/gi, '$& ');
   return sanitizeHtml(spaced, { allowedTags: [], allowedAttributes: {} })
     .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, name: string) => entities[name])
+    .replace(/([^\s.!?:;…,\u0001])\s*\u0001/g, '$1.')
+    .replace(/\u0001/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

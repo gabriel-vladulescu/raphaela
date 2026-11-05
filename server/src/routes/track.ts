@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
-import { ACTIONS, addReadingTime, recordEvent, recordView } from '@/lib/analytics';
+import { ACTIONS, addReadingTime, recordEvent, recordView, siteDay } from '@/lib/analytics';
 import type { Action } from '@/lib/analytics';
 import { notifyShare } from '@/lib/notifications';
 
@@ -97,11 +97,40 @@ const trackRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const first = await recordEvent(db, req, req.body);
-      // "Someone shared your post": once a day per visitor, post and app.
+      // "Someone shared your post": once a day per visitor, post and app (without consent to statistics there's no
+      // visitor to tell apart, so each share; they're grouped while unread anyway).
       const { action, postId } = req.body;
-      if (first && postId && action.startsWith('share:')) {
+      if ((first || (!req.visitor.analytics && !req.visitor.bot)) && postId && action.startsWith('share:')) {
         void notifyShare(db, { postId, actorId: req.user?.id ?? null, app: action.slice('share:'.length) });
       }
+      return reply.code(204).send();
+    },
+  );
+
+  // What readers search for (the home page tells once a search has settled): counted per day and words, with
+  // whether it found nothing. Nothing about who, so no consent needed.
+  app.post<{ Body: { q: string; results: number } }>(
+    '/track/search',
+    {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['q', 'results'],
+          additionalProperties: false,
+          properties: { q: { type: 'string', minLength: 2, maxLength: 100 }, results: { type: 'integer', minimum: 0 } },
+        },
+      },
+    },
+    async (req, reply) => {
+      if (req.visitor.bot) return reply.code(204).send();
+      const query = req.body.q.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
+      if (query.length < 2) return reply.code(204).send();
+      await db.execute(
+        `INSERT INTO search_log (day, query, searches, no_results) VALUES (?, ?, 1, ?) AS new
+         ON DUPLICATE KEY UPDATE searches = search_log.searches + 1, no_results = search_log.no_results + new.no_results`,
+        [siteDay(), query, req.body.results === 0 ? 1 : 0],
+      );
       return reply.code(204).send();
     },
   );

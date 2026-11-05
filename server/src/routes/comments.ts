@@ -2,17 +2,24 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { insertComment, MAX_DEPTH } from '@/lib/comments';
 import type { ParentComment } from '@/lib/comments';
+import { commentLabel, logAdmin } from '@/lib/adminLog';
 import { parseId, requireUser } from '@/lib/guards';
-import { notifyComment, notifyReaction } from '@/lib/notifications';
+import { notifyComment, notifyHeld, notifyReaction, notifyReport } from '@/lib/notifications';
 import type { SessionUser } from '@/lib/session';
-import { visibleTo } from '@/lib/posts';
+import { escapeLike, visibleTo } from '@/lib/posts';
+import { checkComment, siteSettings } from '@/lib/siteSettings';
+
+/** Why a comment can be reported. */
+export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'inappropriate', 'other'] as const;
 
 /** The reactions people can leave on a comment. */
 export const COMMENT_EMOJI = ['❤️', '✨', '🌙', '🔥', '😂', '🙏'];
 
+// A deleted account's comments stay (the replies around them still make sense), without its name or picture.
 const COMMENT_SELECT = `
-  SELECT m.id, m.parent_id, m.body, m.created_at, m.edited_at, m.deleted_at, d.name AS deleted_by_name,
-         u.id AS author_id, u.name AS author_name, COALESCE(u.avatar_url, u.picture) AS author_picture
+  SELECT m.id, m.parent_id, m.body, m.created_at, m.edited_at, m.deleted_at, m.held_at, d.name AS deleted_by_name,
+         u.id AS author_id, u.deleted_at IS NOT NULL AS author_deleted,
+         IF(u.deleted_at IS NULL, u.name, '') AS author_name, IF(u.deleted_at IS NULL, COALESCE(u.avatar_url, u.picture), NULL) AS author_picture
     FROM comments m
     JOIN users u ON u.id = m.user_id
     LEFT JOIN users d ON d.id = m.deleted_by`;
@@ -39,7 +46,15 @@ function toComment(row: RowDataPacket, reactions: Reactions = { reactions: {}, m
     // Deleted comments only reach owners, who see them greyed out.
     deletedAt: row.deleted_at as Date | null,
     deletedBy: row.deleted_at ? ((row.deleted_by_name as string | null) ?? null) : null,
-    author: { id: row.author_id as number, name: row.author_name as string, picture: row.author_picture as string | null },
+    /** Waits for an administrator's approval: only its writer (and administrators) see it. */
+    held: row.held_at != null,
+    author: {
+      id: row.author_id as number,
+      name: row.author_name as string,
+      picture: row.author_picture as string | null,
+      /** The account was deleted: shown as "deleted account". */
+      deleted: Boolean(row.author_deleted),
+    },
     ...reactions,
   };
 }
@@ -74,11 +89,15 @@ async function findPost(db: Pool, user: SessionUser | null, postId: number) {
 /** A comment that can still be acted on: not deleted, on a post the viewer can see that has comments on. */
 type LiveComment = { ok: true; id: number; userId: number } | { ok: false; status: number; error: string };
 
+/** A comment waiting for approval is there only for its writer and administrators (as if it didn't exist for others). */
+const heldVisible = (user: SessionUser | null, alias = 'm') =>
+  user?.role === 'owner' ? '' : `AND (${alias}.held_at IS NULL OR ${alias}.user_id = ${Number(user?.id ?? 0)})`;
+
 async function findLiveComment(db: Pool, user: SessionUser | null, commentId: number): Promise<LiveComment> {
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT m.id, m.user_id, p.comments_enabled
        FROM comments m JOIN posts p ON p.id = m.post_id
-      WHERE m.id = ? AND m.deleted_at IS NULL AND ${visibleTo(user)}`,
+      WHERE m.id = ? AND m.deleted_at IS NULL ${heldVisible(user)} AND ${visibleTo(user)}`,
     [commentId],
   );
   const row = rows[0];
@@ -89,6 +108,39 @@ async function findLiveComment(db: Pool, user: SessionUser | null, commentId: nu
 
 const commentRoutes: FastifyPluginAsync = async (app) => {
   const { db } = app;
+  const postIdOf = async (commentId: number) => {
+    const [[row]] = await db.execute<RowDataPacket[]>('SELECT post_id FROM comments WHERE id = ?', [commentId]);
+    return (row?.post_id as number | undefined) ?? null;
+  };
+
+  // Who can be written as @username in a post's discussion: its author and the people who commented there (by
+  // name or username, a few at a time). Signed in only.
+  app.get<{ Params: { id: string }; Querystring: { q?: string } }>(
+    '/posts/:id/mentionable',
+    {
+      preHandler: requireUser,
+      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+      schema: { querystring: { type: 'object', properties: { q: { type: 'string', maxLength: 40 } } } },
+    },
+    async (req, reply) => {
+      const post = await findPost(db, req.user, parseId(req.params.id) ?? 0);
+      if (!post) return reply.code(404).send({ error: 'not_found' });
+      const q = (req.query.q ?? '').trim().toLowerCase();
+      const [rows] = await db.query<RowDataPacket[]>(
+        `SELECT u.id, u.name, u.username, COALESCE(u.avatar_url, u.picture) AS picture
+           FROM users u
+          WHERE u.deleted_at IS NULL AND u.username IS NOT NULL AND u.id <> ?
+            AND (u.id = (SELECT author_id FROM posts WHERE id = ?)
+                 OR u.id IN (SELECT user_id FROM comments WHERE post_id = ? AND deleted_at IS NULL AND held_at IS NULL))
+            ${q ? 'AND (u.username LIKE ? OR u.name LIKE ?)' : ''}
+          ORDER BY u.name LIMIT 6`,
+        [req.user!.id, post.id, post.id, ...(q ? [`${escapeLike(q)}%`, `%${escapeLike(q)}%`] : [])],
+      );
+      return {
+        people: rows.map((row) => ({ username: row.username as string, name: row.name as string, picture: row.picture as string | null })),
+      };
+    },
+  );
 
   // A page of threads (a top-level comment with all its replies), "top" (most reactions and replies) or "new"
   // first. While comments are off, nobody sees them (they come back if the author turns comments on again).
@@ -109,13 +161,21 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const post = await findPost(db, req.user, parseId(req.params.id) ?? 0);
       if (!post) return reply.code(404).send({ error: 'not_found' });
-      if (!post.commentsEnabled) return { enabled: false, total: 0, order: [], comments: [], hasMore: false };
+      // Whether commenting needs a confirmed address (the admin panel's setting): the page says so to those without one.
+      const requireVerifiedEmail = siteSettings().commentsRequireVerifiedEmail;
+      if (!post.commentsEnabled) return { enabled: false, requireVerifiedEmail, total: 0, order: [], comments: [], hasMore: false };
 
       const { sort, offset, limit } = req.query;
       // Owners also get deleted comments (shown greyed out); they still don't count. (A delete takes the replies
       // with it, so a live comment's thread root is live too.)
-      const live = (alias: string) => (req.user?.role === 'owner' ? '' : `AND ${alias}.deleted_at IS NULL`);
-      const [[count]] = await db.execute<RowDataPacket[]>('SELECT COUNT(*) AS n FROM comments WHERE post_id = ? AND deleted_at IS NULL', [post.id]);
+      // Comments waiting for approval: only their writer's (and administrators') to see.
+      const viewerId = Number(req.user?.id ?? 0);
+      const live = (alias: string) =>
+        req.user?.role === 'owner' ? '' : `AND ${alias}.deleted_at IS NULL AND (${alias}.held_at IS NULL OR ${alias}.user_id = ${viewerId})`;
+      const [[count]] = await db.execute<RowDataPacket[]>(
+        'SELECT COUNT(*) AS n FROM comments WHERE post_id = ? AND deleted_at IS NULL AND held_at IS NULL',
+        [post.id],
+      );
 
       // "top": a thread's live reactions plus its comments (the first one included).
       const [roots] =
@@ -137,7 +197,7 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
               [post.id, limit + 1, offset],
             );
       const order = roots.slice(0, limit).map((row) => row.id as number);
-      const page = { enabled: true, total: Number(count.n), order, hasMore: roots.length > limit };
+      const page = { enabled: true, requireVerifiedEmail, total: Number(count.n), order, hasMore: roots.length > limit };
       if (order.length === 0) return { ...page, comments: [] };
 
       const [rows] = await db.query<RowDataPacket[]>(
@@ -171,6 +231,9 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
       const post = await findPost(db, req.user, parseId(req.params.id) ?? 0);
       if (!post) return reply.code(404).send({ error: 'not_found' });
       if (!post.commentsEnabled) return reply.code(403).send({ error: 'comments_disabled' });
+      if (siteSettings().commentsRequireVerifiedEmail && !req.user!.emailVerified && req.user!.role !== 'owner') {
+        return reply.code(403).send({ error: 'email_unverified' });
+      }
       const body = req.body.body.trim();
       if (!body) return reply.code(400).send({ error: 'comment_empty' });
 
@@ -178,8 +241,8 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
       let parent: ParentComment | null = null;
       if (req.body.parentId != null) {
         const findParent = async (id: number) => {
-          const [rows] = await db.execute<RowDataPacket[]>(
-            'SELECT id, parent_id, root_id, depth FROM comments WHERE id = ? AND post_id = ? AND deleted_at IS NULL',
+          const [rows] = await db.query<RowDataPacket[]>(
+            `SELECT m.id, m.parent_id, m.root_id, m.depth FROM comments m WHERE m.id = ? AND m.post_id = ? AND m.deleted_at IS NULL ${heldVisible(req.user)}`,
             [id, post.id],
           );
           const row = rows[0];
@@ -191,8 +254,27 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
         parent = answered;
       }
 
-      const id = await insertComment(db, { postId: post.id, userId: req.user!.id, parent, body });
-      void notifyComment(db, { postId: post.id, commentId: id, actorId: req.user!.id, parentId: parent?.id ?? null, excerpt: body.slice(0, 140) });
+      // The comment filters (admin panel → Setări): administrators and authors aren't checked.
+      const user = req.user!;
+      let held: string | null = null;
+      if (user.role === 'member') {
+        const check = checkComment(body);
+        if (check.verdict === 'block') return reply.code(400).send({ error: 'comment_blocked' });
+        if (check.verdict === 'hold') held = check.reason;
+        else if (siteSettings().firstCommentApproval) {
+          const [approved] = await db.execute<RowDataPacket[]>('SELECT 1 FROM comments WHERE user_id = ? AND held_at IS NULL AND deleted_at IS NULL LIMIT 1', [user.id]);
+          if (approved.length === 0) held = 'first';
+        }
+      }
+
+      const id = await insertComment(db, { postId: post.id, userId: user.id, parent, body });
+      if (held) {
+        await db.execute('UPDATE comments SET held_at = UTC_TIMESTAMP(), held_reason = ? WHERE id = ?', [held, id]);
+        // Nobody hears about it until it's approved, except the administrators, who decide.
+        void notifyHeld(db, { commentId: id, postId: post.id, actorId: user.id, excerpt: body.slice(0, 140) });
+      } else {
+        void notifyComment(db, { postId: post.id, commentId: id, actorId: user.id, parentId: parent?.id ?? null, body });
+      }
       const [[row]] = await db.execute<RowDataPacket[]>(`${COMMENT_SELECT} WHERE m.id = ?`, [id]);
       return { comment: toComment(row!) };
     },
@@ -208,14 +290,21 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
       if (found.userId !== req.user!.id) return reply.code(403).send({ error: 'forbidden' });
       const body = req.body.body.trim();
       if (!body) return reply.code(400).send({ error: 'comment_empty' });
+      // An edit goes through the comment filters too (a blocked word added later is held, or refused).
+      const check = req.user!.role === 'member' ? checkComment(body) : { verdict: 'ok' as const };
+      if (check.verdict === 'block') return reply.code(400).send({ error: 'comment_blocked' });
+      if (check.verdict === 'hold') {
+        await db.execute('UPDATE comments SET held_at = COALESCE(held_at, UTC_TIMESTAMP()), held_reason = ? WHERE id = ?', [check.reason, found.id]);
+        void notifyHeld(db, { commentId: found.id, postId: (await postIdOf(found.id)) ?? 0, actorId: req.user!.id, excerpt: body.slice(0, 140) });
+      }
       // The text it replaces is kept (comment_revisions), e.g. for moderation.
       await db.execute(
         'INSERT INTO comment_revisions (comment_id, body, replaced_at) SELECT id, body, UTC_TIMESTAMP() FROM comments WHERE id = ? AND body <> ?',
         [found.id, body],
       );
       await db.execute('UPDATE comments SET body = ?, edited_at = UTC_TIMESTAMP() WHERE id = ? AND body <> ?', [body, found.id, body]);
-      const [[row]] = await db.execute<RowDataPacket[]>('SELECT body, edited_at FROM comments WHERE id = ?', [found.id]);
-      return { body: row.body as string, editedAt: row.edited_at as Date };
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT body, edited_at, held_at FROM comments WHERE id = ?', [found.id]);
+      return { body: row.body as string, editedAt: row.edited_at as Date, held: row.held_at != null };
     },
   );
 
@@ -262,12 +351,57 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  // Reports a comment to the administrators (the admin panel's moderation queue). Not one's own; once per person
+  // while the report is open (again: the same answer, nothing new). Administrators delete instead.
+  app.post<{ Params: { id: string }; Body: { reason: (typeof REPORT_REASONS)[number]; details?: string } }>(
+    '/comments/:id/report',
+    {
+      preHandler: requireUser,
+      config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['reason'],
+          additionalProperties: false,
+          properties: { reason: { type: 'string', enum: [...REPORT_REASONS] }, details: { type: 'string', maxLength: 500 } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const user = req.user!;
+      if (user.role === 'owner') return reply.code(403).send({ error: 'forbidden' });
+      const [rows] = await db.query<RowDataPacket[]>(
+        `SELECT m.id, m.user_id, m.post_id, m.body FROM comments m JOIN posts p ON p.id = m.post_id
+          WHERE m.id = ? AND m.deleted_at IS NULL ${heldVisible(user)} AND ${visibleTo(user)}`,
+        [parseId(req.params.id) ?? 0],
+      );
+      const comment = rows[0];
+      if (!comment) return reply.code(404).send({ error: 'not_found' });
+      if (comment.user_id === user.id) return reply.code(400).send({ error: 'report_own' });
+      const [added] = await db.execute<ResultSetHeader>(
+        `INSERT IGNORE INTO comment_reports (comment_id, reporter_id, reason, details, created_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
+        [comment.id, user.id, req.body.reason, req.body.details?.trim() || null],
+      );
+      // Administrators hear about it (not again for a report already open).
+      if (added.affectedRows > 0) {
+        void notifyReport(db, {
+          commentId: comment.id as number,
+          postId: comment.post_id as number,
+          reporterId: user.id,
+          reason: req.body.reason,
+          excerpt: String(comment.body).slice(0, 140),
+        });
+      }
+      return { ok: true };
+    },
+  );
+
   // A soft delete, by the person who wrote it or an owner (not by anyone else, whatever their role).
   // Its replies go with it. Owners still see all of them, marked as deleted.
   app.delete<{ Params: { id: string } }>('/comments/:id', { preHandler: requireUser }, async (req, reply) => {
     const user = req.user!;
     const [rows] = await db.query<RowDataPacket[]>(
-      `SELECT m.id, m.user_id FROM comments m JOIN posts p ON p.id = m.post_id
+      `SELECT m.id, m.user_id, m.body FROM comments m JOIN posts p ON p.id = m.post_id
         WHERE m.id = ? AND m.deleted_at IS NULL AND ${visibleTo(user)}`,
       [parseId(req.params.id) ?? 0],
     );
@@ -286,6 +420,20 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
     );
     const ids = thread.map((row) => row.id as number);
     await db.query('UPDATE comments SET deleted_at = UTC_TIMESTAMP(), deleted_by = ? WHERE id IN (?) AND deleted_at IS NULL', [user.id, ids]);
+    // Reports about them are settled: the comments are gone.
+    await db.query(
+      `UPDATE comment_reports SET resolved_at = UTC_TIMESTAMP(), resolved_by = ?, resolution = 'removed'
+        WHERE comment_id IN (?) AND resolved_at IS NULL`,
+      [user.id, ids],
+    );
+    // An administrator removing someone else's comment: in the log, with who wrote it.
+    if (user.role === 'owner' && comment.user_id !== user.id) {
+      const [[writer]] = await db.execute<RowDataPacket[]>('SELECT name FROM users WHERE id = ?', [comment.user_id]);
+      void logAdmin(db, user, 'comment.delete', { type: 'comment', id: comment.id as number, label: commentLabel(String(comment.body)) }, {
+        author: (writer?.name as string | undefined) ?? null,
+        replies: ids.length - 1,
+      });
+    }
     return { ids };
   });
 };

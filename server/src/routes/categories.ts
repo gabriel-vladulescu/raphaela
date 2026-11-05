@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { categoryLimits } from '@/config';
+import { logAdmin } from '@/lib/adminLog';
 import { loadCategoryIndex } from '@/lib/categories';
 import { parseId, requireOwner } from '@/lib/guards';
 import { VISIBLE_POST } from '@/lib/posts';
@@ -70,6 +71,7 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
          SELECT ?, ?, ?, ?, ?, COALESCE(MAX(position), 0) + 1 FROM categories WHERE parent_id <=> ?`,
         [parentId, name, await uniqueSlug(db, 'categories', name), req.body.icon?.trim() || null, req.body.description?.trim() || null, parentId],
       );
+      void logAdmin(db, req.user!, 'category.create', { type: 'category', id: result.insertId, label: name });
       return { id: result.insertId };
     },
   );
@@ -114,6 +116,10 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
           [parentId, parentId, id],
         );
       }
+      void logAdmin(db, req.user!, 'category.update', { type: 'category', id, label: name }, {
+        ...(current.name !== name ? { renamedFrom: current.name } : {}),
+        ...(moving ? { movedTo: parentId } : {}),
+      });
       return { ok: true };
     },
   );
@@ -170,7 +176,9 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
     const id = parseId(req.params.id) ?? 0;
     const [children] = await db.execute<RowDataPacket[]>('SELECT id FROM categories WHERE parent_id = ? LIMIT 1', [id]);
     if (children[0]) return reply.code(409).send({ error: 'category_has_children' });
+    const [[gone]] = await db.execute<RowDataPacket[]>('SELECT name FROM categories WHERE id = ?', [id]);
     await db.execute('DELETE FROM categories WHERE id = ?', [id]); // its posts become uncategorized
+    if (gone) void logAdmin(db, req.user!, 'category.delete', { type: 'category', id, label: gone.name as string });
     return { ok: true };
   });
 };

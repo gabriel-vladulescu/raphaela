@@ -46,7 +46,7 @@ export function ShareSheet({ item, onClose }: { item: Shareable; onClose: () => 
   const title = encodeURIComponent(item.title);
   const host = new URL(item.url).host;
 
-  const apps: { brand: Brand; label: string; href: string }[] = [
+  const apps: { brand: Exclude<Brand, 'instagram' | 'youtube' | 'tiktok' | 'linkedin'>; label: string; href: string }[] = [
     { brand: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/?text=${encodeURIComponent(`${item.title}\n${item.url}`)}` },
     { brand: 'facebook', label: 'Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${url}` },
     { brand: 'x', label: 'X', href: `https://x.com/intent/post?text=${title}&url=${url}` },

@@ -1,15 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, Navigate, useBlocker, useLocation, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, CalendarClock, Check, ExternalLink, FilePen, History, MessageCircleOff, Send, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Check, Copy, ExternalLink, Eye, FilePen, History, Link2Off, MessageCircleOff, Send, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { BannerPicker } from '@/components/BannerPicker';
 import { CategorySelect } from '@/components/CategorySelect';
 import { RichEditor } from '@/components/editor/RichEditor';
+import { SeoFields } from '@/components/editor/SeoFields';
+import { TagsInput } from '@/components/editor/TagsInput';
+import { VersionsDialog } from '@/components/editor/VersionsDialog';
+import type { Version } from '@/components/editor/VersionsDialog';
 import { Modal } from '@/components/Modal';
 import { useAuth } from '@/context/auth';
 import { useCategories } from '@/context/categories';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { articlePath, articlesPath, newArticlePath } from '@/lib/paths';
+import { showToast } from '@/lib/toast';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 import type { Author, EditablePost } from '@/lib/types';
 
@@ -30,6 +35,11 @@ interface FormState {
   seriesPart: number | null;
   /** The author's username. Administrators pick it (they write in an author's name); for authors it's their own. */
   author: string;
+  tags: string[];
+  /** For search engines and shares (empty: the title, the excerpt, the banner). */
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string | null;
 }
 
 const blankForm = (author: string): FormState => ({
@@ -45,6 +55,10 @@ const blankForm = (author: string): FormState => ({
   seriesId: null,
   seriesPart: null,
   author,
+  tags: [],
+  seoTitle: '',
+  seoDescription: '',
+  socialImageUrl: null,
 });
 
 /** Drafts save themselves this long after the last change. */
@@ -67,7 +81,8 @@ const backupKey = (id: number | null) => `editor.backup.${id ?? 'new'}`;
 function readBackup(id: number | null): Backup | null {
   try {
     const value = JSON.parse(localStorage.getItem(backupKey(id)) ?? 'null') as Backup | null;
-    return value && typeof value.at === 'number' && value.form ? value : null;
+    // A copy from before a field existed gets it, empty.
+    return value && typeof value.at === 'number' && value.form ? { ...value, form: { ...blankForm(value.form.author ?? ''), ...value.form } } : null;
   } catch {
     return null;
   }
@@ -102,6 +117,10 @@ function formFromPost(post: EditablePost): FormState {
     seriesId: post.series?.id ?? null,
     seriesPart: post.series?.part ?? null,
     author: post.author.username,
+    tags: post.tags ?? [],
+    seoTitle: post.seoTitle ?? '',
+    seoDescription: post.seoDescription ?? '',
+    socialImageUrl: post.socialImageUrl ?? null,
   };
 }
 
@@ -148,6 +167,10 @@ export function EditorPage() {
   const [newSeries, setNewSeries] = useState<string | null>(null);
   /** The save under way (an autosave can be), which the next one waits for: two saves of a new post would make two. */
   const inFlight = useRef<Promise<void> | null>(null);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  /** An earlier version was brought back: the next save keeps the text it replaces as a version too. */
+  const restoredVersion = useRef(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const dirty = JSON.stringify(form) !== snapshot;
   const update = (patch: Partial<FormState>) => setForm((current) => ({ ...current, ...patch }));
@@ -292,6 +315,11 @@ export function EditorPage() {
         commentsEnabled: sent.commentsEnabled,
         seriesId: sent.seriesId,
         seriesPart: sent.seriesPart,
+        tags: sent.tags,
+        seoTitle: sent.seoTitle,
+        seoDescription: sent.seoDescription,
+        socialImageUrl: sent.socialImageUrl,
+        ...(restoredVersion.current ? { restoredVersion: true } : {}),
         ...(author ? { authorId: author.id } : {}),
         status: sent.mode === 'draft' ? 'draft' : 'published',
         publishedAt:
@@ -311,6 +339,7 @@ export function EditorPage() {
           : await api<{ id: number; username: string }>(`/u/${owner}/articole`, { method: 'POST', body });
         const { post: saved } = await api<{ post: EditablePost }>(`/u/${encodeURIComponent(result.username)}/articole/${result.id}`);
         loadedId.current = saved.id;
+        restoredVersion.current = false;
         setPost(saved);
         writeBackup(null, null);
         writeBackup(saved.id, null);
@@ -348,6 +377,37 @@ export function EditorPage() {
     setForm(offer.form);
     setEditorKey(`restored-${offer.at}`); // the text editor takes its content when it's created
     setOffer(null);
+  }
+
+  function restoreVersion(version: Version) {
+    setForm((current) => ({ ...current, title: version.title, excerpt: version.excerpt, contentHtml: version.contentHtml, bannerUrl: version.bannerUrl }));
+    setEditorKey(`version-${version.id}-${Date.now()}`);
+    restoredVersion.current = true;
+    showToast({ message: t('versions.restored') });
+  }
+
+  /** The preview link: a new one (an earlier one stops working), or none. */
+  async function setPreview(on: boolean) {
+    if (!post) return;
+    setPreviewBusy(true);
+    try {
+      const { token } = await api<{ token: string | null }>(`/u/${encodeURIComponent(post.author.username)}/articole/${post.id}/preview`, { method: on ? 'POST' : 'DELETE' });
+      setPost({ ...post, previewToken: token });
+      if (token) await copyPreview(token);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
+  async function copyPreview(token: string) {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/previzualizare/${token}`);
+      showToast({ message: t('editor.previewCopied') });
+    } catch {
+      // No clipboard (an insecure page, or refused): the link is on screen to copy by hand.
+    }
   }
 
   function discardOffer() {
@@ -474,6 +534,13 @@ export function EditorPage() {
       </section>
 
       <section className="card side-card">
+        <div className="field">
+          <span className="side-title">{t('editor.tags')}</span>
+          <TagsInput value={form.tags} onChange={(tags) => update({ tags })} />
+        </div>
+      </section>
+
+      <section className="card side-card">
         <label className="field">
           <span className="side-title">{t('editor.series')}</span>
           <select
@@ -577,6 +644,63 @@ export function EditorPage() {
           <span className="field-hint">{t('editor.slugHint')}</span>
         </label>
       </section>
+
+      <section className="card side-card">
+        <h2 className="side-title">{t('editor.seo')}</h2>
+        <SeoFields
+          value={{ seoTitle: form.seoTitle, seoDescription: form.seoDescription, socialImageUrl: form.socialImageUrl }}
+          onChange={update}
+          title={form.title}
+          excerpt={form.excerpt}
+          slug={form.slug || post?.slug || ''}
+          bannerUrl={form.bannerUrl}
+        />
+      </section>
+
+      {/* Before it's public: a secret link to show it to someone (it shows what's saved). */}
+      {post && post.status !== 'published' && !post.deleted && (
+        <section className="card side-card">
+          <h2 className="side-title">{t('editor.preview')}</h2>
+          {post.previewToken ? (
+            <>
+              <div className="preview-link">
+                <input
+                  className="input"
+                  readOnly
+                  value={`${window.location.origin}/previzualizare/${post.previewToken}`}
+                  onFocus={(event) => event.target.select()}
+                  aria-label={t('editor.preview')}
+                />
+                <button type="button" className="icon-btn" aria-label={t('editor.previewCopy')} title={t('editor.previewCopy')} onClick={() => void copyPreview(post.previewToken!)}>
+                  <Copy size={16} />
+                </button>
+              </div>
+              <span className="field-hint">{t('editor.previewOnHint')}</span>
+              <div className="preview-link-actions">
+                <a href={`/previzualizare/${post.previewToken}`} target="_blank" rel="noopener" className="btn btn-ghost btn-sm">
+                  <Eye size={15} /> {t('editor.previewOpen')}
+                </a>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={previewBusy} onClick={() => void setPreview(false)}>
+                  <Link2Off size={15} /> {t('editor.previewOff')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="field-hint">{t('editor.previewHint')}</span>
+              <button type="button" className="btn btn-secondary btn-block" disabled={previewBusy} onClick={() => void setPreview(true)}>
+                <Eye size={15} /> {t('editor.previewCreate')}
+              </button>
+            </>
+          )}
+        </section>
+      )}
+
+      {post && (
+        <button type="button" className="btn btn-secondary btn-block" onClick={() => setVersionsOpen(true)}>
+          <History size={16} /> {t('versions.title')}
+        </button>
+      )}
 
       {post && compact && !fromPost && (
         <Link to={`/posts/${post.slug}`} className="btn btn-secondary btn-block" target="_blank">
@@ -690,6 +814,15 @@ export function EditorPage() {
             {settings}
           </div>
         </Modal>
+      )}
+
+      {versionsOpen && post && (
+        <VersionsDialog
+          base={`/u/${encodeURIComponent(post.author.username)}/articole/${post.id}`}
+          current={{ title: form.title, contentHtml: form.contentHtml }}
+          onRestore={restoreVersion}
+          onClose={() => setVersionsOpen(false)}
+        />
       )}
 
       {blocker.state === 'blocked' && (

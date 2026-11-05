@@ -5,7 +5,7 @@ import type { RowDataPacket } from 'mysql2/promise';
 import opentype from 'opentype.js';
 import sharp from 'sharp';
 import type { OverlayOptions } from 'sharp';
-import { site } from '../../../site.config';
+import { site } from '@/lib/siteIdentity';
 import { config } from '@/config';
 import { BRAND_VERSION, LOGO, NIGHT } from '@/seo/brand';
 
@@ -84,9 +84,12 @@ function titleBlock(title: string) {
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 /** The logo's PNGs with a 256-colour palette: alike to the eye, a quarter of the size (a 512px icon ~100 KB). */
 const PNG = { palette: true, quality: 95, effort: 10, compressionLevel: 9 } as const;
-let trimmed: Promise<Buffer> | null = null;
-/** The logo without the empty margin around it. */
-const trimmedLogo = () => (trimmed ??= sharp(LOGO).trim().png().toBuffer());
+let trimmed: { version: string; image: Promise<Buffer> } | null = null;
+/** The logo without the empty margin around it (made again when the logo changes). */
+function trimmedLogo() {
+  if (trimmed?.version !== BRAND_VERSION) trimmed = { version: BRAND_VERSION, image: sharp(LOGO).trim().png().toBuffer() };
+  return trimmed.image;
+}
 
 /** The logo fitted into a size x size square, transparent around it. */
 async function logoPng(size: number) {
@@ -295,6 +298,38 @@ export function appIcon(size: number, fullBleed: boolean | 'badge') {
     },
     // Earlier versions of this icon (and the star icons from before the logo).
     (old) => new RegExp(`^${kind}(-[0-9a-f]{8})?\\.png$`).test(old),
+  );
+}
+
+/**
+ * /favicon.ico, for browsers and crawlers that ask for it at the root instead of reading the page's icon links: the
+ * logo at 16, 32 and 48 px, as PNGs inside an ICO file (understood everywhere since Windows Vista).
+ */
+export function faviconIco() {
+  return cached(
+    `favicon-${BRAND_VERSION}.ico`,
+    async () => {
+      const images = await Promise.all([16, 32, 48].map(async (size) => ({ size, png: await logoPng(size) })));
+      const header = Buffer.alloc(6 + 16 * images.length);
+      header.writeUInt16LE(0, 0); // reserved
+      header.writeUInt16LE(1, 2); // 1: an icon
+      header.writeUInt16LE(images.length, 4);
+      let offset = header.length;
+      images.forEach(({ size, png }, i) => {
+        const entry = 6 + 16 * i;
+        header.writeUInt8(size, entry); // width
+        header.writeUInt8(size, entry + 1); // height
+        header.writeUInt8(0, entry + 2); // no palette
+        header.writeUInt8(0, entry + 3); // reserved
+        header.writeUInt16LE(1, entry + 4); // colour planes
+        header.writeUInt16LE(32, entry + 6); // bits per pixel
+        header.writeUInt32LE(png.length, entry + 8);
+        header.writeUInt32LE(offset, entry + 12);
+        offset += png.length;
+      });
+      return Buffer.concat([header, ...images.map((image) => image.png)]);
+    },
+    (old) => /^favicon(-[0-9a-f]{8})?\.ico$/.test(old),
   );
 }
 

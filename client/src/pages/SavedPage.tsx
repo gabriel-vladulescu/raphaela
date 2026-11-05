@@ -3,9 +3,6 @@ import { Link, Navigate, useParams } from 'react-router';
 import { Bookmark, Lock } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
 import { PersonHeader } from '@/components/PersonHeader';
-import { SavedHeader } from '@/components/SavedHeader';
-import { useLayoutVariant, VariantSwitcher } from '@/components/VariantSwitcher';
-import type { LayoutVariant } from '@/components/VariantSwitcher';
 import { PostCard } from '@/components/PostCard';
 import { useAuth } from '@/context/auth';
 import { useReactions } from '@/context/reactions';
@@ -15,13 +12,6 @@ import { savedPath } from '@/lib/paths';
 import { usePerson } from '@/lib/people';
 import type { PostSummary } from '@/lib/types';
 import { GridSkeleton, PageError, PersonHeaderSkeleton, PersonMissing } from '@/pages/ArticlesPage';
-
-// TEMPORARY: the variants of the top of a person's saved posts being compared, until one is chosen.
-const VARIANTS: LayoutVariant[] = [
-  { id: 'a', label: 'A', hint: 'Centrat, ca la Profil și Suport' },
-  { id: 'b', label: 'B', hint: 'Titlul la stânga, acțiunile la dreapta' },
-  { id: 'c', label: 'C', hint: 'O bandă subțire, cu poza mică' },
-];
 
 /**
  * Saved posts. /articole-salvate: a guest's, kept in this browser (signed in, their own page instead).
@@ -111,21 +101,13 @@ function PersonSaved({ username, own }: { username: string; own: boolean }) {
   }, [username, own]);
 
   const list = own ? mine.saved : theirs?.username === username ? theirs.value : null;
-  const variant = useLayoutVariant('salvate', VARIANTS) as 'a' | 'b' | 'c' | null;
-  const count = own ? (mine.loading ? null : mine.saved.length) : Array.isArray(list) ? list.length : null;
   if (view === 'missing' || list === 'missing') return <PersonMissing />;
   if (view === 'error') return <PageError message={t('error.generic')} />;
 
   return (
     <div className="container person-page">
       <HeaderBackLink />
-      {view === null ? (
-        <PersonHeaderSkeleton />
-      ) : variant ? (
-        <SavedHeader view={view} count={count} variant={variant} />
-      ) : (
-        <PersonHeader view={view} list="articole-salvate" />
-      )}
+      {view === null ? <PersonHeaderSkeleton /> : <PersonHeader view={view} list="articole-salvate" />}
       {list === 'private' ? (
         <div className="empty-state card">
           <Lock size={34} className="empty-icon" aria-hidden="true" />
@@ -141,7 +123,6 @@ function PersonSaved({ username, own }: { username: string; own: boolean }) {
           empty={t(own ? 'saved.empty' : 'people.emptySaved')}
         />
       )}
-      <VariantSwitcher page="salvate" variants={VARIANTS} />
     </div>
   );
 }

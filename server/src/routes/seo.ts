@@ -5,6 +5,9 @@ import { parseId } from '@/lib/guards';
 import { VISIBLE_POST } from '@/lib/posts';
 import { logoImage, postShareImage, profileShareImage, profileShareVersion, shareImageVersion, siteShareImage } from '@/seo/og';
 import { findPerson } from '@/lib/people';
+import { publicIdentity } from '@/lib/siteIdentity';
+import { publicSiteSettings } from '@/lib/siteSettings';
+import { BRAND_VERSION } from '@/seo/brand';
 import { describePage } from '@/seo/page';
 
 /** Versioned URLs never change content, so platforms and browsers can keep them; others are rechecked. */
@@ -21,8 +24,11 @@ const seoRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { path: string } }>(
     '/seo/page',
     { schema: { querystring: { type: 'object', required: ['path'], properties: { path: { type: 'string', maxLength: 2000 } } } } },
-    async (req) => describePage(db, req.query.path),
+    async (req) => describePage(db, req.query.path, req.user),
   );
+
+  // What every page needs (window.__SITE__ comes with the page; this is for after a change in the admin panel).
+  app.get('/site', async () => ({ identity: publicIdentity(), settings: publicSiteSettings(), brand: BRAND_VERSION }));
 
   // A post's share image (link previews): its banner with the title, category and site name over it.
   app.get<{ Params: { file: string }; Querystring: { v?: string } }>('/og/posts/:file', async (req, reply) => {

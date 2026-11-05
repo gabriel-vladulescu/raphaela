@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import type { FastifyPluginAsync } from 'fastify';
-import { site } from '../../../site.config';
+import { site } from '@/lib/siteIdentity';
 import { BRAND_VERSION, NIGHT } from '@/seo/brand';
-import { appIcon, splashLogo } from '@/seo/og';
+import { appIcon, faviconIco, splashLogo } from '@/seo/og';
 
 /** The images made from the logo, by file name: the home-screen icons the manifest and index.html point to, the
  *  favicon, the splash's logo, and the notification badge. Each resolves to a cached file. */
@@ -46,6 +46,12 @@ const pwaRoutes: FastifyPluginAsync = async (app) => {
         { src: icon('maskable-512.png'), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     };
+  });
+
+  // The pages link to /icons/favicon-64.png; this is for what asks for /favicon.ico anyway (and would get a 404).
+  app.get('/favicon.ico', async (_req, reply) => {
+    reply.type('image/x-icon').header('Cache-Control', 'public, max-age=86400');
+    return reply.send(fs.createReadStream(await faviconIco()));
   });
 
   app.get<{ Params: { file: string } }>('/icons/:file', async (req, reply) => {

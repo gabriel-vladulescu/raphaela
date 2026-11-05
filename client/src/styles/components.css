@@ -2206,3 +2206,190 @@ a.reaction-static:hover {
   min-width: 0;
   padding: 6px;
 }
+
+/* ---------- Cookie banner (ConsentBanner): bottom left on wide screens, across the bottom on phones ---------- */
+.consent {
+  position: fixed;
+  left: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 66; /* over the install card and the phone bars, under toasts */
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  animation: consent-in 0.3s var(--ease);
+}
+
+@keyframes consent-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.consent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.consent-head h2 {
+  flex: 1;
+  margin: 0;
+  color: var(--text);
+  font-size: 1.02rem;
+}
+
+.consent-close {
+  margin: -4px -6px -4px 0;
+}
+
+.consent-text {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.consent-text a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.consent-options {
+  display: grid;
+  gap: 8px;
+}
+
+.consent-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  cursor: pointer;
+}
+
+.consent-option > span {
+  display: grid;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+
+.consent-option.is-locked {
+  cursor: default;
+}
+
+.consent-option.is-locked .switch {
+  opacity: 0.6;
+}
+
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.consent-actions .btn {
+  flex: 1 1 auto;
+}
+
+.consent-custom {
+  flex-basis: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .consent {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+}
+
+/* Footer links that are buttons (the cookie choice). */
+button.footer-link,
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.link-btn {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.link-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.link-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Reporting a comment (ReportCommentModal) ---------- */
+.report-reasons,
+.choice-list {
+  display: grid;
+  gap: 6px;
+}
+
+.report-reason,
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  cursor: pointer;
+}
+
+.report-reason:hover,
+.choice:hover {
+  background: var(--highlight);
+}
+
+.report-reason.is-selected,
+.choice.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.report-reason input,
+.choice input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.report-reason > span,
+.choice > span {
+  display: grid;
+  gap: 1px;
+}
+
+.choice-group {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}

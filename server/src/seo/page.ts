@@ -1,7 +1,8 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { site } from '../../../site.config';
 import { config } from '@/config';
-import { loadPostPage } from '@/lib/posts';
+import { loadPostPage, VISIBLE_POST } from '@/lib/posts';
+import { publicIdentity, site } from '@/lib/siteIdentity';
+import { publicSiteSettings, siteSettings } from '@/lib/siteSettings';
 import { escapeHtml, scriptJson } from '@/seo/html';
 import type { PageMeta } from '@/seo/html';
 import { BRAND_VERSION } from '@/seo/brand';
@@ -17,7 +18,8 @@ import { findPerson } from '@/lib/people';
 const INDEX = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 const NO_INDEX = 'noindex, follow';
 /** Pages for signed-in people (or tools): never in search results. */
-const PRIVATE_PAGES = /^\/(login|register|saved|articole-salvate|profil|setari|notificari|statistici|suport)\/?$|^\/(admin|editor)\/|^\/[^/]+\/articole\/[^/]+\/?$/;
+const PRIVATE_PAGES =
+  /^\/(login|register|saved|articole-salvate|profil|setari|notificari|statistici|suport|parola-uitata|resetare-parola|confirmare-email|invitatie|setup)\/?$|^\/(admin|editor|previzualizare|newsletter)(\/|$)|^\/[^/]+\/articole\/[^/]+\/?$/;
 
 export const siteOrigin = () => config.appUrl.replace(/\/+$/, '');
 const absolute = (url: string) => (/^https?:\/\//.test(url) ? url : `${siteOrigin()}${url}`);
@@ -253,20 +255,22 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
   // the app, which asks the API with their session).
   const loaded = await loadPostPage(db, slug, null);
   if (!loaded) return notFound();
-  const { post, text } = loaded;
+  const { post, text, seo } = loaded;
   const origin = siteOrigin();
   const canonical = `${origin}/posts/${encodeURIComponent(post.slug)}`;
   const trail = trailOf(await categories(db), post.category?.id);
-  const image = { url: absolute(post.shareImage), alt: post.title };
+  // The author's own search title, description and share image, when they set them.
+  const image = { url: absolute(seo.image ?? post.shareImage), alt: post.title };
+  const searchTitle = seo.title ?? post.title;
   const published = post.publishedAt?.toISOString();
   const modified = new Date(post.updatedAt).toISOString();
 
   return page(
     200,
-    `${post.title} · ${site.name}`,
+    `${searchTitle} · ${site.name}`,
     {
-      title: post.title,
-      description: post.excerpt,
+      title: searchTitle,
+      description: seo.description ?? post.excerpt,
       canonical,
       robots: INDEX,
       type: 'article',
@@ -277,7 +281,7 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
         `<meta property="article:modified_time" content="${modified}">`,
         `<meta property="article:author" content="${escapeHtml(post.author.name)}">`,
         trail.length ? `<meta property="article:section" content="${escapeHtml(trail.at(-1)!.name)}">` : '',
-        ...trail.map((c) => `<meta property="article:tag" content="${escapeHtml(c.name)}">`),
+        ...[...trail.map((c) => c.name), ...post.tags.map((t) => t.name)].map((name) => `<meta property="article:tag" content="${escapeHtml(name)}">`),
         // Slack, Discord and others show these under the preview.
         `<meta name="twitter:label1" content="Timp de citit"><meta name="twitter:data1" content="${post.readingMinutes} min">`,
         `<meta name="twitter:label2" content="Scris de"><meta name="twitter:data2" content="${escapeHtml(post.author.name)}">`,
@@ -299,7 +303,7 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
           author: { '@type': 'Person', name: post.author.name, ...(post.author.occupation ? { jobTitle: post.author.occupation } : {}) },
           publisher: publisher(),
           articleSection: trail.at(-1)?.name,
-          keywords: trail.map((c) => c.name).join(', ') || undefined,
+          keywords: [...trail.map((c) => c.name), ...post.tags.map((t) => t.name)].join(', ') || undefined,
           inLanguage: site.language,
           wordCount: text.split(/\s+/).filter(Boolean).length,
           timeRequired: `PT${post.readingMinutes}M`,
@@ -316,6 +320,34 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
     postRoot(post, trail),
     { post },
   );
+}
+
+/** Where a post's old address now leads (its current slug), if it ever was one. */
+async function redirectFor(db: Pool, slug: string) {
+  const [rows] = await db.execute<RowDataPacket[]>(
+    `SELECT p.slug FROM post_redirects r JOIN posts p ON p.id = r.post_id WHERE r.old_slug = ? AND ${VISIBLE_POST}`,
+    [slug],
+  );
+  return (rows[0]?.slug as string | undefined) ?? null;
+}
+
+/** A tag's page (/eticheta/{slug}): its posts, for search engines once it has some. */
+async function tagPage(db: Pool, slug: string): Promise<PageMeta> {
+  const [rows] = await db.execute<RowDataPacket[]>(
+    `SELECT t.name, t.slug, (SELECT COUNT(*) FROM post_tags pt JOIN posts p ON p.id = pt.post_id WHERE pt.tag_id = t.id AND ${VISIBLE_POST}) AS posts
+       FROM tags t WHERE t.slug = ?`,
+    [slug],
+  );
+  const tag = rows[0];
+  if (!tag) return notFound();
+  const title = `${tag.name as string} · ${site.name}`;
+  return page(200, title, {
+    title,
+    description: `Articole despre ${tag.name as string} pe ${site.name}.`,
+    canonical: `${siteOrigin()}/eticheta/${tag.slug as string}`,
+    robots: Number(tag.posts) > 0 ? INDEX : NO_INDEX,
+    image: siteImage(),
+  });
 }
 
 function notFound(): PageMeta {
@@ -343,11 +375,33 @@ async function personPage(db: Pool, username: string, list: ProfileList): Promis
   });
 }
 
-export async function describePage(db: Pool, url: string): Promise<PageMeta> {
+/**
+ * The title, tags and initial content for the page at `url` (a path, with its query), with what every page needs
+ * (window.__SITE__). `viewer`: an administrator still sees the site while it's in maintenance; everyone else gets a
+ * "back soon" page (503, nothing of the content).
+ */
+export async function describePage(db: Pool, url: string, viewer: { id: number; role: string } | null = null): Promise<PageMeta> {
+  const info = { identity: publicIdentity(), settings: publicSiteSettings(), brand: BRAND_VERSION };
+  if (siteSettings().maintenance && viewer?.role !== 'owner') {
+    return { ...page(503, site.name, { title: site.name, description: site.description, robots: 'noindex' }), site: info };
+  }
+  return { ...(await describeRoute(db, url, viewer)), site: info };
+}
+
+async function describeRoute(db: Pool, url: string, viewer: { id: number; role: string } | null): Promise<PageMeta> {
   const { pathname, searchParams } = new URL(url, 'http://localhost');
   if (pathname === '/' || pathname === '/index.html') return home(db, searchParams);
   const post = /^\/posts\/([^/]+)\/?$/.exec(pathname);
-  if (post) return postPage(db, decodeURIComponent(post[1]!));
+  if (post) {
+    const slug = decodeURIComponent(post[1]!);
+    const found = await postPage(db, slug);
+    if (found.status !== 404) return found;
+    // An old address of a post (its slug changed): there for good.
+    const moved = await redirectFor(db, slug);
+    return moved ? { ...found, status: 301, redirect: `/posts/${encodeURIComponent(moved)}` } : found;
+  }
+  const tag = /^\/eticheta\/([^/]+)\/?$/.exec(pathname);
+  if (tag) return tagPage(db, decodeURIComponent(tag[1]!));
   if (pathname === '/termeni-si-conditii') {
     return page(200, `Termeni și Condiții · ${site.name}`, {
       title: `Termeni și Condiții · ${site.name}`,
@@ -360,5 +414,25 @@ export async function describePage(db: Pool, url: string): Promise<PageMeta> {
   if (PRIVATE_PAGES.test(pathname)) return page(200, site.name, { title: site.name, description: site.description, robots: 'noindex' });
   const list = /^\/([a-z0-9.]{3,30})\/(articole|articole-salvate)\/?$/.exec(pathname);
   if (list) return personPage(db, list[1]!, list[2] as ProfileList);
+  const person = /^\/([a-z0-9.]{3,30})\/?$/.exec(pathname);
+  if (person) return personIndex(db, person[1]!, viewer);
   return notFound();
+}
+
+/**
+ * Just /{username}: on to their list this viewer may see (as client/src/pages/PersonIndex.tsx chooses): their
+ * articles if they write and the list is public (or the viewer manages it), else their saved posts; with neither
+ * open, the articles for someone who writes, the saved posts otherwise (each page then says it's private). A
+ * temporary redirect, since it follows their privacy settings.
+ */
+async function personIndex(db: Pool, username: string, viewer: { id: number; role: string } | null): Promise<PageMeta> {
+  const found = await findPerson(db, username);
+  if (!found) return notFound();
+  const me = viewer?.id === found.id;
+  const manage = me || viewer?.role === 'owner';
+  const [[counts]] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM posts p WHERE p.author_id = ? AND ${VISIBLE_POST}`, [found.id]);
+  const writes = found.role === 'author' || Number(counts!.n) > 0 || (me && found.role === 'owner');
+  const savedOpen = found.role !== 'owner' && (found.publicSaved || me);
+  const target: ProfileList = writes && (found.publicArticles || manage) ? 'articole' : savedOpen ? 'articole-salvate' : writes ? 'articole' : 'articole-salvate';
+  return { ...notFound(), status: 302, redirect: `/${found.username}/${target}` };
 }

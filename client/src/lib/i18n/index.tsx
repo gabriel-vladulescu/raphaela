@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { site } from '@/config';
 import { ApiError } from '@/lib/api';
 import { en, ro } from '@/lib/i18n/messages';
 import type { MessageKey } from '@/lib/i18n/messages';
@@ -13,12 +14,15 @@ export const LANGS: { code: Lang; label: string }[] = [
 const messages = { ro, en };
 const locales: Record<Lang, string> = { ro: 'ro-RO', en: 'en-GB' };
 
+/** The visitor's choice, else the site's default language (the admin panel's Identity). */
 function initialLang(): Lang {
   try {
-    return localStorage.getItem('lang') === 'en' ? 'en' : 'ro';
+    const saved = localStorage.getItem('lang');
+    if (saved === 'en' || saved === 'ro') return saved;
   } catch {
-    return 'ro';
+    // no storage: the default
   }
+  return site.defaultLanguage;
 }
 
 function useI18nValue() {
@@ -43,7 +47,7 @@ function useI18nValue() {
       (messages[lang][key] ?? ro[key] ?? key).replace(/\{(\w+)\}/g, (match, name: string) => String(vars?.[name] ?? match));
 
     /** "1 răspuns / 3 răspunsuri / 20 de răspunsuri" in Romanian, "1 reply / 3 replies" in English. */
-    const plural = (base: 'comments.replies' | 'post.views' | 'notif.comments' | 'notif.likes' | 'people.saved' | 'stats.visitorsN' | 'stats.comparedWith', n: number) => {
+    const plural = (base: 'comments.replies' | 'post.views' | 'follow.count' | 'notif.comments' | 'notif.likes' | 'stats.visitorsN' | 'stats.comparedWith', n: number) => {
       const romanianDe = lang === 'ro' && n !== 0 && !(n % 100 >= 1 && n % 100 <= 19);
       const form = n === 1 ? 'one' : romanianDe ? 'other' : 'few';
       return t(`${base}.${form}`, { n: new Intl.NumberFormat(locale).format(n) });

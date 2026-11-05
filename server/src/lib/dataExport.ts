@@ -1,0 +1,91 @@
+import type { Pool, RowDataPacket } from 'mysql2/promise';
+
+// Everything the site keeps about an account, for its person to download (GDPR: access and portability). The same
+// list as the Terms' "what we keep" (client/src/pages/termsContent.ts).
+
+const rows = async (db: Pool, sql: string, params: unknown[]) => (await db.query<RowDataPacket[]>(sql, params))[0];
+
+export async function exportAccount(db: Pool, userId: number) {
+  const [account] = await rows(
+    db,
+    `SELECT id, email, email_verified_at, name, username, picture, avatar_url, role, occupation, quote, created_at, last_login_at,
+            terms_accepted_at, google_id IS NOT NULL AS google_connected, password_hash IS NOT NULL AS has_password,
+            public_articles, public_saved, notify_settings
+       FROM users WHERE id = ?`,
+    [userId],
+  );
+  return {
+    exportedAt: new Date().toISOString(),
+    account: account
+      ? {
+          ...account,
+          google_connected: Boolean(account.google_connected),
+          has_password: Boolean(account.has_password),
+          public_articles: Boolean(account.public_articles),
+          public_saved: Boolean(account.public_saved),
+          notify_settings: typeof account.notify_settings === 'string' ? JSON.parse(account.notify_settings) : account.notify_settings,
+        }
+      : null,
+    comments: await rows(
+      db,
+      `SELECT m.id, m.parent_id, p.title AS post, p.slug AS post_slug, m.body, m.created_at, m.edited_at, m.deleted_at,
+              (SELECT JSON_ARRAYAGG(JSON_OBJECT('body', r.body, 'replaced_at', r.replaced_at)) FROM comment_revisions r WHERE r.comment_id = m.id) AS earlier_versions
+         FROM comments m JOIN posts p ON p.id = m.post_id WHERE m.user_id = ? ORDER BY m.created_at`,
+      [userId],
+    ),
+    commentReactions: await rows(
+      db,
+      'SELECT r.comment_id, r.emoji, r.created_at, r.removed_at FROM comment_reactions r WHERE r.user_id = ? ORDER BY r.created_at',
+      [userId],
+    ),
+    likes: await rows(
+      db,
+      'SELECT p.title AS post, p.slug AS post_slug, l.created_at, l.removed_at FROM post_likes l JOIN posts p ON p.id = l.post_id WHERE l.user_id = ? ORDER BY l.created_at',
+      [userId],
+    ),
+    savedPosts: await rows(
+      db,
+      'SELECT p.title AS post, p.slug AS post_slug, b.created_at FROM post_bookmarks b JOIN posts p ON p.id = b.post_id WHERE b.user_id = ? ORDER BY b.created_at',
+      [userId],
+    ),
+    posts: await rows(
+      db,
+      'SELECT id, title, slug, status, published_at, created_at, updated_at, deleted_at FROM posts WHERE author_id = ? ORDER BY created_at',
+      [userId],
+    ),
+    reportsSent: await rows(
+      db,
+      'SELECT comment_id, reason, details, created_at, resolved_at, resolution FROM comment_reports WHERE reporter_id = ? ORDER BY created_at',
+      [userId],
+    ),
+    supportTickets: await rows(
+      db,
+      `SELECT t.id, t.email, t.name, t.category, t.title, t.body, t.created_at,
+              (SELECT JSON_ARRAYAGG(a.file_name) FROM support_attachments a WHERE a.ticket_id = t.id) AS attachments
+         FROM support_tickets t WHERE t.user_id = ? ORDER BY t.created_at`,
+      [userId],
+    ),
+    notifications: await rows(db, 'SELECT type, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY created_at', [userId]),
+    pushDevices: await rows(db, 'SELECT created_at, last_sent_at, new_posts, activity FROM push_subscriptions WHERE user_id = ?', [userId]),
+    sessions: await rows(db, 'SELECT created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at', [userId]),
+    following: await rows(
+      db,
+      'SELECT u.name AS author, u.username, f.created_at FROM author_follows f JOIN users u ON u.id = f.author_id WHERE f.user_id = ? ORDER BY f.created_at',
+      [userId],
+    ),
+    newsletter: await rows(
+      db,
+      `SELECT s.email, s.frequency, s.lang, s.created_at, s.confirmed_at, s.unsubscribed_at,
+              (SELECT COUNT(*) FROM newsletter_deliveries d WHERE d.subscriber_id = s.id) AS emails_received
+         FROM newsletter_subscribers s WHERE s.user_id = ? OR s.email = (SELECT email FROM users WHERE id = ?)`,
+      [userId, userId],
+    ),
+    // Statistics recorded while signed in (with consent): pages read, how long, and actions.
+    pageViews: await rows(
+      db,
+      'SELECT day, path, referrer, device, loads, active_seconds, max_scroll FROM page_views WHERE user_id = ? ORDER BY day, id',
+      [userId],
+    ),
+    actions: await rows(db, 'SELECT day, action, path, times FROM events WHERE user_id = ? ORDER BY day, id', [userId]),
+  };
+}

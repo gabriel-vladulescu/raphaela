@@ -1,23 +1,28 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router';
-import { BarChart3, Bookmark, FileText, Plus, Search, X } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router';
+import { BarChart3, Bookmark, FileText, Hash, Plus, Search, X } from 'lucide-react';
 import { CategoryTree } from '@/components/CategoryTree';
+import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { FeedPost, FeedPostSkeleton, PostCard, PostCardSkeleton } from '@/components/PostCard';
+import { site } from '@/config';
 import { useAuth } from '@/context/auth';
 import { useCategories } from '@/context/categories';
 import { useReactions } from '@/context/reactions';
+import { trackSearch } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { categoryPath } from '@/lib/categories';
 import { articlesPath, newArticlePath, savedPath } from '@/lib/paths';
 import { useHeaderSlot } from '@/lib/headerSlot';
 import { hideSplash } from '@/lib/splash';
 import { useI18n } from '@/lib/i18n';
-import type { PostSummary } from '@/lib/types';
+import type { PostSummary, Tag } from '@/lib/types';
 import { useHideOnScroll } from '@/lib/useHideOnScroll';
 import { NARROW, useMediaQuery } from '@/lib/useMediaQuery';
 
 const PAGE_SIZE = 12;
+/** The right-hand sidebar (categories, newsletter): hidden for now, the posts taking its width; true brings it back. */
+const SHOW_SIDEBAR = false;
 
 interface PostPage {
   posts: PostSummary[];
@@ -58,7 +63,8 @@ function WriterBar() {
 }
 
 /**
- * The posts, newest first, with search and categories. Wide screens: a grid of cards beside the category tree.
+ * The posts, newest first (those an administrator pinned before them), with search, categories and tags
+ * (/eticheta/:tag). Wide screens: a grid of cards beside the category tree.
  * Narrow screens (phones and tablets, like the post page's bottom bar): a feed (one post after another, more loading
  * on the way down), the search in the top bar, no categories.
  */
@@ -72,6 +78,8 @@ export function HomePage() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const categorySlug = params.get('category') ?? '';
+  const { tag: tagSlug = '' } = useParams();
+  const [tag, setTag] = useState<Tag | null>(null);
 
   const [search, setSearch] = useState(q);
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -109,6 +117,7 @@ export function HomePage() {
     const query = new URLSearchParams({ page: String(pageNumber), limit: String(PAGE_SIZE) });
     if (q) query.set('q', q);
     if (categorySlug) query.set('category', categorySlug);
+    if (tagSlug) query.set('tag', tagSlug);
     return `/posts?${query}`;
   };
 
@@ -132,7 +141,32 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [q, categorySlug]);
+  }, [q, categorySlug, tagSlug]);
+
+  // A tag's page: its name (the address has its slug), also in the tab's title.
+  useEffect(() => {
+    setTag(null);
+    if (!tagSlug) return;
+    let cancelled = false;
+    api<{ tag: Tag }>(`/tags/${encodeURIComponent(tagSlug)}`)
+      .then((data) => {
+        if (cancelled) return;
+        setTag(data.tag);
+        document.title = `#${data.tag.name} · ${site.name}`;
+      })
+      .catch(() => !cancelled && setTag({ name: tagSlug, slug: tagSlug }));
+    return () => {
+      cancelled = true;
+      document.title = site.name;
+    };
+  }, [tagSlug]);
+
+  // A search the reader stopped at (2 s without typing), with what it found: the admin panel's search insights.
+  useEffect(() => {
+    if (!q || loading || error) return;
+    const timer = setTimeout(() => trackSearch(q, posts.length), 2000);
+    return () => clearTimeout(timer);
+  }, [q, loading]);
 
   async function loadMore() {
     setLoadingMore(true);
@@ -162,11 +196,12 @@ export function HomePage() {
 
   const category = categories.find((c) => c.slug === categorySlug);
   const trail = category ? categoryPath(categories, category.id) : [];
-  const filtered = Boolean(q || categorySlug);
+  const filtered = Boolean(q || categorySlug || tagSlug);
   const [featured, ...rest] = filtered ? [undefined, ...posts] : posts;
   const withoutCategory = new URLSearchParams(params);
   withoutCategory.delete('category');
-  const clearCategoryHref = withoutCategory.toString() ? `/?${withoutCategory}` : '/';
+  const clearCategoryHref = `${tagSlug ? `/eticheta/${tagSlug}` : '/'}${withoutCategory.toString() ? `?${withoutCategory}` : ''}`;
+  const clearTagHref = params.toString() ? `/?${params}` : '/';
 
   const searchBox = (
     <label className="search-box home-search">
@@ -187,7 +222,7 @@ export function HomePage() {
   );
 
   return (
-    <div className="container home-layout">
+    <div className={`container home-layout${SHOW_SIDEBAR ? '' : ' is-full'}${isOwner ? ' no-saved' : ''}`}>
       {/* Narrow screens: in the top bar, beside its buttons. */}
       {narrow && headerSlot ? createPortal(searchBox, headerSlot) : searchBox}
 
@@ -200,13 +235,29 @@ export function HomePage() {
         </Link>
       )}
 
-      <aside className="sidebar card">
-        <CategoryTree />
-      </aside>
+      {SHOW_SIDEBAR && (
+        <aside className="sidebar">
+          <div className="card">
+            <CategoryTree />
+          </div>
+          {!narrow && <NewsletterSignup />}
+        </aside>
+      )}
 
       <section className="feed" aria-busy={loading}>
-        {(category || q) && (
+        {(category || q || tagSlug) && (
           <div className="feed-context">
+            {tagSlug && (
+              <span className="filter-chip">
+                <span className="filter-chip-current">
+                  <Hash size={14} aria-hidden="true" />
+                  {tag?.name ?? tagSlug}
+                </span>
+                <Link to={clearTagHref} className="filter-chip-clear" aria-label={t('home.clearFilters')} title={t('home.clearFilters')}>
+                  <X size={14} />
+                </Link>
+              </span>
+            )}
             {category && (
               <span className="filter-chip">
                 {trail.map((c, i) => (
@@ -258,8 +309,12 @@ export function HomePage() {
         ) : narrow ? (
           <>
             <div className="feed-list">
-              {posts.map((post) => (
-                <FeedPost key={post.id} post={post} featured={post === featured} />
+              {posts.map((post, index) => (
+                <Fragment key={post.id}>
+                  <FeedPost post={post} featured={post === featured} />
+                  {/* The newsletter, a few posts in (wide screens have it in the sidebar). */}
+                  {index === Math.min(3, posts.length - 1) && !filtered && <NewsletterSignup variant="wide" />}
+                </Fragment>
               ))}
               {loadingMore && <FeedPostSkeleton />}
             </div>

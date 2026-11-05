@@ -13,7 +13,7 @@ import { TextAlign } from '@tiptap/extension-text-align';
 import { Color, TextStyle } from '@tiptap/extension-text-style';
 import { Typography } from '@tiptap/extension-typography';
 import { Youtube } from '@tiptap/extension-youtube';
-import { LoaderCircle } from 'lucide-react';
+import { ImageIcon, LoaderCircle } from 'lucide-react';
 import { Toolbar } from '@/components/editor/Toolbar';
 import { uploadImage } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -94,11 +94,36 @@ export function RichEditor({ initialHtml, onChange }: RichEditorProps) {
 
   // Storage is gone on an editor that's being destroyed (e.g. StrictMode's remount in development).
   const words = useEditorState({ editor, selector: ({ editor: current }) => current.storage.characterCount?.words() ?? 0 });
+  // A picture's description (alt text): read aloud by screen readers and read by search engines. Edited in a bar
+  // while the picture is selected; the footer counts the pictures still without one.
+  const image = useEditorState({
+    editor,
+    selector: ({ editor: current }) => {
+      let missing = 0;
+      current.state.doc.descendants((node) => {
+        if (node.type.name === 'image' && !String(node.attrs.alt ?? '').trim()) missing++;
+      });
+      return { selected: current.isActive('image'), alt: String(current.getAttributes('image').alt ?? ''), missing };
+    },
+  });
 
   return (
     <div className="rich-editor">
       <Toolbar editor={editor} onPickImages={(files) => void insertImages(files)} />
       <EditorContent editor={editor} />
+      {image.selected && (
+        <label className="image-alt-bar">
+          <ImageIcon size={16} aria-hidden="true" />
+          <span className="image-alt-label">{t('editor.imageAlt')}</span>
+          <input
+            className="input"
+            maxLength={250}
+            value={image.alt}
+            placeholder={t('editor.imageAltPlaceholder')}
+            onChange={(event) => editor.chain().updateAttributes('image', { alt: event.target.value }).run()}
+          />
+        </label>
+      )}
       <div className="editor-footer">
         <span>
           {t('editor.words', { n: words })} · {t('post.readingTime', { n: Math.max(1, Math.round(words / 200)) })}
@@ -106,6 +131,11 @@ export function RichEditor({ initialHtml, onChange }: RichEditorProps) {
         {uploading > 0 && (
           <span className="uploading">
             <LoaderCircle size={14} className="spin" /> {t('editor.uploading')}
+          </span>
+        )}
+        {image.missing > 0 && (
+          <span className="image-alt-missing" title={t('editor.imageAltHint')}>
+            <ImageIcon size={14} aria-hidden="true" /> {t('editor.imageAltMissing', { n: image.missing })}
           </span>
         )}
         {uploadError && <span className="form-error">{uploadError}</span>}

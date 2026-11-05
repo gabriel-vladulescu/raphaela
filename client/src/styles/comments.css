@@ -466,6 +466,8 @@
   place-items: center;
   width: 40px;
   height: 40px;
+  /* No browser padding: it pushed the emoji (wider than it is tall) off the circle's centre. */
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: none;
@@ -922,4 +924,16 @@ button.rx-row:hover {
   gap: 14px;
   padding: 14px 12px;
   font-size: 1rem;
+}
+
+/* A deleted account's comment: no name, just "deleted account". */
+.t-meta strong.t-gone {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 600;
+}
+
+/* Commenting waits for a confirmed address (the admin panel's setting). */
+.discussion-verify {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
 }

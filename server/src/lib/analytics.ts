@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import { site } from '../../../site.config';
+import { site } from '@/lib/siteIdentity';
 import { notifyViews } from '@/lib/notifications';
 
 /**
@@ -99,6 +99,12 @@ export async function recordView(
   const visitor = req.visitor;
   if (visitor.bot) return false;
   const postId = await livePostId(db, input.postId);
+  // Without consent to statistics nothing about the visitor is kept: a post only counts one more view (the browser
+  // reports a post once per visit to it).
+  if (!visitor.analytics || !visitor.fingerprint) {
+    if (postId) await countPostView(db, postId);
+    return postId !== null;
+  }
   const device = input.tablet && visitor.device === 'desktop' ? 'tablet' : visitor.device; // iPads say they're Macs
   const [result] = await db.execute<ResultSetHeader>(
     `INSERT INTO page_views (day, path, post_id, visitor_id, fingerprint, user_id, referrer, device, first_at, last_at)
@@ -117,19 +123,22 @@ export async function recordView(
     ],
   );
   const isNew = result.affectedRows === 1;
-  if (isNew && postId) {
-    await db.execute('UPDATE posts SET view_count = view_count + 1 WHERE id = ?', [postId]);
-    // Milestones, or every N views: the author hears about it (as they chose, lib/notifications.ts).
-    const [[post]] = await db.execute<RowDataPacket[]>('SELECT view_count FROM posts WHERE id = ?', [postId]);
-    void notifyViews(db, { postId, total: Number(post?.view_count ?? 0) });
-  }
+  if (isNew && postId) await countPostView(db, postId);
   return isNew;
+}
+
+/** One more view on a post's counter. Milestones, or every N views: the author hears about it (as they chose,
+ *  lib/notifications.ts). */
+async function countPostView(db: Pool, postId: number) {
+  await db.execute('UPDATE posts SET view_count = view_count + 1 WHERE id = ?', [postId]);
+  const [[post]] = await db.execute<RowDataPacket[]>('SELECT view_count FROM posts WHERE id = ?', [postId]);
+  void notifyViews(db, { postId, total: Number(post?.view_count ?? 0) });
 }
 
 /** Reading time on a page (active seconds since the last report) and how far into a post the visitor got (%). */
 export async function addReadingTime(db: Pool, req: FastifyRequest, input: { path: string; seconds: number; scroll: number }) {
   const visitor = req.visitor;
-  if (visitor.bot) return;
+  if (visitor.bot || !visitor.analytics) return;
   await db.execute(
     `UPDATE page_views SET active_seconds = active_seconds + ?, max_scroll = GREATEST(max_scroll, ?), last_at = UTC_TIMESTAMP()
       WHERE day = ? AND path = ? AND (visitor_id = ? OR fingerprint = ?)
@@ -155,7 +164,7 @@ export async function recordEvent(
   input: { action: Action; path: string; postId?: number | null; seconds?: number | null },
 ) {
   const visitor = req.visitor;
-  if (visitor.bot) return false;
+  if (visitor.bot || !visitor.analytics) return false;
   const postId = await livePostId(db, input.postId);
   const seconds = input.seconds == null ? null : Math.min(Math.max(Math.round(input.seconds), 0), 86_400);
   const [result] = await db.execute<ResultSetHeader>(

@@ -1,7 +1,11 @@
+import { statsAllowed } from '@/lib/consent';
+
 /**
  * Statistics: which page is being read, for how long, how far into a post, and what readers do there. Reading time
  * is active time: the tab is visible and the reader did something (scrolled, touched, typed) in the last 45 seconds.
  * The server keeps one row per visitor, page and day (server/src/lib/analytics.ts). Automated browsers aren't counted.
+ * Only with the visitor's consent (the cookie banner, lib/consent.ts); without it, a post only gets one more view on
+ * its counter (once per visit to it while the site is open), and shares still tell the author.
  */
 
 /** Mirrors ACTIONS in server/src/lib/analytics.ts. */
@@ -44,6 +48,8 @@ let lastTick = 0;
 let lastActivity = 0;
 let landing = true; // the first page of the visit carries the referrer
 let listening = false;
+/** Without consent: the posts already counted while the site is open (kept in memory only). */
+const counted = new Set<number>();
 const automated = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
 function post(url: string, body: unknown) {
@@ -67,7 +73,7 @@ function tick() {
 }
 
 function report() {
-  if (!page) return;
+  if (!page || !statsAllowed()) return;
   tick();
   const seconds = Math.floor((page.activeMs - page.reportedMs) / 1000);
   if (seconds < 1 && page.scroll <= page.reportedScroll) return;
@@ -113,6 +119,13 @@ const isTablet = () => /Macintosh/.test(navigator.userAgent) && navigator.maxTou
  * the post's view count, this view included.
  */
 export async function trackPage(path: string, postId: number | null = null): Promise<number | null> {
+  if (!statsAllowed()) {
+    page = { path, postId, activeMs: 0, reportedMs: 0, scroll: 0, reportedScroll: 0 };
+    if (postId === null || counted.has(postId)) return null;
+    counted.add(postId);
+    const result = (await post('/track/view', { path, postId, automated })) as { views?: number | null } | null;
+    return result?.views ?? null;
+  }
   if (!listening) listen();
   report();
   page = { path, postId, activeMs: 0, reportedMs: 0, scroll: 0, reportedScroll: 0 };
@@ -136,8 +149,23 @@ export function readSeconds() {
 
 /** Records an action on the current page, with how long the reader had been on it. */
 export function track(action: Action, postId?: number | null) {
-  if (!page) return;
+  if (!page || (!statsAllowed() && !action.startsWith('share:'))) return;
   beacon('/track/event', { action, path: page.path, postId: postId ?? page.postId, seconds: readSeconds() });
+}
+
+/** Searches already reported while the site is open. */
+const searched = new Set<string>();
+
+/**
+ * A search on the home page and how many posts it found, for the admin panel's search insights (what readers look
+ * for, and what they don't find). Only the words and a count per day are kept, nothing about who searched, so it
+ * needs no consent. Once per search while the site is open.
+ */
+export function trackSearch(q: string, results: number) {
+  const query = q.trim().toLowerCase();
+  if (query.length < 2 || searched.has(query)) return;
+  searched.add(query);
+  beacon('/track/search', { q: query.slice(0, 100), results });
 }
 
 /** A short buzz for likes and saves (phones that allow it: Android; iPhones ignore it). */

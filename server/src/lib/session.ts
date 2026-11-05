@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { config } from '@/config';
+import { ACTIVE_ACCOUNT } from '@/lib/accounts';
 
 export type Role = 'member' | 'author' | 'owner';
 
@@ -30,6 +31,10 @@ export interface SessionUser {
   google: boolean;
   /** Has a password (accounts made with Google don't, until they set one). */
   hasPassword: boolean;
+  /** The address was confirmed (a link sent to it, a new password through it, or Google). */
+  emailVerified: boolean;
+  /** A new address waiting for its confirmation link to be followed (the email stays the old one until then). */
+  pendingEmail: string | null;
 }
 
 const SESSION_COOKIE = 'sid';
@@ -40,7 +45,9 @@ const hashToken = (token: string) => crypto.createHash('sha256').update(token).d
 
 const USER_COLUMNS =
   'u.id, u.email, u.name, u.username, u.picture, u.avatar_url, u.role, u.name_confirmed, u.terms_accepted_at, u.occupation, u.quote, ' +
-  'u.public_articles, u.public_saved, u.google_id IS NOT NULL AS google_linked, u.password_hash IS NOT NULL AS has_password';
+  'u.public_articles, u.public_saved, u.google_id IS NOT NULL AS google_linked, u.password_hash IS NOT NULL AS has_password, ' +
+  "u.email_verified_at, (SELECT t.email FROM email_tokens t WHERE t.user_id = u.id AND t.purpose = 'change' AND t.expires_at > UTC_TIMESTAMP() " +
+  'ORDER BY t.created_at DESC LIMIT 1) AS pending_email';
 
 function toSessionUser(row: RowDataPacket): SessionUser {
   return {
@@ -59,6 +66,8 @@ function toSessionUser(row: RowDataPacket): SessionUser {
     publicSaved: Boolean(row.public_saved),
     google: Boolean(row.google_linked),
     hasPassword: Boolean(row.has_password),
+    emailVerified: row.email_verified_at !== null,
+    pendingEmail: (row.pending_email as string | null) ?? null,
   };
 }
 
@@ -68,7 +77,7 @@ export async function getSessionUser(db: Pool, req: FastifyRequest): Promise<Ses
   const [rows] = await db.execute<RowDataPacket[]>(
     `SELECT ${USER_COLUMNS}
        FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > UTC_TIMESTAMP()`,
+      WHERE s.id = ? AND s.expires_at > UTC_TIMESTAMP() AND ${ACTIVE_ACCOUNT}`,
     [hashToken(token)],
   );
   return rows[0] ? toSessionUser(rows[0]) : null;
@@ -94,6 +103,11 @@ export async function startSession(db: Pool, reply: FastifyReply, userId: number
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });
+}
+
+/** Signed out everywhere (a new password set through an emailed link, Google taking over an unconfirmed account). */
+export async function endAllSessions(db: Pool, userId: number) {
+  await db.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
 }
 
 /** After a new password: signed out everywhere else (this browser stays signed in). */

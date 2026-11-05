@@ -166,8 +166,8 @@ async function seed(db: Pool) {
 
     const [result] = await db.execute<ResultSetHeader>(
       `INSERT INTO posts (author_id, category_id, title, slug, excerpt, content_html, content_text, reading_minutes,
-                          banner_url, status, published_at, comments_enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                          banner_url, status, published_at, comments_enabled, created_at, updated_at, announced_at, newsletter_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         users[post.author],
         categories[post.category] ?? null,
@@ -183,6 +183,10 @@ async function seed(db: Pool) {
         post.commentsOff ? 0 : 1,
         written,
         publishedAt && publishedAt.getTime() < now ? publishedAt : written,
+        // Demo posts already out count as announced (no notifications, pushes or newsletter emails for them);
+        // scheduled ones are announced when their time comes, like any other.
+        publishedAt && publishedAt.getTime() <= now ? publishedAt : null,
+        publishedAt && publishedAt.getTime() <= now ? publishedAt : null,
       ],
     );
     await track(db, 'posts', result.insertId);

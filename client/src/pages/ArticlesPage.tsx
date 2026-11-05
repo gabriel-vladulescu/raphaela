@@ -102,38 +102,6 @@ export function ArticlesPage() {
   );
 }
 
-/** /admin/articole: every post, to manage, with "New post" (in an author's name, picked in the editor). */
-export function AdminArticlesPage() {
-  const { t, errorMessage } = useI18n();
-  const { user } = useAuth();
-  const [list, setList] = useState<ArticleList | string | null>(null);
-
-  useEffect(() => {
-    api<ArticleList>(`/u/${encodeURIComponent(user!.username)}/articole`)
-      .then(setList)
-      .catch((err) => setList(errorMessage(err)));
-  }, []);
-
-  const setPosts: Dispatch<SetStateAction<PostSummary[]>> = (change) =>
-    setList((state) => (state && typeof state === 'object' ? { ...state, posts: typeof change === 'function' ? change(state.posts) : change } : state));
-
-  return (
-    <div className="container person-page">
-      <HeaderBackLink to="/admin" label={t('admin.back')} />
-      <section className="page-hero">
-        <div className="page-hero-text">
-          <h1>{t('nav.manage')}</h1>
-          <p className="muted">{t('manage.subtitle')}</p>
-        </div>
-        <Link to={newArticlePath(user!.username)} className="btn btn-primary">
-          <Plus size={17} /> {t('manage.new')}
-        </Link>
-      </section>
-      {list === null ? <GridSkeleton /> : typeof list === 'string' ? <p className="form-error">{list}</p> : <ManageList posts={list.posts} setPosts={setPosts} everyone />}
-    </div>
-  );
-}
-
 /** "New post", for an author's own list, and for administrators (on an author's list it's in that author's name). */
 function NewPostButton({ view }: { view: PersonView }) {
   const { t } = useI18n();

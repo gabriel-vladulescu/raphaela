@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Check, CheckCheck, Eye, Heart, LifeBuoy, MessageCircle, Reply, Share2, SlidersHorizontal, SmilePlus, Sparkles, Trophy } from 'lucide-react';
+import { AtSign, Check, CheckCheck, Clock, Eye, Flag, Heart, LifeBuoy, MessageCircle, Reply, Share2, SlidersHorizontal, SmilePlus, Sparkles, Trophy, UserX } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
 import { KINDS, NO_FILTER, NotificationFilters } from '@/components/NotificationFilters';
@@ -14,7 +14,23 @@ import { setUnread } from '@/lib/unread';
 
 interface Notification {
   id: number;
-  type: 'comment' | 'reply' | 'like' | 'share' | 'views' | 'new_post' | 'comment_reply' | 'comment_reaction' | 'post_reaction' | 'milestone' | 'support';
+  type:
+    | 'comment'
+    | 'reply'
+    | 'like'
+    | 'share'
+    | 'views'
+    | 'new_post'
+    | 'comment_reply'
+    | 'comment_reaction'
+    | 'post_reaction'
+    | 'milestone'
+    | 'support'
+    | 'report'
+    | 'account_due'
+    | 'comment_held'
+    | 'mention'
+    | 'followed_post';
   /** Likes and shares grouped while unread. */
   times: number;
   /** Shares: the app. */
@@ -28,6 +44,8 @@ interface Notification {
   comment: { id: number; body: string | null } | null;
   actor: { id: number; name: string; picture: string | null } | null;
   ticket: { id: number; title: string; email: string } | null;
+  /** Administrators: a deleted account waiting to be deleted for good. */
+  account: { id: number; name: string } | null;
 }
 
 interface Page {
@@ -49,6 +67,11 @@ const ICONS = {
   post_reaction: SmilePlus,
   milestone: Trophy,
   support: LifeBuoy,
+  report: Flag,
+  account_due: UserX,
+  comment_held: Clock,
+  mention: AtSign,
+  followed_post: Sparkles,
 };
 const APPS: Record<string, string> = {
   whatsapp: 'WhatsApp',
@@ -232,14 +255,27 @@ export function NotificationsPage() {
       }
       case 'support':
         return t('notif.support', { email: n.ticket?.email ?? '', title: n.ticket?.title ?? '' });
+      case 'report':
+        return n.times === 1 ? say('notif.report') : say('notif.reportMany', { n: n.times });
+      case 'account_due':
+        return t('notif.accountDue', { name: n.account?.name ?? '' });
+      case 'comment_held':
+        return n.times === 1 ? say('notif.held') : say('notif.heldMany', { n: n.times });
+      case 'mention':
+        return say('notif.mention');
+      case 'followed_post':
+        return say('notif.followedPost');
     }
   };
 
   /** Where a notification leads: its ticket, its post's discussion, or the post. */
   const target = (n: Notification) => {
     if (n.type === 'support') return n.ticket ? `/admin/suport/${n.ticket.id}` : '/admin/suport';
+    if (n.type === 'report') return '/admin/comentarii?filter=reported';
+    if (n.type === 'comment_held') return '/admin/comentarii?filter=held';
+    if (n.type === 'account_due') return n.account ? `/admin/utilizatori?status=due&id=${n.account.id}` : '/admin/utilizatori?status=due';
     if (!n.post) return '/';
-    const discussion = ['comment', 'reply', 'comment_reply', 'comment_reaction', 'post_reaction'].includes(n.type);
+    const discussion = ['comment', 'reply', 'comment_reply', 'comment_reaction', 'post_reaction', 'mention'].includes(n.type);
     return `/posts/${n.post.slug}${discussion ? '#discussion-title' : ''}`;
   };
 

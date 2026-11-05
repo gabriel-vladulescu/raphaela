@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
-import { site } from '../../../site.config';
+import { site } from '@/lib/siteIdentity';
+import { siteSettings } from '@/lib/siteSettings';
 import { summaryOf, TEXT_START, VISIBLE_POST } from '@/lib/posts';
 import { shareImagePath } from '@/seo/og';
 import { siteOrigin } from '@/seo/page';
@@ -15,14 +16,24 @@ const feedRoutes: FastifyPluginAsync = async (app) => {
   const { db } = app;
 
   app.get('/robots.txt', async (_req, reply) => {
-    const body = ['User-agent: *', 'Allow: /', 'Disallow: /admin/', 'Disallow: /editor/', 'Disallow: /*/articole/', '', `Sitemap: ${siteOrigin()}/sitemap.xml`, ''].join('\n');
+    const body = ['User-agent: *', 'Allow: /', 'Disallow: /admin', 'Disallow: /editor/', 'Disallow: /resetare-parola', 'Disallow: /confirmare-email', 'Disallow: /*/articole/', '', `Sitemap: ${siteOrigin()}/sitemap.xml`, ''].join('\n');
     return reply.type('text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(body);
   });
 
+  // Closed for maintenance: the posts aren't listed either (search engines come back later, as the pages tell them).
+  const closed = () => siteSettings().maintenance;
+
   app.get('/sitemap.xml', async (_req, reply) => {
+    if (closed()) return reply.code(503).header('Retry-After', '3600').type('text/plain; charset=utf-8').send('Maintenance');
     const origin = siteOrigin();
     const [posts] = await db.query<RowDataPacket[]>(
       `SELECT p.slug, p.title, p.banner_url, p.updated_at FROM posts p WHERE ${VISIBLE_POST} ORDER BY p.published_at DESC`,
+    );
+    // Tags with public posts (each has its page).
+    const [tags] = await db.query<RowDataPacket[]>(
+      `SELECT t.slug, MAX(p.updated_at) AS updated_at
+         FROM tags t JOIN post_tags pt ON pt.tag_id = t.id JOIN posts p ON p.id = pt.post_id AND ${VISIBLE_POST}
+        GROUP BY t.slug`,
     );
     const [categories] = await db.query<RowDataPacket[]>(
       `SELECT c.slug, MAX(p.updated_at) AS updated_at
@@ -39,6 +50,7 @@ const feedRoutes: FastifyPluginAsync = async (app) => {
           '</url>',
       ),
       ...categories.map((category) => `<url><loc>${xml(`${origin}/?category=${encodeURIComponent(category.slug)}`)}</loc>${lastmod(category.updated_at)}</url>`),
+      ...tags.map((tag) => `<url><loc>${xml(`${origin}/eticheta/${encodeURIComponent(tag.slug)}`)}</loc>${lastmod(tag.updated_at)}</url>`),
       `<url><loc>${origin}/termeni-si-conditii</loc></url>`,
     ];
     const body = `<?xml version="1.0" encoding="UTF-8"?>
@@ -50,6 +62,7 @@ ${urls.join('\n')}
   });
 
   app.get('/rss.xml', async (_req, reply) => {
+    if (closed()) return reply.code(503).header('Retry-After', '3600').type('text/plain; charset=utf-8').send('Maintenance');
     const origin = siteOrigin();
     const [posts] = await db.query<RowDataPacket[]>(
       `SELECT p.id, p.slug, p.title, p.excerpt, ${TEXT_START}, p.banner_url, p.published_at, u.name AS author_name, c.name AS category_name

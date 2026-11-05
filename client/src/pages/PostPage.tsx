@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, ArrowRight, CalendarClock, CalendarDays, Clock, Eye, Heart, House, MessageCircle, SquarePen } from 'lucide-react';
 import { AuthorSignature } from '@/components/AuthorSignature';
 import { Comments } from '@/components/Comments';
+import { FollowButton } from '@/components/FollowButton';
+import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { BookmarkButton, LikeButton } from '@/components/ReactionButtons';
 import { ShareButton } from '@/components/ShareSheet';
 import { site } from '@/config';
@@ -38,6 +40,7 @@ const anchorId = (text: string) =>
 export function PostPage() {
   const { slug = '' } = useParams();
   const { hash } = useLocation();
+  const navigate = useNavigate();
   const { user, isOwner, canEditPost } = useAuth();
   const { categories } = useCategories();
   const { t, plural, formatDate, formatShortDate, formatDateTime } = useI18n();
@@ -74,6 +77,11 @@ export function PostPage() {
       })
       .catch((err) => {
         if (cancelled) return;
+        // The post's address changed (its title did): on to the new one, in place of the old in the history.
+        if (err instanceof ApiError && err.code === 'moved' && typeof err.data.slug === 'string') {
+          navigate(`/posts/${encodeURIComponent(err.data.slug)}${hash}`, { replace: true });
+          return;
+        }
         // Only a 404 means there's no such post. Otherwise (e.g. offline, reading a page saved by the installed
         // app) the post the page came with stays.
         if (err instanceof ApiError && err.status === 404) setNotFound(true);
@@ -367,6 +375,16 @@ export function PostPage() {
           {/* Sanitized on the server when the post is saved. */}
           <div ref={contentRef} className="prose post-content" dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
 
+          {(post.tags?.length ?? 0) > 0 && (
+            <nav className="post-tags" aria-label={t('post.tags')}>
+              {post.tags.map((tag) => (
+                <Link key={tag.slug} to={`/eticheta/${tag.slug}`} className="chip chip-link">
+                  #{tag.name}
+                </Link>
+              ))}
+            </nav>
+          )}
+
           {nextPart && (
             <Link to={`/posts/${nextPart.slug}`} className="series-next card">
               <span className="series-next-text">
@@ -385,9 +403,13 @@ export function PostPage() {
             </div>
           </div>
 
+          {post.status === 'published' && !post.deleted && <NewsletterSignup />}
+
           {/* Narrow screens only: the author, in place of the sidebar's Author card. */}
           <div className="post-signature">
-            <AuthorSignature author={post.author} />
+            <AuthorSignature author={post.author}>
+              <FollowButton authorId={post.author.id} followers={post.author.followers ?? 0} />
+            </AuthorSignature>
           </div>
 
           {/* Narrow screens only: "Read next" moves here from the sidebar, as wide cards. */}
@@ -460,7 +482,9 @@ export function PostPage() {
           )}
 
           <div className="card side-card">
-            <AuthorSignature author={post.author} />
+            <AuthorSignature author={post.author}>
+              <FollowButton authorId={post.author.id} followers={post.author.followers ?? 0} />
+            </AuthorSignature>
           </div>
 
           {related.length > 0 && (

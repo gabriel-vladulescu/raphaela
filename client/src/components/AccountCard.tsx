@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { Check, KeyRound, Mail, TriangleAlert } from 'lucide-react';
+import { Check, Clock, KeyRound, Mail, TriangleAlert } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { GoogleLogo } from '@/components/GoogleButton';
 import { AlertModal, ConfirmModal, Modal } from '@/components/Modal';
 import { useAuth } from '@/context/auth';
-import { api, googleLinkUrl } from '@/lib/api';
+import { api, ApiError, googleLinkUrl } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/i18n/messages';
 import type { User } from '@/lib/types';
@@ -35,12 +35,14 @@ const RETURNS: Record<string, { notice?: MessageKey; error?: MessageKey }> = {
  * that could lock someone out, or that changes the email, says so in a dialog first.
  */
 export function AccountCard() {
-  const { t } = useI18n();
+  const { t, lang, errorMessage } = useI18n();
   const { user, setUser } = useAuth();
   const me = user!;
   const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [notice, setNotice] = useState<MessageKey | null>(null);
+  const [notice, setNotice] = useState<{ key: MessageKey; vars?: Record<string, string> } | null>(null);
+  const [resending, setResending] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [alert, setAlert] = useState<MessageKey | null>(null);
   const [pending, setPending] = useState<PendingGoogle | null>(null);
 
@@ -63,7 +65,7 @@ export function AccountCard() {
       return;
     }
     const result = RETURNS[outcome];
-    if (result?.notice) setNotice(result.notice);
+    if (result?.notice) setNotice({ key: result.notice });
     if (result?.error) setAlert(result.error);
   }, []);
 
@@ -73,11 +75,34 @@ export function AccountCard() {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const done = (updated: User, message: MessageKey) => {
+  const done = (updated: User, message: MessageKey, vars?: Record<string, string>) => {
     setUser(updated);
     setDialog(null);
-    setNotice(message);
+    setNotice({ key: message, vars });
   };
+
+  // The link that confirms the address, again.
+  async function resend() {
+    setResending(true);
+    setEmailError('');
+    try {
+      await api('/me/verify-email', { method: 'POST', body: { lang } });
+      setNotice({ key: 'verify.sent', vars: { email: me.email } });
+    } catch (err) {
+      setEmailError(err instanceof ApiError && err.code === 'rate_limited' ? t('verify.wait') : errorMessage(err));
+    } finally {
+      setResending(false);
+    }
+  }
+
+  async function cancelPending() {
+    setEmailError('');
+    try {
+      setUser((await api<{ user: User }>('/me/email/pending', { method: 'DELETE' })).user);
+    } catch (err) {
+      setEmailError(errorMessage(err));
+    }
+  }
 
   return (
     <section className="card profile-card signin-card">
@@ -89,7 +114,33 @@ export function AccountCard() {
         </span>
         <div className="signin-text">
           <strong>{t('profile.email')}</strong>
-          <span className="signin-value">{me.email}</span>
+          <span className="signin-value">
+            {me.email}{' '}
+            {me.emailVerified ? (
+              <span className="email-state is-ok" title={t('verify.confirmedHint')}>
+                <Check size={12} aria-hidden="true" /> {t('verify.confirmed')}
+              </span>
+            ) : (
+              <span className="email-state is-pending">{t('verify.unconfirmed')}</span>
+            )}
+          </span>
+          {!me.emailVerified && (
+            <span className="signin-sub">
+              {t('verify.why')}{' '}
+              <button type="button" className="link-btn" disabled={resending} onClick={() => void resend()}>
+                {resending ? t('common.loading') : t('verify.resend')}
+              </button>
+            </span>
+          )}
+          {me.pendingEmail && (
+            <span className="signin-sub">
+              <Clock size={13} aria-hidden="true" /> {t('account.emailWaiting', { email: me.pendingEmail })}{' '}
+              <button type="button" className="link-btn" onClick={() => void cancelPending()}>
+                {t('account.emailWaitingCancel')}
+              </button>
+            </span>
+          )}
+          {emailError && <span className="form-error small">{emailError}</span>}
         </div>
         <div className="signin-actions">
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDialog('email')}>
@@ -149,11 +200,18 @@ export function AccountCard() {
 
       {notice && (
         <p className="signin-notice" role="status">
-          <Check size={16} aria-hidden="true" /> {t(notice)}
+          <Check size={16} aria-hidden="true" /> {t(notice.key, notice.vars)}
         </p>
       )}
 
-      {dialog === 'email' && <EmailDialog onCancel={() => setDialog(null)} onDone={(updated) => done(updated, 'account.emailChanged')} />}
+      {dialog === 'email' && (
+        <EmailDialog
+          onCancel={() => setDialog(null)}
+          onDone={(updated, pendingEmail) =>
+            pendingEmail ? done(updated, 'account.emailPending', { email: pendingEmail }) : done(updated, 'account.emailChanged')
+          }
+        />
+      )}
       {dialog === 'password' && <PasswordDialog onCancel={() => setDialog(null)} onDone={(updated) => done(updated, 'account.passwordSaved')} />}
       {dialog === 'unlink' && <UnlinkDialog onCancel={() => setDialog(null)} onDone={(updated) => done(updated, 'account.googleUnlinked')} />}
       {dialog === 'replace' && (
@@ -264,13 +322,15 @@ function PasswordFields({ hasPassword, current, setCurrent, fresh, setFresh, fre
   );
 }
 
-function EmailDialog({ onCancel, onDone }: { onCancel: () => void; onDone: (user: User) => void }) {
-  const { t } = useI18n();
+function EmailDialog({ onCancel, onDone }: { onCancel: () => void; onDone: (user: User, pendingEmail: string | null) => void }) {
+  const { t, lang } = useI18n();
   const me = useAuth().user!;
   const [email, setEmail] = useState('');
   const [current, setCurrent] = useState('');
   const [fresh, setFresh] = useState('');
-  const { busy, error, setError, submit } = useSubmit(onDone);
+  // The server answers with the new address still waiting for its link (`pending`), or already changed.
+  const pendingRef = useRef<string | null>(null);
+  const { busy, error, setError, submit } = useSubmit((user) => onDone(user, pendingRef.current));
   return (
     <FormDialog
       title={t('account.emailTitle')}
@@ -280,9 +340,14 @@ function EmailDialog({ onCancel, onDone }: { onCancel: () => void; onDone: (user
       onCancel={onCancel}
       onSubmit={() => {
         if (email.trim().toLowerCase() === me.email) return setError(t('account.emailSame'));
-        void submit(() =>
-          api('/me/email', { method: 'PUT', body: { email: email.trim(), ...(me.hasPassword ? { currentPassword: current } : { newPassword: fresh }) } }),
-        );
+        void submit(async () => {
+          const result = await api<{ user: User; pending: string | null }>('/me/email', {
+            method: 'PUT',
+            body: { email: email.trim(), lang, ...(me.hasPassword ? { currentPassword: current } : { newPassword: fresh }) },
+          });
+          pendingRef.current = result.pending;
+          return result;
+        });
       }}
     >
       {me.google && (

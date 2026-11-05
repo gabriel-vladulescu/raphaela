@@ -16,7 +16,7 @@ export interface Person {
 export async function findPerson(db: Pool, username: string): Promise<Person | null> {
   const [rows] = await db.execute<RowDataPacket[]>(
     `SELECT id, username, name, COALESCE(avatar_url, picture) AS picture, role, occupation, quote, public_articles, public_saved
-       FROM users WHERE username = ?`,
+       FROM users WHERE username = ? AND deleted_at IS NULL`,
     [username.toLowerCase()],
   );
   const row = rows[0];
