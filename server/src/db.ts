@@ -23,11 +23,19 @@ export async function connectDb(options: Config['db']): Promise<Pool> {
     }
   }
 
-  await migrate(db);
+  await migrate(db, options.database);
   return db;
 }
 
-async function migrate(db: Pool) {
+async function migrate(db: Pool, database: string) {
+  // A database made by a hosting panel can default to latin1 (MariaDB on cPanel): tables made later would be too, and
+  // lose the diacritics. utf8mb4 from here on (the tables already there keep theirs).
+  const [schema] = await db.query<RowDataPacket[]>('SELECT DEFAULT_CHARACTER_SET_NAME AS charset FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [
+    database,
+  ]);
+  if (schema[0] && schema[0].charset !== 'utf8mb4') {
+    await db.query(`ALTER DATABASE \`${database.replace(/`/g, '``')}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  }
   await db.query('CREATE TABLE IF NOT EXISTS schema_migrations (version INT UNSIGNED PRIMARY KEY)');
   const [rows] = await db.query<RowDataPacket[]>('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations');
   const current = Number(rows[0].version);

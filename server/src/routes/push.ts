@@ -45,10 +45,10 @@ const pushRoutes: FastifyPluginAsync = async (app) => {
     const hash = endpointHash(subscription.endpoint);
     await db.execute(
       `INSERT INTO push_subscriptions (endpoint, endpoint_hash, p256dh, auth, user_id, visitor_id, device, new_posts, activity)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
-       ON DUPLICATE KEY UPDATE p256dh = new.p256dh, auth = new.auth, user_id = new.user_id, visitor_id = new.visitor_id,
-                               device = COALESCE(new.device, push_subscriptions.device)
-                               ${flags ? ', new_posts = new.new_posts, activity = new.activity' : ''}`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE p256dh = VALUES(p256dh), auth = VALUES(auth), user_id = VALUES(user_id), visitor_id = VALUES(visitor_id),
+                               device = COALESCE(VALUES(device), push_subscriptions.device)
+                               ${flags ? ', new_posts = VALUES(new_posts), activity = VALUES(activity)' : ''}`,
       [subscription.endpoint, hash, subscription.keys.p256dh, subscription.keys.auth, userId, visitorId, device, flags?.new_posts ? 1 : 0, flags?.activity ? 1 : 0],
     );
     const [[row]] = await db.execute<RowDataPacket[]>('SELECT id FROM push_subscriptions WHERE endpoint_hash = ?', [hash]);

@@ -127,8 +127,8 @@ const trackRoutes: FastifyPluginAsync = async (app) => {
       const query = req.body.q.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 100);
       if (query.length < 2) return reply.code(204).send();
       await db.execute(
-        `INSERT INTO search_log (day, query, searches, no_results) VALUES (?, ?, 1, ?) AS new
-         ON DUPLICATE KEY UPDATE searches = search_log.searches + 1, no_results = search_log.no_results + new.no_results`,
+        `INSERT INTO search_log (day, query, searches, no_results) VALUES (?, ?, 1, ?)
+         ON DUPLICATE KEY UPDATE searches = search_log.searches + 1, no_results = search_log.no_results + VALUES(no_results)`,
         [siteDay(), query, req.body.results === 0 ? 1 : 0],
       );
       return reply.code(204).send();

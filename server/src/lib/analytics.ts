@@ -108,9 +108,9 @@ export async function recordView(
   const device = input.tablet && visitor.device === 'desktop' ? 'tablet' : visitor.device; // iPads say they're Macs
   const [result] = await db.execute<ResultSetHeader>(
     `INSERT INTO page_views (day, path, post_id, visitor_id, fingerprint, user_id, referrer, device, first_at, last_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP()) AS new
-     ON DUPLICATE KEY UPDATE loads = LEAST(page_views.loads + 1, 65535), last_at = new.last_at,
-                             user_id = COALESCE(page_views.user_id, new.user_id)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+     ON DUPLICATE KEY UPDATE loads = LEAST(page_views.loads + 1, 65535), last_at = VALUES(last_at),
+                             user_id = COALESCE(page_views.user_id, VALUES(user_id))`,
     [
       siteDay(),
       normalizePath(input.path),
@@ -169,8 +169,8 @@ export async function recordEvent(
   const seconds = input.seconds == null ? null : Math.min(Math.max(Math.round(input.seconds), 0), 86_400);
   const [result] = await db.execute<ResultSetHeader>(
     `INSERT INTO events (day, action, path, post_id, visitor_id, fingerprint, user_id, first_seconds, first_at, last_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP()) AS new
-     ON DUPLICATE KEY UPDATE times = events.times + 1, last_at = new.last_at, user_id = COALESCE(events.user_id, new.user_id)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+     ON DUPLICATE KEY UPDATE times = events.times + 1, last_at = VALUES(last_at), user_id = COALESCE(events.user_id, VALUES(user_id))`,
     [siteDay(), input.action, normalizePath(input.path), postId, visitor.id, visitor.fingerprint, req.user?.id ?? null, seconds],
   );
   return result.affectedRows === 1;

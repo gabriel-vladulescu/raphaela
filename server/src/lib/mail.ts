@@ -77,7 +77,7 @@ export const mailSettings = () => settings;
 export const mailConfigured = () => Boolean(settings.host && settings.fromEmail);
 
 export async function saveMailSettings(db: Pool, next: SmtpSettings) {
-  await db.query("INSERT INTO app_settings (name, value) VALUES ('smtp', ?) AS new ON DUPLICATE KEY UPDATE value = new.value", [JSON.stringify(next)]);
+  await db.query("INSERT INTO app_settings (name, value) VALUES ('smtp', ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [JSON.stringify(next)]);
   settings = next;
   transport = null;
 }

@@ -4,6 +4,12 @@ import type { Pool, RowDataPacket } from 'mysql2/promise';
 // list as the Terms' "what we keep" (client/src/pages/termsContent.ts).
 
 const rows = async (db: Pool, sql: string, params: unknown[]) => (await db.query<RowDataPacket[]>(sql, params))[0];
+/** Columns made with JSON_ARRAYAGG, as lists: MySQL hands them over parsed, MariaDB as text. */
+const withLists = (list: RowDataPacket[], ...columns: string[]) =>
+  list.map((row) => {
+    for (const column of columns) if (typeof row[column] === 'string') row[column] = JSON.parse(row[column] as string);
+    return row;
+  });
 
 export async function exportAccount(db: Pool, userId: number) {
   const [account] = await rows(
@@ -27,12 +33,15 @@ export async function exportAccount(db: Pool, userId: number) {
           notify_settings: typeof account.notify_settings === 'string' ? JSON.parse(account.notify_settings) : account.notify_settings,
         }
       : null,
-    comments: await rows(
-      db,
-      `SELECT m.id, m.parent_id, p.title AS post, p.slug AS post_slug, m.body, m.created_at, m.edited_at, m.deleted_at,
-              (SELECT JSON_ARRAYAGG(JSON_OBJECT('body', r.body, 'replaced_at', r.replaced_at)) FROM comment_revisions r WHERE r.comment_id = m.id) AS earlier_versions
-         FROM comments m JOIN posts p ON p.id = m.post_id WHERE m.user_id = ? ORDER BY m.created_at`,
-      [userId],
+    comments: withLists(
+      await rows(
+        db,
+        `SELECT m.id, m.parent_id, p.title AS post, p.slug AS post_slug, m.body, m.created_at, m.edited_at, m.deleted_at,
+                (SELECT JSON_ARRAYAGG(JSON_OBJECT('body', r.body, 'replaced_at', r.replaced_at)) FROM comment_revisions r WHERE r.comment_id = m.id) AS earlier_versions
+           FROM comments m JOIN posts p ON p.id = m.post_id WHERE m.user_id = ? ORDER BY m.created_at`,
+        [userId],
+      ),
+      'earlier_versions',
     ),
     commentReactions: await rows(
       db,
@@ -70,14 +79,18 @@ export async function exportAccount(db: Pool, userId: number) {
       'SELECT comment_id, reason, details, created_at, resolved_at, resolution FROM comment_reports WHERE reporter_id = ? ORDER BY created_at',
       [userId],
     ),
-    supportTickets: await rows(
-      db,
-      `SELECT t.id, t.email, t.name, t.category, t.title, t.body, t.status, t.created_at,
-              (SELECT JSON_ARRAYAGG(a.file_name) FROM support_attachments a WHERE a.ticket_id = t.id) AS attachments,
-              (SELECT JSON_ARRAYAGG(JSON_OBJECT('from', IF(r.staff, 'support', 'you'), 'body', r.body, 'created_at', r.created_at))
-                 FROM support_replies r WHERE r.ticket_id = t.id) AS replies
-         FROM support_tickets t WHERE t.user_id = ? ORDER BY t.created_at`,
-      [userId],
+    supportTickets: withLists(
+      await rows(
+        db,
+        `SELECT t.id, t.email, t.name, t.category, t.title, t.body, t.status, t.created_at,
+                (SELECT JSON_ARRAYAGG(a.file_name) FROM support_attachments a WHERE a.ticket_id = t.id) AS attachments,
+                (SELECT JSON_ARRAYAGG(JSON_OBJECT('from', IF(r.staff, 'support', 'you'), 'body', r.body, 'created_at', r.created_at))
+                   FROM support_replies r WHERE r.ticket_id = t.id) AS replies
+           FROM support_tickets t WHERE t.user_id = ? ORDER BY t.created_at`,
+        [userId],
+      ),
+      'attachments',
+      'replies',
     ),
     notifications: await rows(db, 'SELECT type, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY created_at', [userId]),
     pushDevices: await rows(db, 'SELECT device, created_at, last_sent_at, new_posts, activity FROM push_subscriptions WHERE user_id = ?', [userId]),

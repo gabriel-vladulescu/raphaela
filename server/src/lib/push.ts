@@ -30,7 +30,7 @@ export async function initPush(db: Pool) {
     const keys = webpush.generateVAPIDKeys();
     publicKey = keys.publicKey;
     privateKey = keys.privateKey;
-    await db.query("INSERT INTO app_settings (name, value) VALUES ('vapid_public', ?), ('vapid_private', ?) AS new ON DUPLICATE KEY UPDATE value = new.value", [
+    await db.query("INSERT INTO app_settings (name, value) VALUES ('vapid_public', ?), ('vapid_private', ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [
       publicKey,
       privateKey,
     ]);

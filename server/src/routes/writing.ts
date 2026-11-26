@@ -97,7 +97,7 @@ function register(app: FastifyInstance, kind: Kind, base: string) {
     // A new address: the old one keeps leading here (shared links, search engines), and nothing else leads from
     // the new one any more. (A draft was never public: nobody has its old address.)
     if (row!.slug !== post.slug && post.status !== 'draft') {
-      await db.execute('INSERT INTO post_redirects (old_slug, post_id, created_at) VALUES (?, ?, UTC_TIMESTAMP()) AS new ON DUPLICATE KEY UPDATE post_id = new.post_id', [
+      await db.execute('INSERT INTO post_redirects (old_slug, post_id, created_at) VALUES (?, ?, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE post_id = VALUES(post_id)', [
         post.slug,
         id,
       ]);

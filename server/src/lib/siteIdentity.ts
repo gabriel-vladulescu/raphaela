@@ -51,7 +51,7 @@ export async function loadSiteIdentity(db: Pool) {
 }
 
 export async function saveSiteIdentity(db: Pool, next: SiteIdentity) {
-  await db.query("INSERT INTO app_settings (name, value) VALUES ('identity', ?) AS new ON DUPLICATE KEY UPDATE value = new.value", [JSON.stringify(next)]);
+  await db.query("INSERT INTO app_settings (name, value) VALUES ('identity', ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [JSON.stringify(next)]);
   apply(next);
   return site;
 }

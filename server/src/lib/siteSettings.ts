@@ -68,7 +68,7 @@ export const siteSettings = () => current;
 
 export async function saveSiteSettings(db: Pool, next: SiteSettings) {
   const value = merge(next);
-  await db.query("INSERT INTO app_settings (name, value) VALUES ('site', ?) AS new ON DUPLICATE KEY UPDATE value = new.value", [JSON.stringify(value)]);
+  await db.query("INSERT INTO app_settings (name, value) VALUES ('site', ?) ON DUPLICATE KEY UPDATE value = VALUES(value)", [JSON.stringify(value)]);
   current = value;
   return value;
 }

@@ -341,9 +341,9 @@ export async function saveProgress(db: Pool, userId: number, postId: number, pro
   const value = Math.max(0, Math.min(100, Math.round(progress)));
   const finished = value >= FINISHED_AT ? at : null;
   await db.execute(
-    `INSERT INTO reading_progress (user_id, post_id, progress, updated_at, finished_at) VALUES (?, ?, ?, ?, ?) AS new
-       ON DUPLICATE KEY UPDATE progress = GREATEST(reading_progress.progress, new.progress), updated_at = GREATEST(reading_progress.updated_at, new.updated_at),
-                               finished_at = COALESCE(reading_progress.finished_at, new.finished_at)`,
+    `INSERT INTO reading_progress (user_id, post_id, progress, updated_at, finished_at) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE progress = GREATEST(reading_progress.progress, VALUES(progress)), updated_at = GREATEST(reading_progress.updated_at, VALUES(updated_at)),
+                               finished_at = COALESCE(reading_progress.finished_at, VALUES(finished_at))`,
     [userId, postId, value, at, finished],
   );
   if (day && value >= 20) await db.execute('INSERT IGNORE INTO reading_days (user_id, day) VALUES (?, ?)', [userId, day]);
