@@ -42,6 +42,13 @@ export interface AccountChange {
 }
 
 /** A link sent to an account by email, and what became of it (the account's panel). */
+/** A new address waiting for its link to be opened (the address changes then). */
+export interface PendingEmail {
+  email: string;
+  sentAt: string;
+  expiresAt: string;
+}
+
 export interface EmailLink {
   purpose: 'verify' | 'reset' | 'change';
   email: string;

@@ -1,12 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { countAuthors } from '@/lib/follows';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import { createEmailToken, finalizeAccountDeletion, liftSuspension, restoreAccount, RETENTION_MONTHS, revokeEmailTokens, suspendAccount, SUSPENDED_NOW } from '@/lib/accounts';
+import { createEmailToken, finalizeAccountDeletion, liftSuspension, restoreAccount, RETENTION_MONTHS, revokeEmailTokens, sendVerification, suspendAccount, SUSPENDED_NOW } from '@/lib/accounts';
 import { recordAccountChange } from '@/lib/accountChanges';
 import { commentLabel, logAdmin } from '@/lib/adminLog';
 import type { AdminTarget } from '@/lib/adminLog';
 import { siteDay, siteDayStart } from '@/lib/analytics';
-import { langOf, resetEmail, siteLink, testEmail } from '@/lib/emails';
+import { changeEmail, langOf, resetEmail, siteLink, testEmail } from '@/lib/emails';
 import { parseId, requireOwner } from '@/lib/guards';
 import { mailConfigured, mailSettings, saveMailSettings, sendMail, sendTestMail } from '@/lib/mail';
 import type { SmtpSettings } from '@/lib/mail';
@@ -19,6 +19,7 @@ import { siteSettings } from '@/lib/siteSettings';
 import { publicBook } from '@/lib/books';
 import { periodProperties, periodWhere } from '@/lib/period';
 import type { Period } from '@/lib/period';
+import { canClaimEmail } from '@/lib/session';
 import { endSessions } from '@/lib/sessionEnd';
 import { AVATAR_PREFIX, removeUpload } from '@/lib/uploads';
 import { usernameProblemFor } from '@/lib/usernames';
@@ -342,6 +343,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
          FROM email_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 10`,
       [id],
     );
+    const pending = await pendingAddress(id);
     const base = toAdminUser(row);
     return {
       /** Its sign-ins (newest first): when, and whether they're still on, ran out, or ended (and why). */
@@ -377,6 +379,8 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
         via: c.via as string,
         at: c.changed_at as Date,
       })),
+      /** A new address waiting for its link to be opened (asked for by the person or an administrator). */
+      pendingEmail: pending,
       /** The links sent to the account by email (newest first), and what became of each. */
       links: links.map((l) => ({
         purpose: l.purpose as string,
@@ -677,6 +681,105 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     void logAdmin(db, req.user!, 'user.sessions_end', await userTarget(id), { sessions: num(open!.n) });
     return { ended: num(open!.n) };
   });
+
+  // ---- The account's address. A new one is confirmed by the person: a link goes to it, and the address changes when
+  // it's opened (24 hours), as when they change it themselves (routes/me.ts); a typo can't lose them the account.
+  // Everything here emails, so only with an email server.
+
+  // The new address waiting for its link, if any (the latest one still open).
+  const pendingAddress = async (id: number) => {
+    const [rows] = await db.execute<RowDataPacket[]>(
+      `SELECT email, created_at, expires_at FROM email_tokens
+        WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()
+        ORDER BY created_at DESC LIMIT 1`,
+      [id],
+    );
+    const row = rows[0];
+    return row ? { email: row.email as string, sentAt: row.created_at as Date, expiresAt: row.expires_at as Date } : null;
+  };
+
+  // A new address for the account: its link goes there (the address changes once it's opened).
+  app.post<{ Params: { id: string }; Body: { email: string; lang?: string } }>(
+    '/admin/users/:id/email',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email'],
+          additionalProperties: false,
+          properties: { email: { type: 'string', format: 'email', maxLength: 255 }, lang: { type: 'string', enum: ['ro', 'en'] } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const id = parseId(req.params.id);
+      const problem = await changeable(id, req.user!.id);
+      if (problem) return reply.code(problem.status).send({ error: problem.error });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
+      const email = req.body.email.trim().toLowerCase();
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT name, email, role FROM users WHERE id = ?', [id]);
+      if (email === row!.email) return reply.code(400).send({ error: 'email_same' });
+      // An administrator address only through Google; one another account has (even a deleted one) can't be taken.
+      if (!canClaimEmail(email, row!.role as 'member' | 'author')) return reply.code(400).send({ error: 'email_google_only' });
+      const [used] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ? AND id <> ?', [email, id]);
+      if (used[0]) return reply.code(409).send({ error: 'email_in_use' });
+      const token = await createEmailToken(db, id!, 'change', email);
+      const sent = await sendMail(changeEmail(email, langOf(req.body.lang), row!.name as string, siteLink(`/confirmare-email?token=${token}`)));
+      void logAdmin(db, req.user!, 'user.email_change', await userTarget(id), { from: row!.email, to: email, sent });
+      if (!sent) return reply.code(502).send({ error: 'email_failed' });
+      return { pendingEmail: await pendingAddress(id!) };
+    },
+  );
+
+  // The link for the address waiting, again (the person didn't get it, or it's about to run out).
+  app.post<{ Params: { id: string }; Body: { lang?: string } }>(
+    '/admin/users/:id/email/resend',
+    { schema: { body: { type: 'object', additionalProperties: false, properties: { lang: { type: 'string', enum: ['ro', 'en'] } } } } },
+    async (req, reply) => {
+      const id = parseId(req.params.id);
+      const problem = await changeable(id, req.user!.id);
+      if (problem) return reply.code(problem.status).send({ error: problem.error });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
+      const pending = await pendingAddress(id!);
+      if (!pending) return reply.code(404).send({ error: 'not_found' });
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT name FROM users WHERE id = ?', [id]);
+      const token = await createEmailToken(db, id!, 'change', pending.email);
+      const sent = await sendMail(changeEmail(pending.email, langOf(req.body?.lang), row!.name as string, siteLink(`/confirmare-email?token=${token}`)));
+      void logAdmin(db, req.user!, 'user.link_resend', await userTarget(id), { purpose: 'change', to: pending.email, sent });
+      if (!sent) return reply.code(502).send({ error: 'email_failed' });
+      return { pendingEmail: await pendingAddress(id!) };
+    },
+  );
+
+  // The address change given up: its links stop working, the address stays.
+  app.delete<{ Params: { id: string } }>('/admin/users/:id/email/pending', async (req, reply) => {
+    const id = parseId(req.params.id);
+    const problem = await changeable(id, req.user!.id);
+    if (problem) return reply.code(problem.status).send({ error: problem.error });
+    const pending = await pendingAddress(id!);
+    if (!pending) return reply.code(404).send({ error: 'not_found' });
+    await revokeEmailTokens(db, id!, ['change'], 'cancelled');
+    void logAdmin(db, req.user!, 'user.email_change_cancel', await userTarget(id), { to: pending.email });
+    return { pendingEmail: null };
+  });
+
+  // The link that confirms the account's address, again (it never arrived, or ran out).
+  app.post<{ Params: { id: string }; Body: { lang?: string } }>(
+    '/admin/users/:id/verification',
+    { schema: { body: { type: 'object', additionalProperties: false, properties: { lang: { type: 'string', enum: ['ro', 'en'] } } } } },
+    async (req, reply) => {
+      const id = parseId(req.params.id);
+      const problem = await changeable(id, req.user!.id);
+      if (problem) return reply.code(problem.status).send({ error: problem.error });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
+      const [[row]] = await db.execute<RowDataPacket[]>('SELECT name, email, email_verified_at FROM users WHERE id = ?', [id]);
+      if (row!.email_verified_at) return reply.code(409).send({ error: 'already_verified' });
+      const sent = await sendVerification(db, { id: id!, email: row!.email as string, name: row!.name as string }, langOf(req.body?.lang));
+      void logAdmin(db, req.user!, 'user.link_resend', await userTarget(id), { purpose: 'verify', to: row!.email, sent });
+      if (!sent) return reply.code(502).send({ error: 'email_failed' });
+      return { ok: true, email: row!.email as string };
+    },
+  );
 
   // Sends the person a link to choose a new password (someone who can't sign in and wrote to support). Only with a
   // way to send email.

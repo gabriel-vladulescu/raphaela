@@ -108,6 +108,11 @@ export function useDescribe() {
       }
       case 'user.sessions_end':
         return t('log.user.sessions_end', { target, n: Number(d.sessions ?? 0) });
+      case 'user.email_change':
+      case 'user.email_change_cancel':
+        return t(`log.${entry.action}` as AdminKey, { target, to: String(d.to ?? '') });
+      case 'user.link_resend':
+        return t(d.purpose === 'change' ? 'log.user.link_resend_change' : 'log.user.link_resend_verify', { target, to: String(d.to ?? '') });
       case 'book.publish':
       case 'book.unpublish':
       case 'book.restore':

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Ban, BellRing, CalendarClock, ChevronRight, History, KeyRound, LogIn, LogOut, Mail, MailCheck, MessageSquare, RotateCcw, ShieldCheck, ShieldX, Trash2, UserPen, Users } from 'lucide-react';
+import { AtSign, Ban, BellRing, CalendarClock, ChevronRight, History, KeyRound, LogIn, LogOut, Mail, MailCheck, MailPlus, MessageSquare, RotateCcw, Send, ShieldCheck, ShieldX, Trash2, TriangleAlert, UserPen, Users, X } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { FinalizeDialog } from '@/admin/FinalizeDialog';
 import { InviteDialog, InviteIcon, InvitesCard } from '@/admin/Invites';
@@ -8,7 +8,7 @@ import { useDescribe } from '@/admin/pages/Log';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
 import { SuspendDialog } from '@/admin/SuspendDialog';
-import type { AccountChange, AdminUser, AdminUserDetail, EmailLink, Login, LogEntry, LogPage, PushDevice, SignInAttempt, UserList, UserStatus } from '@/admin/types';
+import type { AccountChange, AdminUser, AdminUserDetail, EmailLink, Login, LogEntry, LogPage, PendingEmail, PushDevice, SignInAttempt, UserList, UserStatus } from '@/admin/types';
 import { Badge, Card, ConfirmDialog, Dialog, Empty, ErrorNote, Field, LoadMore, Loading, PageHead, roleKey, SearchBox, Select, Tabs } from '@/admin/ui';
 import { Avatar } from '@/components/Avatar';
 import { useAuth } from '@/context/auth';
@@ -233,6 +233,8 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
     attempts: SignInAttempt[];
     devices: PushDevice[];
     changes: AccountChange[];
+    /** A new address waiting for its link to be opened. */
+    pendingEmail: PendingEmail | null;
   } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -240,6 +242,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
   const [finalizing, setFinalizing] = useState(false);
   const [confirm, setConfirm] = useState<'lift' | 'restore' | 'sessions' | 'reset' | null>(null);
   const [editing, setEditing] = useState(false);
+  const [changingEmail, setChangingEmail] = useState(false);
   /** What the last action did, said under the buttons ("Signed out of 2 browsers"). */
   const [done, setDone] = useState('');
   const { overview } = useAdmin();
@@ -298,6 +301,46 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
               </span>
             </div>
           </div>
+
+          {/* A new address waiting for its link: the address changes when it's opened. */}
+          {data.pendingEmail && (
+            <div className="adm-callout is-info">
+              <AtSign size={18} aria-hidden="true" />
+              <div>
+                <strong>{t('users.pendingEmail', { email: data.pendingEmail.email })}</strong>
+                <p>
+                  {t('users.pendingEmailBody', { sent: timeAgo(data.pendingEmail.sentAt), until: formatDateTime(data.pendingEmail.expiresAt) })}
+                </p>
+                {editable && (
+                  <div className="adm-user-buttons">
+                    {canMail && (
+                      <button
+                        type="button"
+                        className="adm-btn is-small"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(
+                            () => api(`/admin/users/${u!.id}/email/resend`, { method: 'POST', body: { lang } }),
+                            () => t('users.emailChangeSent', { email: data.pendingEmail!.email }),
+                          )
+                        }
+                      >
+                        <Send size={14} /> {t('users.resendLink')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="adm-btn is-small is-ghost"
+                      disabled={busy}
+                      onClick={() => void run(() => api(`/admin/users/${u!.id}/email/pending`, { method: 'DELETE' }), () => t('users.emailChangeCancelled'))}
+                    >
+                      <X size={14} /> {t('users.cancelEmailChange')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {u!.deletedAt && u!.deletion && (
             <div className="adm-callout is-bad">
@@ -426,21 +469,39 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
                     <MailCheck size={14} /> {t('users.markVerified')}
                   </button>
                 )}
+                {/* (only with an email server: these go by email) */}
+                {!u!.emailVerified && canMail && (
+                  <button
+                    type="button"
+                    className="adm-btn is-small"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(
+                        () => api(`/admin/users/${u!.id}/verification`, { method: 'POST', body: { lang } }),
+                        () => t('users.verificationSent', { email: u!.email }),
+                      )
+                    }
+                  >
+                    <MailPlus size={14} /> {t('users.resendVerification')}
+                  </button>
+                )}
+                {canMail && (
+                  <button type="button" className="adm-btn is-small" disabled={busy} onClick={() => setChangingEmail(true)}>
+                    <AtSign size={14} /> {t('users.changeEmail')}
+                  </button>
+                )}
                 <button type="button" className="adm-btn is-small" onClick={() => setEditing(true)}>
                   <UserPen size={14} /> {t('profile.edit')}
                 </button>
                 <button type="button" className="adm-btn is-small" disabled={busy || u!.sessions === 0} onClick={() => setConfirm('sessions')}>
                   <LogOut size={14} /> {t('users.endSessions')}
                 </button>
-                <button
-                  type="button"
-                  className="adm-btn is-small"
-                  disabled={busy || !canMail}
-                  title={canMail ? undefined : t('users.resetNoMail')}
-                  onClick={() => setConfirm('reset')}
-                >
-                  <KeyRound size={14} /> {t('users.sendReset')}
-                </button>
+                {/* (only with an email server: the link goes by email) */}
+                {canMail && (
+                  <button type="button" className="adm-btn is-small" disabled={busy} onClick={() => setConfirm('reset')}>
+                    <KeyRound size={14} /> {t('users.sendReset')}
+                  </button>
+                )}
                 {!u!.suspension && (
                   <button type="button" className="adm-btn is-small is-danger-ghost" onClick={() => setSuspending(true)}>
                     <Ban size={14} /> {t('users.suspend')}
@@ -711,6 +772,18 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           }
         />
       )}
+      {changingEmail && u && (
+        <EmailDialog
+          user={u}
+          onClose={() => setChangingEmail(false)}
+          onSent={(email) => {
+            setChangingEmail(false);
+            setDone(t('users.emailChangeSent', { email }));
+            load();
+            onChanged();
+          }}
+        />
+      )}
       {editing && u && (
         <ProfileDialog
           user={u}
@@ -789,6 +862,62 @@ function ProfileDialog({ user, onClose, onSaved }: { user: AdminUserDetail; onCl
             <Avatar name={user.name} picture={user.picture} size={28} />
             <span>{t('profile.removePicture')}</span>
           </label>
+        )}
+        {error && <p className="adm-form-error">{error}</p>}
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * A new address for the account: a link goes to it, and the address changes when the person opens it (24 hours),
+ * as when they change it themselves; until then the old one stays. Google sign-in stops with the change.
+ */
+function EmailDialog({ user, onClose, onSent }: { user: AdminUserDetail; onClose: () => void; onSent: (email: string) => void }) {
+  const { t, lang, errorMessage } = useAdminI18n();
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const fresh = email.trim().toLowerCase();
+
+  async function send() {
+    if (fresh === user.email) return setError(t('users.emailSame'));
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/admin/users/${user.id}/email`, { method: 'POST', body: { email: fresh, lang } });
+      onSent(fresh);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      title={t('users.changeEmailTitle', { name: user.name })}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="adm-btn is-ghost" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </button>
+          <button type="button" className="adm-btn is-primary" onClick={() => void send()} disabled={busy || !/^\S+@\S+\.\S+$/.test(fresh)}>
+            <Send size={15} /> {busy ? t('common.loading') : t('users.changeEmailSubmit')}
+          </button>
+        </>
+      }
+    >
+      <div className="adm-form">
+        <p className="adm-muted adm-small">{t('users.changeEmailIntro', { email: user.email })}</p>
+        <Field label={t('users.newEmail')}>
+          <input className="adm-input" type="email" maxLength={255} value={email} autoFocus onChange={(event) => setEmail(event.target.value)} />
+        </Field>
+        {user.google && (
+          <p className="adm-callout is-warn adm-small">
+            <TriangleAlert size={16} aria-hidden="true" /> {t(user.hasPassword ? 'users.changeEmailGoogle' : 'users.changeEmailGoogleOnly')}
+          </p>
         )}
         {error && <p className="adm-form-error">{error}</p>}
       </div>

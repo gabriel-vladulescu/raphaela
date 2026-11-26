@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { MailPlus, RefreshCw, Send, X } from 'lucide-react';
+import { MailPlus, MailWarning, RefreshCw, Send, X } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
@@ -14,10 +14,11 @@ import { api } from '@/lib/api';
 
 const STATUS_TONE: Record<Invite['status'], Tone> = { pending: 'info', accepted: 'good', expired: 'neutral', revoked: 'neutral' };
 
-/** "Invite an author": the address and a few words, sent at once. */
+/** "Invite an author": the address and a few words, sent at once. Without an email server, only why not. */
 export function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
   const { t, lang, errorMessage } = useAdminI18n();
-  const { refreshOverview } = useAdmin();
+  const { overview, refreshOverview } = useAdmin();
+  const canMail = overview ? overview.mail.configured : true;
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,7 +45,7 @@ export function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent:
       title={t('invites.new')}
       onClose={onClose}
       footer={
-        sent === null ? (
+        sent === null && canMail ? (
           <>
             <button type="button" className="adm-btn is-ghost" onClick={onClose} disabled={busy}>
               {t('common.cancel')}
@@ -60,7 +61,20 @@ export function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent:
         )
       }
     >
-      {sent === null ? (
+      {!canMail ? (
+        <div className="adm-callout is-bad">
+          <MailWarning size={18} aria-hidden="true" />
+          <div>
+            <strong>{t('invites.noMailTitle')}</strong>
+            <p>
+              {t('invites.noMail')}{' '}
+              <Link to="/admin/setari?tab=email" className="adm-link" onClick={onClose}>
+                {t('common.setMail')}
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : sent === null ? (
         <>
           <p className="adm-muted adm-small">{t('invites.intro')}</p>
           <Field label={t('invites.email')}>
@@ -84,8 +98,10 @@ export function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent:
 
 /** The invitations sent: who to, by whom, and where each stands; send one again, or take it back. */
 export function InvitesCard() {
-  const { t, formatShortDate } = useAdminI18n();
-  const { refreshOverview } = useAdmin();
+  const { t, formatShortDate, errorMessage } = useAdminI18n();
+  const { overview, refreshOverview } = useAdmin();
+  /** Sending one again needs an email server. */
+  const canMail = overview ? overview.mail.configured : true;
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [note, setNote] = useState('');
@@ -109,6 +125,8 @@ export function InvitesCard() {
       }
       load();
       refreshOverview();
+    } catch (err) {
+      setNote(errorMessage(err));
     } finally {
       setBusy(null);
     }
@@ -137,9 +155,11 @@ export function InvitesCard() {
             <Badge tone={STATUS_TONE[invite.status]}>{t(`invites.status.${invite.status}` as AdminKey)}</Badge>
             {(invite.status === 'pending' || invite.status === 'expired') && (
               <div className="adm-row-actions">
-                <button type="button" className="adm-icon-btn" title={t('invites.resend')} aria-label={t('invites.resend')} disabled={busy === invite.id} onClick={() => void run(invite, 'resend')}>
-                  <RefreshCw size={15} />
-                </button>
+                {canMail && (
+                  <button type="button" className="adm-icon-btn" title={t('invites.resend')} aria-label={t('invites.resend')} disabled={busy === invite.id} onClick={() => void run(invite, 'resend')}>
+                    <RefreshCw size={15} />
+                  </button>
+                )}
                 {invite.status === 'pending' && (
                   <button type="button" className="adm-icon-btn is-danger" title={t('invites.revoke')} aria-label={t('invites.revoke')} disabled={busy === invite.id} onClick={() => void run(invite, 'revoke')}>
                     <X size={15} />

@@ -295,9 +295,10 @@ export function TicketPage() {
               ))}
             </ol>
           )}
-          <form className="adm-form adm-answer" onSubmit={reply}>
-            <h3 className="adm-subtitle">{t('support.answer')}</h3>
-            {!mail ? (
+          {/* Without an email server there's no answering: only the warning, no box to write in. */}
+          {!mail ? (
+            <div className="adm-answer">
+              <h3 className="adm-subtitle">{t('support.answer')}</h3>
               <div className="adm-callout is-bad">
                 <MailWarning size={18} aria-hidden="true" />
                 <div>
@@ -305,36 +306,39 @@ export function TicketPage() {
                   <p>
                     {t('support.noMail')}{' '}
                     <Link to="/admin/setari?tab=email" className="adm-link">
-                      {t('support.setMail')}
+                      {t('common.setMail')}
                     </Link>
                   </p>
                 </div>
               </div>
-            ) : (
-              <p className="adm-muted adm-small">{t(ticket.user ? 'support.answerBoth' : 'support.answerEmail', { email: ticket.email })}</p>
-            )}
-            <textarea
-              className="adm-input adm-textarea"
-              rows={6}
-              maxLength={5000}
-              value={answer}
-              disabled={!mail || sending}
-              placeholder={t('support.answerPlaceholder')}
-              aria-label={t('support.answer')}
-              onChange={(event) => setAnswer(event.target.value)}
-            />
-            {answerError && <p className="adm-form-error">{answerError}</p>}
-            <div className="adm-form-actions">
-              {sent && (
-                <span className="adm-saved" role="status">
-                  <CircleCheck size={15} /> {sent}
-                </span>
-              )}
-              <button type="submit" className="adm-btn is-primary" disabled={!mail || sending || answer.trim().length < 2}>
-                <Send size={15} /> {sending ? t('common.loading') : t('support.send')}
-              </button>
             </div>
-          </form>
+          ) : (
+            <form className="adm-form adm-answer" onSubmit={reply}>
+              <h3 className="adm-subtitle">{t('support.answer')}</h3>
+              <p className="adm-muted adm-small">{t(ticket.user ? 'support.answerBoth' : 'support.answerEmail', { email: ticket.email })}</p>
+              <textarea
+                className="adm-input adm-textarea"
+                rows={6}
+                maxLength={5000}
+                value={answer}
+                disabled={sending}
+                placeholder={t('support.answerPlaceholder')}
+                aria-label={t('support.answer')}
+                onChange={(event) => setAnswer(event.target.value)}
+              />
+              {answerError && <p className="adm-form-error">{answerError}</p>}
+              <div className="adm-form-actions">
+                {sent && (
+                  <span className="adm-saved" role="status">
+                    <CircleCheck size={15} /> {sent}
+                  </span>
+                )}
+                <button type="submit" className="adm-btn is-primary" disabled={sending || answer.trim().length < 2}>
+                  <Send size={15} /> {sending ? t('common.loading') : t('support.send')}
+                </button>
+              </div>
+            </form>
+          )}
         </Card>
         <Card title={t('support.sender')}>
           <dl className="adm-facts">
