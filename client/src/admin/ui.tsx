@@ -190,13 +190,17 @@ let openDialogs = 0;
  */
 export function Dialog(props: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; drawer?: boolean; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
+  /** Still on the page (its own closing, when it goes, isn't the browser's). */
+  const shown = useRef(false);
   const { t } = useAdminI18n();
   useEffect(() => {
     const dialog = ref.current;
+    shown.current = true;
     if (dialog && !dialog.open) dialog.showModal();
     openDialogs += 1;
     document.documentElement.classList.add('adm-locked');
     return () => {
+      shown.current = false;
       dialog?.close();
       openDialogs -= 1;
       if (openDialogs === 0) document.documentElement.classList.remove('adm-locked');
@@ -208,7 +212,16 @@ export function Dialog(props: { title: string; onClose: () => void; children: Re
       className={`adm-dialog${props.drawer ? ' is-drawer' : ''}${props.wide ? ' is-wide' : ''}`}
       aria-label={props.title}
       onCancel={(event) => {
+        if (!event.cancelable) return; // the browser closes it regardless: see onClose
         event.preventDefault();
+        props.onClose();
+      }}
+      // Browsers let a page keep a dialog open on Escape only once per click or tap: pressed again straight away, the
+      // browser closes it itself. Then it's opened again at once, and closed the page's way.
+      onClose={(event) => {
+        const dialog = event.currentTarget;
+        if (!shown.current || dialog.open) return;
+        dialog.showModal();
         props.onClose();
       }}
       onClick={(event) => event.target === event.currentTarget && props.onClose()}
@@ -281,6 +294,37 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
     </label>
   );
 }
+
+/** A period, from one day to another (both included; either open): the logs' filter, and what Clean up clears. */
+export function PeriodFilter({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
+  const { t } = useAdminI18n();
+  return (
+    <div className="adm-period" role="group" aria-label={t('period.label')}>
+      <label>
+        <span>{t('period.from')}</span>
+        <input type="date" className="adm-input" value={from} max={to || undefined} onChange={(event) => onChange(event.target.value, to)} />
+      </label>
+      <label>
+        <span>{t('period.to')}</span>
+        <input type="date" className="adm-input" value={to} min={from || undefined} onChange={(event) => onChange(from, event.target.value)} />
+      </label>
+      {(from || to) && (
+        <button type="button" className="adm-icon-btn" aria-label={t('period.clear')} title={t('period.clear')} onClick={() => onChange('', '')}>
+          <X size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The period in the address, for an API query ("&from=…&to=…"). */
+export const periodQuery = (params: URLSearchParams) =>
+  ['from', 'to']
+    .map((key) => {
+      const value = params.get(key);
+      return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? `&${key}=${value}` : '';
+    })
+    .join('');
 
 /** A translation key for a role. */
 export const roleKey = (role: string) => `role.${role}` as AdminKey;

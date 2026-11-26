@@ -75,7 +75,7 @@ export function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent:
         <p className="adm-callout is-good adm-small">{t('invites.sentTo', { email: email.trim() })}</p>
       ) : (
         <p className="adm-callout is-bad adm-small">
-          {t('invites.notSent')} <Link to="/admin/setari?tab=history">{t('invites.toHistory')}</Link>
+          {t('invites.notSent')} <Link to="/admin/jurnal?tab=emails">{t('invites.toHistory')}</Link>
         </p>
       )}
     </Dialog>

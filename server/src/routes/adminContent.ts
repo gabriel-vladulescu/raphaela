@@ -9,14 +9,17 @@ import { siteDay } from '@/lib/analytics';
 import { langOf } from '@/lib/emails';
 import { parseId, requireOwner } from '@/lib/guards';
 import { sendInvite } from '@/lib/invites';
-import { canSendMail } from '@/lib/mail';
+import { mailConfigured } from '@/lib/mail';
 import { notifyComment } from '@/lib/notifications';
-import { escapeLike } from '@/lib/posts';
+import { bookSelect, forgetThought, publicBook, toBook } from '@/lib/books';
+import { escapeLike, searchWords } from '@/lib/posts';
 import { saveSiteIdentity, site, SOCIAL } from '@/lib/siteIdentity';
 import type { SiteIdentity } from '@/lib/siteIdentity';
 import { saveSiteSettings, siteSettings } from '@/lib/siteSettings';
 import type { SiteSettings } from '@/lib/siteSettings';
 import { slugify } from '@/lib/slug';
+import { tagColor, tagIcon } from '@/lib/tags';
+import { tagName } from '../../../tagStyles';
 import { customLogo, setLogo } from '@/seo/brand';
 
 const num = (value: unknown) => Number(value ?? 0);
@@ -33,13 +36,14 @@ const RECENT_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The admin panel's content tools: featured posts, tags, comments waiting for approval, the newsletter's
- * subscribers, invitations, the media library, what readers search for, and the site's identity and settings.
+ * subscribers, the books, invitations, the media library, what readers search for, and the site's identity and
+ * settings.
  */
 const adminContentRoutes: FastifyPluginAsync = async (app) => {
   const { db } = app;
   app.addHook('onRequest', requireOwner); // before the body is validated
 
-  // ---- Featured posts: at the top of the home page, the latest featured first
+  // ---- Featured posts: at the top of the journal, the latest featured first (articles only: chapters are in their books)
 
   app.post<{ Params: { id: string }; Body: { featured: boolean } }>(
     '/admin/posts/:id/feature',
@@ -47,7 +51,7 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const id = parseId(req.params.id) ?? 0;
       const [result] = await db.execute<ResultSetHeader>(
-        `UPDATE posts SET featured_at = ${req.body.featured ? 'COALESCE(featured_at, UTC_TIMESTAMP())' : 'NULL'} WHERE id = ? AND deleted_at IS NULL`,
+        `UPDATE posts SET featured_at = ${req.body.featured ? 'COALESCE(featured_at, UTC_TIMESTAMP())' : 'NULL'} WHERE id = ? AND deleted_at IS NULL AND book_id IS NULL`,
         [id],
       );
       if (result.affectedRows === 0) return reply.code(404).send({ error: 'not_found' });
@@ -62,32 +66,58 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { q?: string } }>('/admin/tags', async (req) => {
     const q = req.query.q?.trim();
     const [rows] = await db.query<RowDataPacket[]>(
-      `SELECT t.id, t.name, t.slug, COUNT(pt.post_id) AS posts FROM tags t LEFT JOIN post_tags pt ON pt.tag_id = t.id
-        ${q ? 'WHERE t.name LIKE ?' : ''} GROUP BY t.id, t.name, t.slug ORDER BY posts DESC, t.name LIMIT 500`,
-      q ? [like(q)] : [],
+      `SELECT t.id, t.name, t.slug, t.color, t.icon, COUNT(pt.post_id) AS posts FROM tags t LEFT JOIN post_tags pt ON pt.tag_id = t.id
+        ${q ? 'WHERE t.name LIKE ? OR t.slug LIKE ?' : ''} GROUP BY t.id, t.name, t.slug, t.color, t.icon ORDER BY posts DESC, t.name LIMIT 500`,
+      q ? [like(q), like(slugify(q))] : [],
     );
-    return { tags: rows.map((row) => ({ id: row.id as number, name: row.name as string, slug: row.slug as string, posts: num(row.posts) })) };
+    return {
+      tags: rows.map((row) => ({
+        id: row.id as number,
+        name: row.name as string,
+        slug: row.slug as string,
+        color: (row.color as string | null) ?? null,
+        icon: (row.icon as string | null) ?? null,
+        posts: num(row.posts),
+      })),
+    };
   });
 
-  app.put<{ Params: { id: string }; Body: { name: string } }>(
+  // (a name in the tags' shape, tagStyles.ts: "Full Moon" -> "full-moon"; with it, maybe its colour and sign)
+  app.put<{ Params: { id: string }; Body: { name: string; color?: string | null; icon?: string | null } }>(
     '/admin/tags/:id',
-    { schema: { body: { type: 'object', required: ['name'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 60 } } } } },
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 60 },
+            color: { type: ['string', 'null'], maxLength: 16 },
+            icon: { type: ['string', 'null'], maxLength: 16 },
+          },
+        },
+      },
+    },
     async (req, reply) => {
       const id = parseId(req.params.id) ?? 0;
       const [[tag]] = await db.execute<RowDataPacket[]>('SELECT name FROM tags WHERE id = ?', [id]);
       if (!tag) return reply.code(404).send({ error: 'not_found' });
-      const name = req.body.name.replace(/\s+/g, ' ').trim();
+      const name = tagName(req.body.name);
+      if (!name) return reply.code(400).send({ error: 'tag_name' });
       const slug = slugify(name);
       const [other] = await db.execute<RowDataPacket[]>('SELECT id FROM tags WHERE slug = ? AND id <> ?', [slug, id]);
       if (other[0]) {
         // The same as another tag: its posts move there, and this one goes.
         await db.execute('INSERT IGNORE INTO post_tags (post_id, tag_id) SELECT post_id, ? FROM post_tags WHERE tag_id = ?', [other[0].id, id]);
         await db.execute('DELETE FROM tags WHERE id = ?', [id]);
-        void logAdmin(db, req.user!, 'tag.merge', { type: 'post', id: null, label: name }, { from: tag.name });
+        void logAdmin(db, req.user!, 'tag.merge', { type: 'category', id: null, label: name }, { from: tag.name });
         return { merged: other[0].id as number };
       }
       await db.execute('UPDATE tags SET name = ?, slug = ? WHERE id = ?', [name, slug, id]);
-      void logAdmin(db, req.user!, 'tag.rename', { type: 'post', id: null, label: name }, { from: tag.name });
+      if (req.body.color !== undefined) await db.execute('UPDATE tags SET color = ? WHERE id = ?', [tagColor(req.body.color), id]);
+      if (req.body.icon !== undefined) await db.execute('UPDATE tags SET icon = ? WHERE id = ?', [tagIcon(req.body.icon), id]);
+      void logAdmin(db, req.user!, 'tag.rename', { type: 'category', id: null, label: name }, { from: tag.name });
       return { ok: true };
     },
   );
@@ -97,7 +127,7 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
     const [[tag]] = await db.execute<RowDataPacket[]>('SELECT name FROM tags WHERE id = ?', [id]);
     if (!tag) return reply.code(404).send({ error: 'not_found' });
     await db.execute('DELETE FROM tags WHERE id = ?', [id]);
-    void logAdmin(db, req.user!, 'tag.delete', { type: 'post', id: null, label: tag.name as string });
+    void logAdmin(db, req.user!, 'tag.delete', { type: 'category', id: null, label: tag.name as string });
     return { ok: true };
   });
 
@@ -149,7 +179,8 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
       const { q, status, offset, limit } = req.query;
       const where = [status ? SUBSCRIBER_STATUS[status] : '1 = 1', ...(q ? ['email LIKE ?'] : [])];
       const [rows] = await db.query<RowDataPacket[]>(
-        `SELECT s.id, s.email, s.frequency, s.lang, s.created_at, s.confirmed_at, s.unsubscribed_at, u.name AS user_name,
+        `SELECT s.id, s.email, s.all_posts, s.lang, s.created_at, s.confirmed_at, s.unsubscribed_at, u.name AS user_name,
+                (SELECT GROUP_CONCAT(bk.title ORDER BY nb.created_at SEPARATOR ' · ') FROM newsletter_books nb JOIN books bk ON bk.id = nb.book_id WHERE nb.subscriber_id = s.id) AS books,
                 (SELECT COUNT(*) FROM newsletter_deliveries d WHERE d.subscriber_id = s.id) AS received
            FROM newsletter_subscribers s LEFT JOIN users u ON u.id = s.user_id
           WHERE ${where.join(' AND ')} ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
@@ -158,14 +189,15 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
       const [[counts]] = await db.query<RowDataPacket[]>(
         `SELECT ${Object.entries(SUBSCRIBER_STATUS)
           .map(([key, sql]) => `SUM(${sql}) AS ${key}`)
-          .join(', ')}, SUM(${SUBSCRIBER_STATUS.active} AND frequency = 'instant') AS instant, SUM(${SUBSCRIBER_STATUS.active} AND frequency = 'weekly') AS weekly
+          .join(', ')}, SUM(${SUBSCRIBER_STATUS.active} AND all_posts = 0) AS books_only
            FROM newsletter_subscribers`,
       );
       return {
         subscribers: rows.slice(0, limit).map((row) => ({
           id: row.id as number,
           email: row.email as string,
-          frequency: row.frequency as string,
+          allPosts: Boolean(row.all_posts),
+          books: (row.books as string | null) ?? null,
           lang: row.lang as string,
           createdAt: row.created_at as Date,
           confirmedAt: row.confirmed_at as Date | null,
@@ -178,11 +210,10 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
           active: num(counts!.active),
           pending: num(counts!.pending),
           unsubscribed: num(counts!.unsubscribed),
-          instant: num(counts!.instant),
-          weekly: num(counts!.weekly),
+          booksOnly: num(counts!.books_only),
         },
         enabled: siteSettings().newsletterEnabled,
-        mail: canSendMail(),
+        mail: mailConfigured(),
       };
     },
   );
@@ -194,6 +225,145 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
     await db.execute('DELETE FROM newsletter_subscribers WHERE id = ?', [id]);
     void logAdmin(db, req.user!, 'newsletter.delete', { type: 'user', id: null, label: row.email as string });
     return { ok: true };
+  });
+
+
+  // ---- Books: every one (hidden and deleted ones too), with its chapters, its numbers and who waits for its next
+  // chapter; an administrator hides or shows one, deletes an empty one, restores a deleted one.
+
+  const BOOK_STATUS = {
+    all: 'bk.deleted_at IS NULL',
+    public: publicBook(),
+    hidden: `bk.deleted_at IS NULL AND NOT (${publicBook()})`,
+    ongoing: 'bk.deleted_at IS NULL AND bk.completed_at IS NULL',
+    complete: 'bk.deleted_at IS NULL AND bk.completed_at IS NOT NULL',
+    deleted: 'bk.deleted_at IS NOT NULL',
+  } as const;
+  type BookStatus = keyof typeof BOOK_STATUS;
+  const BOOK_SORT = {
+    updated: 'bk.updated_at DESC, bk.id DESC',
+    new: 'bk.created_at DESC, bk.id DESC',
+    title: 'bk.title, bk.id',
+    views: 'views DESC, bk.id DESC',
+    followers: 'email_followers + device_followers DESC, bk.id DESC',
+  } as const;
+  const BOOK_NUMBERS = `,
+    bk.deleted_at,
+    (SELECT COUNT(*) FROM posts p WHERE p.book_id = bk.id AND p.deleted_at IS NULL AND p.status = 'draft') AS drafts,
+    (SELECT COUNT(*) FROM posts p WHERE p.book_id = bk.id AND p.deleted_at IS NULL AND p.status = 'published' AND p.published_at > UTC_TIMESTAMP()) AS scheduled,
+    (SELECT COALESCE(SUM(p.view_count), 0) FROM posts p WHERE p.book_id = bk.id AND p.deleted_at IS NULL) AS views,
+    (SELECT COUNT(*) FROM post_likes l JOIN posts p ON p.id = l.post_id WHERE p.book_id = bk.id AND p.deleted_at IS NULL AND l.removed_at IS NULL) AS likes,
+    (SELECT COUNT(*) FROM comments m JOIN posts p ON p.id = m.post_id WHERE p.book_id = bk.id AND p.deleted_at IS NULL AND m.deleted_at IS NULL) AS comments,
+    (SELECT COUNT(DISTINCT r.user_id) FROM reading_progress r JOIN posts p ON p.id = r.post_id WHERE p.book_id = bk.id) AS readers,
+    (SELECT COUNT(*) FROM newsletter_books nb JOIN newsletter_subscribers s ON s.id = nb.subscriber_id
+      WHERE nb.book_id = bk.id AND s.confirmed_at IS NOT NULL AND s.unsubscribed_at IS NULL) AS email_followers,
+    (SELECT COUNT(*) FROM push_books pb WHERE pb.book_id = bk.id) AS device_followers`;
+
+  const adminBook = (row: RowDataPacket) => ({
+    ...toBook(row),
+    deletedAt: (row.deleted_at as Date | null) ?? null,
+    drafts: num(row.drafts),
+    scheduled: num(row.scheduled),
+    views: num(row.views),
+    likes: num(row.likes),
+    comments: num(row.comments),
+    /** Signed-in readers who started it. */
+    readers: num(row.readers),
+    /** Waiting for its next chapter ("Notify me"): by email, on a device. */
+    followers: { email: num(row.email_followers), devices: num(row.device_followers) },
+  });
+
+  app.get<{ Querystring: { q?: string; author?: number; status: BookStatus; sort: keyof typeof BOOK_SORT; offset: number; limit: number } }>(
+    '/admin/books',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            q: { type: 'string', maxLength: 100 },
+            author: { type: 'integer', minimum: 1 },
+            status: { type: 'string', enum: Object.keys(BOOK_STATUS), default: 'all' },
+            sort: { type: 'string', enum: Object.keys(BOOK_SORT), default: 'updated' },
+            ...paging,
+          },
+        },
+      },
+    },
+    async (req) => {
+      const { q, author, status, sort, offset, limit } = req.query;
+      const base: string[] = [];
+      const params: unknown[] = [];
+      for (const word of searchWords(q)) {
+        base.push('(bk.title LIKE ? OR u.name LIKE ?)');
+        params.push(word, word);
+      }
+      if (author) {
+        base.push('bk.author_id = ?');
+        params.push(author);
+      }
+      const where = [...base, BOOK_STATUS[status]].join(' AND ');
+      const [rows] = await db.query<RowDataPacket[]>(`${bookSelect(BOOK_NUMBERS)} WHERE ${where} ORDER BY ${BOOK_SORT[sort]} LIMIT ? OFFSET ?`, [
+        ...params,
+        limit + 1,
+        offset,
+      ]);
+      const [[counts]] = await db.query<RowDataPacket[]>(
+        `SELECT ${Object.entries(BOOK_STATUS)
+          .map(([key, sql]) => `SUM(${sql}) AS \`${key}\``)
+          .join(', ')}
+           FROM books bk JOIN users u ON u.id = bk.author_id ${base.length ? `WHERE ${base.join(' AND ')}` : ''}`,
+        params,
+      );
+      return {
+        books: rows.slice(0, limit).map(adminBook),
+        hasMore: rows.length > limit,
+        counts: Object.fromEntries(Object.keys(BOOK_STATUS).map((key) => [key, num(counts![key])])),
+      };
+    },
+  );
+
+  const bookRow = async (id: number) => {
+    const [rows] = await db.query<RowDataPacket[]>(`${bookSelect(BOOK_NUMBERS)} WHERE bk.id = ?`, [id]);
+    return rows[0] ? adminBook(rows[0]) : null;
+  };
+
+  // Shown or hidden on the site (what its author does from the book's page): a book that shouldn't be there yet.
+  app.post<{ Params: { id: string }; Body: { published: boolean } }>(
+    '/admin/books/:id/published',
+    { schema: { body: { type: 'object', required: ['published'], additionalProperties: false, properties: { published: { type: 'boolean' } } } } },
+    async (req, reply) => {
+      const id = parseId(req.params.id) ?? 0;
+      const [result] = await db.execute<ResultSetHeader>(
+        `UPDATE books SET published_at = ${req.body.published ? 'COALESCE(published_at, UTC_TIMESTAMP())' : 'NULL'} WHERE id = ? AND deleted_at IS NULL`,
+        [id],
+      );
+      if (result.affectedRows === 0) return reply.code(404).send({ error: 'not_found' });
+      forgetThought();
+      const book = await bookRow(id);
+      void logAdmin(db, req.user!, req.body.published ? 'book.publish' : 'book.unpublish', { type: 'book', id, label: book!.title }, { author: book!.author.name });
+      return { book };
+    },
+  );
+
+  // A book goes once it has no chapters (as its author deletes it); a deleted one comes back.
+  app.delete<{ Params: { id: string } }>('/admin/books/:id', async (req, reply) => {
+    const book = await bookRow(parseId(req.params.id) ?? 0);
+    if (!book || book.deletedAt) return reply.code(404).send({ error: 'not_found' });
+    if (book.allChapters > 0) return reply.code(409).send({ error: 'book_not_empty' });
+    await db.execute('UPDATE books SET deleted_at = UTC_TIMESTAMP() WHERE id = ?', [book.id]);
+    forgetThought();
+    void logAdmin(db, req.user!, 'book.delete', { type: 'book', id: book.id, label: book.title }, { author: book.author.name });
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>('/admin/books/:id/restore', async (req, reply) => {
+    const id = parseId(req.params.id) ?? 0;
+    const [result] = await db.execute<ResultSetHeader>('UPDATE books SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL', [id]);
+    if (result.affectedRows === 0) return reply.code(404).send({ error: 'not_found' });
+    forgetThought();
+    const book = await bookRow(id);
+    void logAdmin(db, req.user!, 'book.restore', { type: 'book', id, label: book!.title }, { author: book!.author.name });
+    return { book };
   });
 
   // ---- Invitations to write
@@ -216,7 +386,7 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
         status: row.accepted_at ? 'accepted' : row.revoked_at ? 'revoked' : (row.expires_at as Date).getTime() < now ? 'expired' : 'pending',
         accepted: row.accepted_id ? { id: row.accepted_id as number, name: row.accepted_name as string } : null,
       })),
-      mail: canSendMail(),
+      mail: mailConfigured(),
     };
   });
 
@@ -234,7 +404,7 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      if (!canSendMail()) return reply.code(503).send({ error: 'email_unavailable' });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
       const email = req.body.email.trim().toLowerCase();
       const [users] = await db.execute<RowDataPacket[]>('SELECT role FROM users WHERE email = ? AND purged_at IS NULL', [email]);
       if (users[0] && users[0].role !== 'member') return reply.code(409).send({ error: 'already_author' });
@@ -255,6 +425,7 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
     const invite = rows[0];
     if (!invite) return reply.code(404).send({ error: 'not_found' });
     const sent = await sendInvite(db, { id: invite.id as number, email: invite.email as string, message: invite.message as string | null }, req.user!.name, site.defaultLanguage);
+    void logAdmin(db, req.user!, 'invite.resend', { type: 'user', id: null, label: invite.email as string });
     return { sent };
   });
 
@@ -439,9 +610,9 @@ const adminContentRoutes: FastifyPluginAsync = async (app) => {
     return { customLogo: false };
   });
 
-  // ---- The site's settings (Setări → General): every rule at once
+  // ---- The site's settings (Settings → General): every rule at once
 
-  app.get('/admin/settings/site', async () => ({ settings: siteSettings(), mailConfigured: canSendMail(), production: config.production }));
+  app.get('/admin/settings/site', async () => ({ settings: siteSettings(), mailConfigured: mailConfigured() }));
 
   app.put<{ Body: SiteSettings }>(
     '/admin/settings/site',

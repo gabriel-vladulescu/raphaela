@@ -42,7 +42,7 @@ export function NameConfirmModal({ user }: { user: User }) {
   }
 
   return (
-    <Modal title={t('nameModal.title')}>
+    <Modal title={t('nameModal.title')} head>
       <form
         className="modal-body name-modal"
         onSubmit={(event) => {
@@ -51,7 +51,6 @@ export function NameConfirmModal({ user }: { user: User }) {
         }}
       >
         <Avatar name={name.trim() || user.name} picture={user.picture} size={64} />
-        <h2>{t('nameModal.title')}</h2>
         <p className="muted">{t('nameModal.body')}</p>
         <label className="field">
           <span className="field-label">{t('nameModal.label')}</span>

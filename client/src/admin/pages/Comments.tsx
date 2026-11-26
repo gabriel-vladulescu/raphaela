@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Ban, Check, Clock, CornerDownRight, ExternalLink, Flag, MessageSquare, Trash2, X } from 'lucide-react';
+import { Ban, Check, Clock, CornerDownRight, ExternalLink, Flag, History, MessageSquare, Trash2, X } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
 import { SuspendDialog } from '@/admin/SuspendDialog';
 import type { AdminComment, CommentFilter, CommentList } from '@/admin/types';
 import { UserSelect } from '@/admin/UserSelect';
-import { Badge, Card, ConfirmDialog, Empty, ErrorNote, LoadMore, Loading, PageHead, SearchBox, Tabs } from '@/admin/ui';
+import { Badge, Card, ConfirmDialog, Dialog, Empty, ErrorNote, LoadMore, Loading, PageHead, SearchBox, Tabs } from '@/admin/ui';
 import { Avatar } from '@/components/Avatar';
 import { api } from '@/lib/api';
 
@@ -15,7 +15,7 @@ const PAGE = 20;
 const FILTERS: CommentFilter[] = ['held', 'reported', 'all', 'deleted'];
 
 /**
- * Moderation: comments waiting for approval (the comment filters, Setări), reported comments (why, by whom), then
+ * Moderation: comments waiting for approval (the comment filters, Settings), reported comments (why, by whom), then
  * every comment, and the deleted ones. Approve or reject a held one, keep a reported one, delete one (with its
  * replies), or suspend whoever wrote it.
  */
@@ -32,6 +32,8 @@ export function CommentsPage() {
   const [more, setMore] = useState(false);
   const [deleting, setDeleting] = useState<AdminComment | null>(null);
   const [suspending, setSuspending] = useState<AdminComment['author'] | null>(null);
+  /** The comment whose earlier versions are open. */
+  const [versionsOf, setVersionsOf] = useState<AdminComment | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
 
@@ -135,8 +137,12 @@ export function CommentsPage() {
                     {c.author.suspended && <Badge tone="bad">{t('users.state.suspended')}</Badge>}
                     <span className="adm-muted adm-small" title={formatDateTime(c.createdAt)}>
                       {timeAgo(c.createdAt)}
-                      {c.editedAt && ` · ${t('comments.edited')}`}
                     </span>
+                    {c.editedAt && (
+                      <button type="button" className="adm-chip is-small" title={t('comments.versions')} onClick={() => setVersionsOf(c)}>
+                        <History size={12} aria-hidden="true" /> {t('comments.edited')}
+                      </button>
+                    )}
                     {c.held && !c.deletedAt && (
                       <Badge tone="warn" title={t(`comments.heldWhy.${c.held}` as AdminKey)}>
                         <Clock size={12} aria-hidden="true" /> {t('comments.held')}
@@ -230,6 +236,7 @@ export function CommentsPage() {
           onConfirm={() => void run(() => api(`/comments/${deleting.id}`, { method: 'DELETE' }))}
         />
       )}
+      {versionsOf && <VersionsDialog comment={versionsOf} onClose={() => setVersionsOf(null)} />}
       {suspending && (
         <SuspendDialog
           user={suspending}
@@ -242,5 +249,46 @@ export function CommentsPage() {
         />
       )}
     </>
+  );
+}
+
+/** A comment's versions, oldest first: each earlier text (kept when it was edited) and when it was replaced, then now. */
+function VersionsDialog({ comment, onClose }: { comment: AdminComment; onClose: () => void }) {
+  const { t, formatDateTime } = useAdminI18n();
+  const [data, setData] = useState<{ createdAt: string; versions: { body: string; replacedAt: string }[]; current: { body: string; editedAt: string | null } } | null>(
+    null,
+  );
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api<NonNullable<typeof data>>(`/admin/comments/${comment.id}/versions`)
+      .then(setData)
+      .catch(() => setFailed(true));
+  }, [comment.id]);
+  return (
+    <Dialog title={t('comments.versionsTitle', { name: comment.author.name })} onClose={onClose} wide>
+      {failed ? (
+        <ErrorNote message={t('common.loadFailed')} />
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <ol className="adm-versions">
+          {data.versions.map((version, i) => (
+            <li key={`${version.replacedAt}-${i}`}>
+              <span className="adm-edit-label">
+                {t('comments.version', { n: i + 1 })} · {formatDateTime(i === 0 ? data.createdAt : data.versions[i - 1]!.replacedAt)} → {formatDateTime(version.replacedAt)}
+              </span>
+              <p className="adm-edit-text is-before">{version.body}</p>
+            </li>
+          ))}
+          <li>
+            <span className="adm-edit-label">
+              {t('comments.versionNow')}
+              {data.current.editedAt && <> · {formatDateTime(data.current.editedAt)}</>}
+            </span>
+            <p className="adm-edit-text">{data.current.body}</p>
+          </li>
+        </ol>
+      )}
+    </Dialog>
   );
 }

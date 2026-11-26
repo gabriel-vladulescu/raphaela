@@ -3,11 +3,15 @@ import { ExternalLink, Hash, Pencil, Trash2 } from 'lucide-react';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminTag } from '@/admin/types';
 import { Card, ConfirmDialog, Dialog, Empty, ErrorNote, Field, Loading, SearchBox } from '@/admin/ui';
+import { TagStyleFields } from '@/components/editor/TagPicker';
+import { TagChip } from '@/components/TagChip';
 import { api } from '@/lib/api';
+import { TAG_NAME_MAX, tagName, tagSlug, typingTagName } from '@/lib/tags';
 
 /**
- * The posts' tags (the editor adds them): how many posts each has; rename one (onto another's name merges the two,
- * so "Lună plină" and "luna plina" become one), or delete it (the posts keep everything else).
+ * The posts' tags (the editor adds them): how many posts each has; rename one, or change its colour and sign (onto
+ * another's name merges the two, so "café-noir" and "cafe-noir" become one), or delete it (the posts keep
+ * everything else). Names are lower case, the words joined by dashes (tagStyles.ts).
  */
 export function TagsCard() {
   const { t, errorMessage, formatNumber } = useAdminI18n();
@@ -16,6 +20,7 @@ export function TagsCard() {
   const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState<AdminTag | null>(null);
   const [name, setName] = useState('');
+  const [look, setLook] = useState<{ color: string | null; icon: string | null }>({ color: null, icon: null });
   const [deleting, setDeleting] = useState<AdminTag | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -46,7 +51,9 @@ export function TagsCard() {
     }
   }
 
-  const other = editing && tags?.find((tag) => tag.id !== editing.id && tag.name.toLowerCase() === name.trim().toLowerCase());
+  const shaped = tagName(name);
+  const other = editing && tags?.find((tag) => tag.id !== editing.id && tag.slug === tagSlug(shaped));
+  const changed = Boolean(editing && (shaped !== editing.name || look.color !== editing.color || look.icon !== editing.icon));
 
   return (
     <>
@@ -62,7 +69,9 @@ export function TagsCard() {
           <ul className="adm-tags">
             {tags.map((tag) => (
               <li key={tag.id} className="adm-tag">
-                <span className="adm-tag-name">#{tag.name}</span>
+                <span className="adm-tag-name">
+                  <TagChip tag={tag} />
+                </span>
                 <span className="adm-muted adm-small">{t('tags.posts', { n: formatNumber(tag.posts) })}</span>
                 <span className="adm-row-actions">
                   <a href={`/eticheta/${tag.slug}`} target="_blank" rel="noopener" className="adm-icon-btn" title={t('tags.open')} aria-label={t('tags.open')}>
@@ -76,6 +85,7 @@ export function TagsCard() {
                     onClick={() => {
                       setEditing(tag);
                       setName(tag.name);
+                      setLook({ color: tag.color, icon: tag.icon });
                       setError('');
                     }}
                   >
@@ -103,8 +113,8 @@ export function TagsCard() {
               <button
                 type="button"
                 className="adm-btn is-primary"
-                disabled={busy || !name.trim() || name.trim() === editing.name}
-                onClick={() => void run(() => api(`/admin/tags/${editing.id}`, { method: 'PUT', body: { name: name.trim() } }))}
+                disabled={busy || !shaped || !changed}
+                onClick={() => void run(() => api(`/admin/tags/${editing.id}`, { method: 'PUT', body: { name: shaped, ...look } }))}
               >
                 {busy ? t('common.loading') : other ? t('tags.merge') : t('common.save')}
               </button>
@@ -112,8 +122,14 @@ export function TagsCard() {
           }
         >
           <Field label={t('tags.name')} hint={other ? t('tags.mergeHint', { name: other.name, n: other.posts }) : t('tags.renameHint')}>
-            <input className="adm-input" value={name} maxLength={40} autoFocus onChange={(event) => setName(event.target.value)} />
+            <input className="adm-input" value={name} maxLength={TAG_NAME_MAX} autoFocus spellCheck={false} onChange={(event) => setName(typingTagName(event.target.value))} />
           </Field>
+          {!other && (
+            <div className="adm-tag-look">
+              <TagChip tag={{ name: shaped || editing.name, ...look }} />
+              <TagStyleFields color={look.color} icon={look.icon} onChange={(next) => setLook({ ...look, ...next })} />
+            </div>
+          )}
           {error && <p className="adm-form-error">{error}</p>}
         </Dialog>
       )}

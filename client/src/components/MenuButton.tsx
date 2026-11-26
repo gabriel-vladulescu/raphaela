@@ -42,15 +42,13 @@ export function MenuButton(props: {
       </button>
       {open && (
         <Modal title={title} onClose={close} closeOnBackdrop sheet={phone} className={`filter-sheet${phone ? '' : ' filter-dialog'}`}>
-          <div className="filter-sheet-body">
-            <div className="filter-sheet-head">
-              <h2>{title}</h2>
-              <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={close}>
-                <X size={18} />
-              </button>
-            </div>
-            {children(close)}
+          <div className="filter-sheet-head">
+            <h2>{title}</h2>
+            <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={close}>
+              <X size={18} />
+            </button>
           </div>
+          <div className="filter-sheet-body">{children(close)}</div>
         </Modal>
       )}
     </>

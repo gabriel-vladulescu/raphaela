@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth';
 import { api, ApiError } from '@/lib/api';
+import type { PersonList } from '@/lib/paths';
 import type { Role } from '@/lib/types';
 
-/** A person's lists, at /{username}/articole and /{username}/articole-salvate. */
-export type PersonList = 'articole' | 'articole-salvate';
+export type { PersonList } from '@/lib/paths';
+
+/** A person's lists, at /{username}/jurnal, /{username}/carti and /{username}/salvate, in their tabs' order. */
+export const PERSON_LISTS: PersonList[] = ['jurnal', 'carti', 'salvate'];
 
 /** What their pages show about them (server: routes/people.ts). */
 export interface Person {
@@ -15,9 +18,11 @@ export interface Person {
   occupation: string | null;
   quote: string | null;
   publicArticles: boolean;
+  publicBooks: boolean;
   publicSaved: boolean;
-  /** Their published posts. */
+  /** Their published articles, and their published books. */
   articles: number;
+  books: number;
 }
 
 export interface PersonView {
@@ -30,7 +35,12 @@ export interface PersonView {
   shareImages: Record<PersonList, string>;
 }
 
-export const isPublicList = (person: Person, list: PersonList) => (list === 'articole' ? person.publicArticles : person.publicSaved);
+/** Whether the list is one they have at all: an author's journal and books, anyone's saved posts but an administrator's. */
+export const hasList = (person: Pick<Person, 'role'>, list: PersonList) => (list === 'salvate' ? person.role !== 'owner' : person.role === 'author');
+
+/** Whether anyone may see it (they made it public: Settings). */
+export const isPublicList = (person: Person, list: PersonList) =>
+  hasList(person, list) && (list === 'jurnal' ? person.publicArticles : list === 'carti' ? person.publicBooks : person.publicSaved);
 
 /**
  * The person with this username, as the viewer sees them: null while loading, 'missing' when nobody has it, 'error'

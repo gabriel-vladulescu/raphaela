@@ -1,227 +1,225 @@
 import { useEffect, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
-import { CalendarClock, ExternalLink, FileText, Heart, Lock, MessageCircle, Plus, SquarePen, Trash2 } from 'lucide-react';
+import { Link, Navigate, useLocation, useParams } from 'react-router';
+import { CalendarClock, Eye, Heart, MessageCircle, Pencil, Trash2 } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
-import { PersonHeader } from '@/components/PersonHeader';
-import { PostCard, PostCardSkeleton } from '@/components/PostCard';
+import { ConfirmModal } from '@/components/Modal';
+import { PostCardSkeleton } from '@/components/PostCard';
+import { WritingDesk } from '@/components/WritingDesk';
 import { useAuth } from '@/context/auth';
 import { useCategories } from '@/context/categories';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import type { CoverDesign } from '@/lib/covers';
 import { useI18n } from '@/lib/i18n';
-import { articlePath, articlesPath, newArticlePath } from '@/lib/paths';
-import { usePerson } from '@/lib/people';
-import type { PersonView } from '@/lib/people';
+import { articlePath, newArticlePath, postPath } from '@/lib/paths';
 import type { PostStatus, PostSummary } from '@/lib/types';
+import { NotFoundPage } from '@/pages/StatusPages';
 
-type Filter = PostStatus | 'all' | 'deleted';
+type Filter = PostStatus | 'all';
 
-const FILTERS: Filter[] = ['all', 'published', 'scheduled', 'draft', 'deleted'];
+const FILTERS: Filter[] = ['all', 'published', 'scheduled', 'draft'];
 
-interface ArticleList {
-  posts: PostSummary[];
-  /** The viewer manages them (drafts and scheduled ones too): the person, or an administrator. */
-  manage: boolean;
-  /** An administrator's own list: every post. */
-  everyone: boolean;
+/** The journal desk's background: one cover, tilted in its corner (a picture, not a book). */
+const DESK_COVER = { template: 'spirala', layout: 'clasic', ornament: 'feather', palette: 'adanc' } as CoverDesign;
+
+/**
+ * An old address, where it is now (the writer's own pages had their username in them, their editors were under it;
+ * articles were "articole"; saved posts "articole-salvate"): `to` makes the new one from the old one's parts.
+ */
+export function OldPath({ to }: { to: (params: Readonly<Partial<Record<string, string>>>) => string }) {
+  const params = useParams();
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to(params)}${search}${hash}`} replace />;
 }
 
-/** The old addresses (/admin/posts, /editor/new): the signed-in writer's own pages. */
-export function MyPage({ to }: { to: 'articles' | 'new' }) {
-  const { user } = useAuth();
-  return <Navigate to={to === 'new' ? newArticlePath(user!.username) : articlesPath(user!.username)} replace />;
+/** An article's picture in the lists: its banner, else its category's sign on a soft ground. */
+function ArticleThumb({ post }: { post: PostSummary }) {
+  return (
+    <span className="journal-thumb">
+      {post.bannerUrl ? <img src={post.bannerUrl} alt="" loading="lazy" /> : <span aria-hidden="true">{post.category?.icon || '✦'}</span>}
+    </span>
+  );
 }
 
 /**
- * /{username}/articole: their articles. They (and administrators) manage them here, drafts and scheduled ones
- * too; anyone else sees the published ones, if they made the list public (Settings).
+ * /jurnalul-meu: an author's own articles, to write and manage (drafts and scheduled ones too), as "My books"
+ * shows their books: the desk on top (how many are out, scheduled, drafts; the one last worked on), then the
+ * articles, by state. Nobody else's: readers find them in the journal, administrators in the admin panel.
  */
-export function ArticlesPage() {
-  const { username = '' } = useParams();
-  const { t, errorMessage } = useI18n();
-  const { user, loading, isOwner } = useAuth();
-  const view = usePerson(username);
-  const [list, setList] = useState<{ key: string; value: ArticleList | 'private' | 'missing' | string } | null>(null);
-  const key = `${username.toLowerCase()}|${loading ? null : (user?.id ?? 0)}`;
+export function JournalPage() {
+  const { t, plural, errorMessage, formatDate, formatDateTime, timeAgo } = useI18n();
+  const { user, isOwner } = useAuth();
+  const username = user?.username ?? '';
+  const { reload: reloadCategories } = useCategories();
+  const [posts, setPosts] = useState<PostSummary[] | null>(null);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [deleting, setDeleting] = useState<PostSummary | null>(null);
+  const allowed = user?.role === 'author';
 
   useEffect(() => {
-    if (loading) return;
+    if (!allowed) return;
     let cancelled = false;
-    api<ArticleList>(`/u/${encodeURIComponent(username)}/articole`)
-      .then((data) => !cancelled && setList({ key, value: data }))
-      .catch((err) => {
-        if (cancelled) return;
-        const code = err instanceof ApiError ? err.code : '';
-        setList({ key, value: code === 'private' || code === 'not_found' ? (code === 'private' ? 'private' : 'missing') : errorMessage(err) });
-      });
+    setPosts(null);
+    api<{ posts: PostSummary[] }>(`/u/${encodeURIComponent(username)}/articole`)
+      .then((data) => !cancelled && setPosts(data.posts))
+      .catch((err) => !cancelled && setError(errorMessage(err)));
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [username, allowed]);
 
-  const current = list?.key === key ? list.value : null;
-  const setPosts: Dispatch<SetStateAction<PostSummary[]>> = (change) =>
-    setList((state) =>
-      state && typeof state.value === 'object' ? { ...state, value: { ...state.value, posts: typeof change === 'function' ? change(state.value.posts) : change } } : state,
-    );
+  // Administrators have every post in the admin panel; nobody else may see an author's journal.
+  if (isOwner) return <Navigate to="/admin/articole" replace />;
+  if (!allowed) return <NotFoundPage />;
 
-  // An administrator's own list is every post: the administration's.
-  if (isOwner && user && username.toLowerCase() === user.username) return <Navigate to="/admin/articole" replace />;
-  if (view === 'missing' || current === 'missing') return <PersonMissing />;
-  if (view === 'error') return <PageError message={t('error.generic')} />;
-
-  return (
-    <div className="container person-page">
-      <HeaderBackLink />
-      {view === null ? <PersonHeaderSkeleton /> : <PersonHeader view={view} list="articole" actions={<NewPostButton view={view} />} />}
-
-      {current === null ? (
-        <GridSkeleton />
-      ) : current === 'private' ? (
-        <div className="empty-state card">
-          <Lock size={34} className="empty-icon" aria-hidden="true" />
-          <p>{t('people.private')}</p>
-        </div>
-      ) : typeof current === 'string' ? (
-        <p className="form-error">{current}</p>
-      ) : current.manage ? (
-        <ManageList posts={current.posts} setPosts={setPosts} everyone={current.everyone} />
-      ) : current.posts.length === 0 ? (
-        <div className="empty-state card">
-          <FileText size={34} className="empty-icon" aria-hidden="true" />
-          <p>{t('people.emptyPublic')}</p>
-        </div>
-      ) : (
-        <div className="post-grid post-grid-3">
-          {current.posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** "New post", for an author's own list, and for administrators (on an author's list it's in that author's name). */
-function NewPostButton({ view }: { view: PersonView }) {
-  const { t } = useI18n();
-  const { person, me, manage } = view;
-  if (!manage || !(person.role === 'author' || (me && person.role === 'owner'))) return null;
-  return (
-    <Link to={newArticlePath(person.username)} className="btn btn-primary btn-sm">
-      <Plus size={16} /> {t('manage.new')}
-    </Link>
-  );
-}
-
-/** Their articles to manage: by status, with links to edit, view and delete. Administrators keep seeing deleted ones. */
-function ManageList({ posts, setPosts, everyone }: { posts: PostSummary[]; setPosts: Dispatch<SetStateAction<PostSummary[]>>; everyone: boolean }) {
-  const { t, errorMessage, formatDate, formatDateTime } = useI18n();
-  const { isOwner } = useAuth();
-  const { reload: reloadCategories } = useCategories();
-  const [filter, setFilter] = useState<Filter>('all');
-  const [error, setError] = useState('');
-
+  /** Deletes one (asked first: `deleting`). */
   async function remove(post: PostSummary) {
-    if (!window.confirm(t('editor.confirmDelete'))) return;
+    setDeleting(null);
     try {
-      await api(`/u/${post.author.username}/articole/${post.id}`, { method: 'DELETE' });
-      // Administrators keep seeing it, on the "Deleted" tab.
-      setPosts((current) => (isOwner ? current.map((p) => (p.id === post.id ? { ...p, deleted: true } : p)) : current.filter((p) => p.id !== post.id)));
+      await api(`/u/${encodeURIComponent(username)}/articole/${post.id}`, { method: 'DELETE' });
+      setPosts((current) => current?.filter((p) => p.id !== post.id) ?? current);
       void reloadCategories();
     } catch (err) {
       setError(errorMessage(err));
     }
   }
 
-  const matches = (post: PostSummary, value: Filter) =>
-    value === 'deleted' ? post.deleted : !post.deleted && (value === 'all' || post.status === value);
-  const count = (value: Filter) => posts.filter((p) => matches(p, value)).length;
-  const visible = posts.filter((p) => matches(p, filter));
-  const filters = FILTERS.filter((value) => value !== 'deleted' || count('deleted') > 0);
+  const count = (value: Filter) => (posts ?? []).filter((p) => value === 'all' || p.status === value).length;
+  const shown = (posts ?? []).filter((p) => filter === 'all' || p.status === filter);
+  const published = count('published');
+  const scheduled = count('scheduled');
+  const drafts = count('draft');
+  const last = posts?.[0];
+  const status = (post: PostSummary) => t(`post.status.${post.status}`);
+
+  const line = !posts
+    ? ''
+    : posts.length === 0
+      ? t('journal.mineIntro')
+      : published
+        ? t('journal.deskLine', { published: plural('journal.count', published) })
+        : t('journal.deskNone');
 
   return (
-    <>
-      <div className="tabs" role="tablist">
-        {filters.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={filter === value}
-            className={`tab${filter === value ? ' is-selected' : ''}`}
-            onClick={() => setFilter(value)}
-          >
-            {value === 'all' ? t('manage.filter.all') : value === 'deleted' ? t('manage.filter.deleted') : t(`post.status.${value}`)}
-            <span className="count-pill">{count(value)}</span>
-          </button>
-        ))}
-      </div>
+    <div className="container books-page my-books">
+      <HeaderBackLink />
+      <WritingDesk
+        title={t('journal.mineTitle')}
+        line={line}
+        stats={
+          posts && posts.length > 0
+            ? [
+                { value: published, label: t(published === 1 ? 'journal.deskPublished' : 'journal.deskPublishedN') },
+                { value: scheduled, label: t(scheduled === 1 ? 'journal.deskScheduled' : 'journal.deskScheduledN') },
+                { value: drafts, label: t(drafts === 1 ? 'books.deskDraft' : 'books.deskDrafts') },
+              ]
+            : null
+        }
+        newTo={newArticlePath()}
+        newLabel={t('manage.new')}
+        cover={{ design: DESK_COVER, title: t('journal.coverTitle'), subject: t('journal.coverSubject'), author: user!.name }}
+        last={
+          last
+            ? {
+                thumb: <ArticleThumb post={last} />,
+                thumbTo: articlePath(last.id),
+                title: last.title || t('post.untitled'),
+                meta: `${status(last).toLocaleLowerCase()} · ${timeAgo(last.updatedAt)}`,
+                actions: (
+                  <>
+                    <Link to={articlePath(last.id)} className="btn btn-soft btn-sm">
+                      <Pencil size={15} /> {t('journal.deskContinue')}
+                    </Link>
+                    <Link to={postPath(last)} className="btn btn-soft btn-sm">
+                      <Eye size={15} /> {t('journal.view')}
+                    </Link>
+                  </>
+                ),
+              }
+            : null
+        }
+      />
 
       {error && <p className="form-error">{error}</p>}
-      {visible.length === 0 ? (
-        <div className="empty-state card">
-          <p>{t('manage.empty')}</p>
+
+      {posts && posts.length > 0 && (
+        <div className="books-filters journal-filters">
+          <div className="chip-row" role="group" aria-label={t('journal.byState')}>
+            {FILTERS.map((value) => (
+              <button key={value} type="button" className={`filter-pill${filter === value ? ' is-on' : ''}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+                {value === 'all' ? t('manage.filter.all') : t(`journal.filter.${value}`)} <span className="filter-pill-count">{count(value)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {posts === null && !error ? (
+        <div className="my-books-list">
+          {Array.from({ length: 2 }, (_, index) => (
+            <PostCardSkeleton key={index} />
+          ))}
         </div>
       ) : (
-        <ul className="manage-list">
-          {visible.map((post) => (
-            <li key={post.id} className={`manage-item card${post.deleted ? ' is-deleted' : ''}`}>
-              <div className="manage-thumb">
-                {post.bannerUrl ? <img src={post.bannerUrl} alt="" loading="lazy" /> : <span aria-hidden="true">{post.category?.icon || '✦'}</span>}
-              </div>
-              <div className="manage-main">
-                <div className="manage-tags">
-                  {post.deleted && <span className="badge badge-deleted">{t('post.deleted')}</span>}
-                  <span className={`badge badge-status-${post.status}`}>{t(`post.status.${post.status}`)}</span>
-                  {post.category && <span className="chip">{post.category.name}</span>}
-                  {everyone && (
-                    <Link to={articlesPath(post.author.username)} className="muted small">
-                      {post.author.name}
-                    </Link>
-                  )}
+        <div className="my-books-list">
+          {shown.map((post) => (
+            <article key={post.id} className="my-book glass">
+              <div className="my-book-inner">
+                <Link to={articlePath(post.id)} className="my-book-cover" tabIndex={-1} aria-label={post.title || t('post.untitled')}>
+                  <ArticleThumb post={post} />
+                </Link>
+                <div className="my-book-text">
+                  {/* Its state first, over the title (as the books'). */}
+                  <span className="my-book-chips">
+                    <span className={`book-chip journal-chip is-${post.status}`}>{status(post)}</span>
+                    {post.category && <span className="book-chip">{post.category.name}</span>}
+                  </span>
+                  <h2>
+                    <Link to={articlePath(post.id)}>{post.title || t('post.untitled')}</Link>
+                  </h2>
+                  <p className="muted journal-meta">
+                    {post.status === 'scheduled' && post.publishedAt ? (
+                      <>
+                        <CalendarClock size={14} /> {t('post.scheduledFor', { date: formatDateTime(post.publishedAt) })}
+                      </>
+                    ) : post.status === 'published' && post.publishedAt ? (
+                      <>
+                        {formatDate(post.publishedAt)} · <Heart size={14} /> {post.likeCount} · <MessageCircle size={14} /> {post.commentCount}
+                      </>
+                    ) : (
+                      t('manage.updated', { date: formatDateTime(post.updatedAt) })
+                    )}
+                  </p>
                 </div>
-                <Link to={post.deleted ? `/posts/${post.slug}` : articlePath(post.author.username, post.id)} className="manage-title">
-                  {post.title}
-                </Link>
-                <span className="muted small">
-                  {post.status === 'scheduled' && post.publishedAt ? (
-                    <>
-                      <CalendarClock size={13} /> {t('post.scheduledFor', { date: formatDateTime(post.publishedAt) })}
-                    </>
-                  ) : post.status === 'published' && post.publishedAt ? (
-                    formatDate(post.publishedAt)
-                  ) : (
-                    t('manage.updated', { date: formatDateTime(post.updatedAt) })
-                  )}
-                  {post.status === 'published' && (
-                    <>
-                      {' · '}
-                      <Heart size={13} /> {post.likeCount} · <MessageCircle size={13} /> {post.commentCount}
-                    </>
-                  )}
-                </span>
+                <div className="my-book-actions">
+                  <Link to={postPath(post)} className="btn btn-soft btn-sm">
+                    <Eye size={15} /> {t('journal.view')}
+                  </Link>
+                  <Link to={articlePath(post.id)} className="btn btn-soft btn-sm">
+                    <Pencil size={15} /> {t('books.edit')}
+                  </Link>
+                  <button type="button" className="btn btn-soft btn-sm is-danger" onClick={() => setDeleting(post)}>
+                    <Trash2 size={15} /> {t('common.delete')}
+                  </button>
+                </div>
               </div>
-              <div className="manage-actions">
-                <Link to={`/posts/${post.slug}`} className="icon-btn" title={t('editor.view')} aria-label={t('editor.view')}>
-                  <ExternalLink size={17} />
-                </Link>
-                {!post.deleted && (
-                  <>
-                    <Link to={articlePath(post.author.username, post.id)} className="icon-btn" title={t('post.edit')} aria-label={t('post.edit')}>
-                      <SquarePen size={17} />
-                    </Link>
-                    <button type="button" className="icon-btn icon-btn-danger" title={t('common.delete')} aria-label={t('common.delete')} onClick={() => remove(post)}>
-                      <Trash2 size={17} />
-                    </button>
-                  </>
-                )}
-              </div>
-            </li>
+            </article>
           ))}
-        </ul>
+          {posts && posts.length > 0 && shown.length === 0 && <p className="muted journal-none">{t('manage.empty')}</p>}
+        </div>
       )}
-    </>
+
+      {deleting && (
+        <ConfirmModal
+          title={t('editor.delete')}
+          message={t('editor.confirmDelete')}
+          confirmLabel={t('editor.delete')}
+          danger
+          onConfirm={() => void remove(deleting)}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
+    </div>
   );
 }
 

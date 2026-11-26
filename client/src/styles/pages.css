@@ -30,7 +30,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 .breadcrumbs a::after {
@@ -147,7 +147,7 @@
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-text);
-  font-size: 0.75rem;
+  font-size: var(--fs-label);
   font-weight: 700;
 }
 
@@ -166,8 +166,8 @@
   padding: 5px 5px 5px 14px;
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
-  font-size: 0.92rem;
-  font-weight: 500;
+  font-size: var(--fs-strong);
+  font-weight: 600;
 }
 
 .filter-chip > span:not(:first-child)::before {
@@ -179,6 +179,11 @@
 .filter-chip-current {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* A tag's page: the tag, in its colour (none: as the others). */
+.filter-chip-tag[style] svg {
+  color: var(--tag);
 }
 
 .filter-chip-clear {
@@ -219,7 +224,7 @@
 
 .results-label {
   color: var(--text-2);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .load-more {
@@ -239,7 +244,7 @@
 }
 
 .empty-state h1 {
-  font-size: 1.8rem;
+  font-size: var(--fs-num);
 }
 
 .empty-glyph {
@@ -268,7 +273,7 @@
 
 .error-details summary {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 
@@ -280,7 +285,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -362,7 +367,7 @@
 
 .feed-post-author {
   overflow: hidden;
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -372,7 +377,7 @@
   display: flex;
   gap: 5px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
   white-space: nowrap;
 }
 
@@ -404,7 +409,7 @@
 }
 
 .feed-post-title {
-  font-size: 1.25rem;
+  font-size: var(--fs-card);
   line-height: 1.25;
 }
 
@@ -423,7 +428,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 0.94rem;
+  font-size: var(--fs-strong);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
@@ -464,7 +469,7 @@
   margin-left: auto;
   padding: 0 6px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -496,8 +501,8 @@
   gap: 6px;
   margin-bottom: 22px;
   color: var(--muted);
-  font-weight: 500;
-  font-size: 0.92rem;
+  font-weight: 600;
+  font-size: var(--fs-strong);
 }
 
 .back-link:hover {
@@ -513,7 +518,7 @@
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface-2);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 .notice span {
@@ -532,7 +537,7 @@
   margin-bottom: 0;
 }
 
-/* "Înapoi la articole", and Edit on the right (the post's author and owners). */
+/* "Back to posts", and Edit on the right (the post's author and owners). */
 .post-topbar {
   display: flex;
   align-items: center;
@@ -637,8 +642,8 @@
   gap: 6px 20px;
   margin-top: -6px;
   color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 500;
+  font-size: var(--fs-strong);
+  font-weight: 400;
 }
 
 .post-meta > span {
@@ -690,7 +695,7 @@ a.reaction-btn {
   gap: 4px;
   padding: 10px 4px 9px;
   border-radius: var(--radius);
-  font-size: 0.84rem;
+  font-size: var(--fs-small);
 }
 
 /* Saving: a small card that is one wide button. */
@@ -723,7 +728,7 @@ a.reaction-btn {
 
 .post-end-text {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: var(--fs-card);
   font-weight: 600;
 }
 
@@ -741,7 +746,7 @@ a.reaction-btn {
   padding: 6px 10px;
   border-radius: 9px;
   color: var(--text-2);
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   line-height: 1.35;
 }
 
@@ -753,55 +758,197 @@ a.reaction-btn {
 .toc-level-3 a {
   padding-left: 24px;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: var(--fs-small);
 }
 
-/* The author (sidebar card, under "Was this helpful?" on narrow screens, profile preview): centred. */
-.author-signature {
+/* The author (the sidebar's card, under the end on narrow screens, the profile's preview): a label, who they are
+   (with Follow beside them), their line, and their @name with a link to their page. In the sidebar (.is-side),
+   Follow goes down beside the link. */
+.author-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  text-align: center;
+  text-align: left;
 }
 
-.author-signature .avatar {
-  margin-bottom: 8px;
-  box-shadow: var(--shadow-md);
-}
-
-.author-signature-name {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.author-signature-role {
+.author-card-label {
+  margin-bottom: 12px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.author-signature-quote {
-  max-width: 34ch;
-  margin-top: 10px;
-  color: var(--text-2);
+.author-card-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The picture in a ring of the theme's warm colours. */
+.author-card-avatar {
+  flex-shrink: 0;
+  padding: 2.5px;
+  border-radius: 50%;
+  background: conic-gradient(from 200deg, var(--accent-2), #c9a8f0, #ffb36b, var(--accent-2));
+}
+
+.author-card-avatar .avatar {
+  box-shadow: 0 0 0 2.5px var(--surface);
+}
+
+.author-card-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.author-card-name strong {
   font-family: var(--font-display);
-  font-size: 1.02rem;
-  font-style: italic;
-  line-height: 1.5;
+  font-size: var(--fs-card);
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.side-card .author-signature {
-  padding: 6px 0 2px;
+.author-card-name span {
+  color: var(--muted);
+  font-size: var(--fs-small);
 }
 
-.side-card .author-signature-quote {
-  font-size: 0.95rem;
+.author-card-action {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.author-card-quote {
+  position: relative;
+  margin-top: 16px;
+  padding: 14px 0 14px 34px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-style: italic;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.author-card-quote svg {
+  position: absolute;
+  top: 17px;
+  left: 0;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.author-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.author-card-who + .author-card-foot {
+  margin-top: 16px;
+}
+
+.author-card-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Follow: a dark pill (light in the dark themes), its count under it (beside it in the sidebar). */
+.author-card .follow {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-top: 0;
+}
+
+.author-card.is-side .follow {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.author-card .follow .btn {
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-small);
+}
+
+.author-card .follow .btn-secondary,
+.author-card .follow .btn-secondary:hover {
+  border-color: transparent;
+  background: var(--text);
+  box-shadow: none;
+  color: var(--surface);
+}
+
+.author-card .follow .btn-secondary:hover {
+  opacity: 0.88;
+}
+
+.author-card .follow-count {
+  font-size: var(--fs-label);
+}
+
+/* Compact (under the end on narrow screens): a smaller picture and name, the occupation alone under the name (two
+   lines at most), a small Follow without its count, and the quote in two lines at most beside a line in the theme's
+   colour (no marks, no rules). */
+.author-card.is-compact .author-card-who {
+  gap: 11px;
+}
+
+.author-card.is-compact .author-card-name strong {
+  font-size: 1.05rem;
+}
+
+.author-card.is-compact .author-card-name span {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.author-card.is-compact .follow .btn {
+  padding: 5px 11px;
+  font-size: 0.8125rem;
+}
+
+.author-card.is-compact .follow-count {
+  display: none;
+}
+
+.author-card.is-compact .author-card-quote {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 10px;
+  padding: 0 0 0 12px;
+  border: 0;
+  border-left: 2px solid var(--accent);
+  color: var(--text-2);
+  font-size: var(--fs-strong);
+  line-height: 1.45;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.side-card .author-card-quote {
+  font-size: var(--fs-body);
 }
 
 .related {
@@ -835,7 +982,7 @@ a.reaction-btn {
   border-radius: 10px;
   background: var(--placeholder);
   color: var(--accent);
-  font-size: 1.2rem;
+  font-size: var(--fs-card);
 }
 
 .related-thumb img {
@@ -847,7 +994,7 @@ a.reaction-btn {
 .related-title {
   display: block;
   font-family: var(--font-display);
-  font-size: 0.98rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.25;
   transition: color 0.18s;
@@ -856,24 +1003,33 @@ a.reaction-btn {
 .related-meta {
   display: block;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 
-/* The author under "Was this helpful?" (narrow screens): centred, no card. */
+/* The author under the end (narrow screens): a compact card. */
 .post-signature {
-  justify-content: center;
-  margin-top: 32px;
+  flex-direction: column;
+  margin-top: 36px;
+  padding: 14px;
+  border-radius: 24px;
 }
 
-/* "Read next" above the discussion (narrow screens): one wide card per post. */
+/* "Read next" above the discussion (narrow screens): a row per post. */
 .post-related {
   flex-direction: column;
   gap: 16px;
   margin-top: 48px;
 }
 
+/* The size of the discussion's heading under it ("Discuție", comments.css), on phones too. */
 .post-related h2 {
-  font-size: 2rem;
+  font-size: var(--fs-num);
+}
+
+@media (max-width: 640px) {
+  .post-related h2 {
+    font-size: var(--fs-page);
+  }
 }
 
 .related-cards {
@@ -882,22 +1038,21 @@ a.reaction-btn {
   gap: 12px;
 }
 
+/* A row as in "My books" and "My journal": a glass card, the picture as a small cover, then the chip, the title and
+   when and how long. */
 .related-card {
   display: grid;
-  grid-template-columns: clamp(112px, 26%, 210px) minmax(0, 1fr);
-  min-height: 100px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card-bg);
-  box-shadow: var(--shadow-md);
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 24px;
   color: var(--text);
-  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s;
+  transition: transform 0.25s var(--ease), border-color 0.25s;
 }
 
 .related-card:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-lg);
   color: var(--text);
   transform: translateY(-2px);
 }
@@ -906,52 +1061,33 @@ a.reaction-btn {
   color: var(--accent);
 }
 
-.related-card-media {
-  position: relative;
+.related-card-thumb {
+  font-size: var(--fs-section);
+}
+
+.related-card-text {
   display: grid;
-  place-items: center;
-  background: var(--placeholder);
-  color: var(--accent);
-  font-size: 1.6rem;
-}
-
-.related-card-media img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.related-card-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
+  gap: 6px;
+  justify-items: start;
   min-width: 0;
-  padding: 14px 18px;
+}
+
+.related-card-text .book-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .related-card-title {
   display: -webkit-box;
   overflow: hidden;
   font-family: var(--font-display);
-  font-size: 1.08rem;
+  font-size: var(--fs-card);
   font-weight: 600;
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  transition: color 0.18s;
-}
-
-.related-card-excerpt {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--text-2);
-  font-size: 0.9rem;
-  line-height: 1.45;
+  line-height: 1.2;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  transition: color 0.18s;
 }
 
 /* The sidebar's actions as an app-style bar fixed to the bottom of the screen (narrow screens): Like and Save on
@@ -1132,7 +1268,7 @@ a.reaction-btn {
 .post-bar-next-title {
   overflow: hidden;
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1154,7 +1290,7 @@ a.reaction-btn {
   padding: 6px 2px;
   border: 0;
   border-radius: 14px;
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   line-height: 1.2;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.18s, transform 0.15s var(--ease);
@@ -1249,20 +1385,6 @@ a.reaction-btn {
   }
 }
 
-@media (max-width: 560px) {
-  .related-card-excerpt {
-    display: none;
-  }
-
-  .related-card-body {
-    padding: 12px 14px;
-  }
-
-  .related-card-title {
-    font-size: 1rem;
-  }
-}
-
 /* ---------- Auth ---------- */
 .auth-page {
   display: flex;
@@ -1292,7 +1414,7 @@ a.reaction-btn {
 }
 
 .auth-header h1 {
-  font-size: 1.9rem;
+  font-size: var(--fs-num);
 }
 
 /* Signing up: agreeing to the Terms (needed for Google and for email). */
@@ -1316,7 +1438,7 @@ a.reaction-btn {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   line-height: 1.45;
   cursor: pointer;
 }
@@ -1362,7 +1484,7 @@ a.reaction-btn {
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-text);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1376,7 +1498,7 @@ a.reaction-btn {
 
 .auth-switch {
   text-align: center;
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
 }
 
 .auth-switch a {
@@ -1423,11 +1545,11 @@ a.reaction-btn {
   }
 
   .auth-header h1 {
-    font-size: 1.6rem;
+    font-size: var(--fs-page);
   }
 
   .auth-header p {
-    font-size: 0.92rem;
+    font-size: var(--fs-strong);
     line-height: 1.45;
   }
 
@@ -1517,7 +1639,7 @@ a.reaction-btn {
   align-items: center;
   gap: 4px;
   color: var(--success);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   animation: popover-in 0.2s var(--ease);
 }
@@ -1538,7 +1660,7 @@ a.reaction-btn {
 }
 
 .switch-text strong {
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   font-weight: 600;
 }
 
@@ -1586,7 +1708,7 @@ a.reaction-btn {
   border-radius: var(--radius-sm);
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -1648,51 +1770,359 @@ a.reaction-btn {
 
 .side-title {
   font-family: var(--font-body);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-.mode-options {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* A settings card that folds (FoldCard): its title opens it; folded, a line says what's in it. */
+.fold-card {
+  gap: 0;
 }
 
-.mode-option {
+.fold-card-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
+  width: calc(100% + 16px);
+  margin: -8px;
+  padding: 8px;
+  border: 0;
   border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  font-weight: 500;
+}
+
+.fold-card-toggle:hover {
+  background: var(--soft-fill);
+}
+
+.fold-card-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.fold-card-text {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fold-card-text .side-title {
+  margin: 0;
+}
+
+.fold-card-summary {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fold-card-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+
+.fold-card.is-open .fold-card-chevron {
+  transform: rotate(180deg);
+}
+
+.fold-card-body {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  animation: advanced-in 0.2s var(--ease);
+}
+
+.fold-card-body .field {
+  margin: 0;
+}
+
+/* The publishing toggle: a draft, out, scheduled (each change saves itself). */
+.state-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--soft-fill);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.state-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
   color: var(--text-2);
-  transition: border-color 0.18s, background 0.18s, color 0.18s;
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.18s var(--ease),
+    color 0.18s var(--ease),
+    box-shadow 0.18s var(--ease);
 }
 
-.mode-option input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
+.state-option > svg {
+  flex-shrink: 0;
 }
 
-.mode-option:hover {
-  background: var(--surface-2);
+.state-option span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.mode-option.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+.state-option:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.state-option[aria-checked='true'] {
+  background: var(--surface);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.08),
+    inset 0 0 0 1px var(--border);
   color: var(--accent);
 }
 
-.mode-option:has(input:focus-visible) {
+/* Out: in the site's green, so it's clear at a glance that it is. */
+.state-option.is-live[aria-checked='true'] {
+  color: var(--sage);
+}
+
+.state-option:disabled {
+  cursor: progress;
+}
+
+.state-option:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: 1px;
+}
+
+.state-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* When it's scheduled for: a field that opens the day and time picker (DateTimePicker). */
+.schedule-field {
+  min-height: 52px;
+}
+
+/* With a panel open (the picker), the sidebar (sticky: its own layer) stays over the editor beside it, its sticky
+   toolbar included. */
+.editor-side:has(.popover) {
+  z-index: 30;
+}
+
+.schedule-field > svg:first-child {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* What's scheduled (ScheduledDialog): by day, each at its time. A dialog; the whole screen on phones. */
+.modal.scheduled-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  height: min(80dvh, 760px);
+  max-height: none;
+}
+
+.modal.scheduled-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scheduled-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scheduled-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scheduled-head h2 {
+  font-size: var(--fs-card);
+}
+
+.scheduled-head h2 .muted {
+  font-family: var(--font-body);
+  font-size: var(--fs-strong);
+  font-weight: 400;
+}
+
+.scheduled-list {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 18px;
+  min-height: 0;
+  padding: 16px 20px 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.scheduled-day {
+  display: grid;
+  gap: 8px;
+}
+
+.scheduled-day h3 {
+  margin: 0;
+}
+
+.scheduled-day h3::first-letter {
+  text-transform: uppercase;
+}
+
+.scheduled-day ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scheduled-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s var(--ease);
+}
+
+.scheduled-item:hover {
+  background: var(--soft-fill);
+}
+
+.scheduled-item.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+.scheduled-time {
+  flex-shrink: 0;
+  min-width: 48px;
+  color: var(--accent);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.scheduled-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scheduled-text strong {
+  overflow: hidden;
+  font-size: var(--fs-strong);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduled-text .muted {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--fs-small);
+}
+
+.scheduled-text .muted svg {
+  flex-shrink: 0;
+}
+
+.scheduled-text .muted span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduled-status {
+  justify-self: center;
+  margin: 0;
+}
+
+.scheduled-end {
+  height: 1px;
+}
+
+.scheduled-this {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: var(--fs-label);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .modal.scheduled-dialog {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .scheduled-head {
+    padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
+  }
+
+  .scheduled-list {
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+}
+
+/* "Publish it now?": asked over the page (ConfirmBubble), the toggle sharp with the state picked. */
+.state-bubble .state-toggle {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 18px 40px -18px rgb(20 16 34 / 0.5);
+}
+
+.state-bubble .state-option {
+  cursor: default;
 }
 
 .banner-drop {
@@ -1752,7 +2182,7 @@ a.reaction-btn {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 16px 20px;
+  padding: 12px 16px 20px;
 }
 
 .editor-sheet-head {
@@ -1760,10 +2190,11 @@ a.reaction-btn {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 18px 16px 0;
 }
 
 .editor-sheet-head h2 {
-  font-size: 1.25rem;
+  font-size: var(--fs-card);
 }
 
 .editor-sheet .side-card {
@@ -1805,10 +2236,6 @@ a.reaction-btn {
 
   .editor-topbar-status {
     gap: 8px;
-  }
-
-  .editor-save {
-    white-space: nowrap;
   }
 
   .editor-error {
@@ -1890,7 +2317,7 @@ a.reaction-btn {
   background: var(--surface);
   color: var(--text-2);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1948,7 +2375,7 @@ a.reaction-btn {
   border-radius: 12px;
   background: var(--placeholder);
   color: var(--accent);
-  font-size: 1.5rem;
+  font-size: var(--fs-section);
 }
 
 .manage-thumb img {
@@ -1980,7 +2407,7 @@ a.reaction-btn {
 .manage-title {
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 1.08rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2227,7 +2654,7 @@ a.reaction-btn {
   border-radius: 11px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 1.1rem;
+  font-size: var(--fs-card);
 }
 
 .cat-info {
@@ -2280,7 +2707,7 @@ a.reaction-btn {
   border-radius: 10px;
   background: var(--surface);
   color: var(--text-2);
-  font-size: 1.1rem;
+  font-size: var(--fs-card);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
@@ -2336,7 +2763,7 @@ a.reaction-btn {
 }
 
 .stats-head h1 {
-  font-size: 2rem;
+  font-size: var(--fs-num);
 }
 
 .stats-head p {
@@ -2358,7 +2785,12 @@ a.reaction-btn {
   min-width: 270px;
 }
 
-.stats-period button {
+.stats-kind {
+  min-width: 250px;
+}
+
+.stats-period button,
+.stats-kind button {
   white-space: nowrap;
 }
 
@@ -2394,7 +2826,7 @@ a.reaction-btn {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -2412,32 +2844,75 @@ a.reaction-btn {
 
 .stats-kpi-value {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: var(--fs-num);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
 .stats-kpi-note {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 
-.stats-spark {
+/* A tile's picture, at its foot: the period in small bars, or a bar with a mark where it was before. */
+.stats-kpi-graphic {
   display: block;
-  width: 100%;
-  height: 34px;
   margin-top: auto;
+  padding-top: 8px;
 }
 
-.stats-spark-area {
-  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+.stats-minibars {
+  --bar: var(--accent);
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 34px;
 }
 
-.stats-spark-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-linejoin: round;
-  stroke-width: 1.6;
+.stats-minibars.is-visitors {
+  --bar: var(--chart-2);
+}
+
+.stats-minibars > span {
+  flex: 1;
+  min-width: 0;
+  border-radius: 4px 4px 2px 2px;
+  background: color-mix(in srgb, var(--bar) 32%, transparent);
+  transition: background 0.15s var(--ease);
+}
+
+.stats-minibars > span:hover,
+.stats-minibars > span.is-last {
+  background: var(--bar);
+}
+
+.stats-meter {
+  position: relative;
+  display: block;
+  height: 8px;
+  margin: 13px 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft-fill);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.stats-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, transparent), var(--accent));
+}
+
+/* Where it was in the period before. */
+.stats-meter-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.55;
 }
 
 /* How a number moved since the period before. */
@@ -2446,7 +2921,7 @@ a.reaction-btn {
   align-items: center;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  font-size: 0.75rem;
+  font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   white-space: nowrap;
@@ -2499,7 +2974,7 @@ a.reaction-btn {
   display: flex;
   gap: 14px;
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
 }
 
 .stats-keys span,
@@ -2603,13 +3078,13 @@ a.reaction-btn {
   background: var(--surface);
   box-shadow: var(--shadow-md);
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   pointer-events: none;
 }
 
 .stats-tooltip strong {
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
 }
 
 /* Interactions: four rows (how many, and how it changed), then the reading before a like or a comment. */
@@ -2647,19 +3122,19 @@ a.reaction-btn {
   display: flex;
   flex-direction: column;
   color: var(--text-2);
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   font-weight: 600;
 }
 
 .stats-engage-name small {
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: var(--fs-label);
+  font-weight: 400;
 }
 
 .stats-engage-list strong {
   font-family: var(--font-display);
-  font-size: 1.3rem;
+  font-size: var(--fs-card);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2677,7 +3152,7 @@ a.reaction-btn {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--fs-small);
 }
 
 .stats-engage-times svg {
@@ -2703,7 +3178,7 @@ a.reaction-btn {
   padding: 0 4px 8px;
   border-bottom: 1px solid var(--border);
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2733,7 +3208,7 @@ a.reaction-btn {
 
 .stats-post-rank {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -2778,7 +3253,7 @@ a.reaction-btn {
 
 .stats-post-num {
   color: var(--text-2);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -2818,7 +3293,7 @@ a.reaction-btn {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 .stats-bar-label {
@@ -2835,7 +3310,7 @@ a.reaction-btn {
 
 .stats-bar-value small {
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .stats-bar-track {
@@ -2977,19 +3452,19 @@ a.reaction-btn {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
 .stats-tile-value {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: var(--fs-section);
   font-variant-numeric: tabular-nums;
 }
 
 .stats-tile-note {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 
 .stats-note {
@@ -3061,7 +3536,7 @@ a.reaction-btn {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 0.84rem;
+    font-size: var(--fs-small);
   }
 
   .stats-post-num svg {
@@ -3072,11 +3547,12 @@ a.reaction-btn {
 
 @media (max-width: 640px) {
   .stats-head h1 {
-    font-size: 1.6rem;
+    font-size: var(--fs-page);
   }
 
   .stats-controls,
   .stats-author,
+  .stats-kind,
   .stats-period {
     width: 100%;
     min-width: 0;
@@ -3091,7 +3567,7 @@ a.reaction-btn {
   }
 
   .stats-kpi-value {
-    font-size: 1.55rem;
+    font-size: var(--fs-page);
   }
 
   .stats-grid {
@@ -3124,30 +3600,6 @@ a.reaction-btn {
   padding-bottom: 32px;
 }
 
-/* The title and subtitle, with "Mark all as read" at the other end. */
-.notif-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 20px;
-}
-
-.notif-title {
-  font-size: 2rem;
-}
-
-.notif-subtitle {
-  margin-top: 4px;
-}
-
-.notif-head-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
 /* To the Settings page: small, its icon in the accent colour so it's still seen. */
 .notif-settings-link svg {
   color: var(--accent);
@@ -3171,7 +3623,7 @@ a.reaction-btn {
   margin: 4px 6px 0;
   color: var(--muted);
   font-family: var(--font-body);
-  font-size: 0.76rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -3235,6 +3687,17 @@ a.reaction-btn {
   color: var(--text-2);
 }
 
+/* The site answering (support): its logo, not the person who wrote the answer. */
+.notif-site-logo {
+  display: block;
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  object-fit: contain;
+}
+
 /* The kind of notification, as a small badge on the picture (as on Facebook), and named under the text. */
 .notif-type {
   position: absolute;
@@ -3246,7 +3709,30 @@ a.reaction-btn {
   height: 20px;
   border: 2px solid var(--surface);
   border-radius: 50%;
+  /* (a kind without a colour of its own still shows) */
+  background: var(--muted);
   color: #fff;
+}
+
+.notif-type-mention {
+  background: #6366f1;
+}
+
+.notif-type-followed_post {
+  background: #8b5cf6;
+}
+
+.notif-type-comment_held {
+  background: #f59e0b;
+}
+
+.notif-type-report {
+  background: #ef4444;
+}
+
+.notif-type-account_due,
+.notif-type-cleanup_due {
+  background: #64748b;
 }
 
 .notif-type-comment,
@@ -3283,7 +3769,8 @@ a.reaction-btn {
   background: #d4a017;
 }
 
-.notif-type-support {
+.notif-type-support,
+.notif-type-support_reply {
   background: #14b8a6;
 }
 
@@ -3311,7 +3798,7 @@ a.reaction-btn {
   padding-left: 10px;
   border-left: 2px solid var(--border-strong);
   color: var(--text-2);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -3322,7 +3809,7 @@ a.reaction-btn {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 
 .notif-kind {
@@ -3363,8 +3850,30 @@ a.reaction-btn {
   color: #d4a017;
 }
 
-.notif-kind-support {
+.notif-kind-support,
+.notif-kind-support_reply {
   color: #14b8a6;
+}
+
+.notif-kind-mention {
+  color: #6366f1;
+}
+
+.notif-kind-followed_post {
+  color: #8b5cf6;
+}
+
+.notif-kind-comment_held {
+  color: #d97706;
+}
+
+.notif-kind-report {
+  color: #ef4444;
+}
+
+.notif-kind-account_due,
+.notif-kind-cleanup_due {
+  color: #64748b;
 }
 
 .notif-item.is-unread time {
@@ -3421,10 +3930,6 @@ a.reaction-btn {
     gap: 16px;
   }
 
-  .notif-title {
-    font-size: 1.6rem;
-  }
-
   .notif-day {
     margin-inline: 0;
   }
@@ -3462,31 +3967,13 @@ a.reaction-btn {
   padding-bottom: 32px;
 }
 
-.prefs-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px 20px;
-}
-
-.prefs-head h1,
-.support-head h1 {
-  font-size: 2rem;
-}
-
-.prefs-head p,
-.support-head p {
-  margin-top: 4px;
-}
-
 .prefs-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 1.5em;
   color: var(--success);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -3533,7 +4020,7 @@ a.reaction-btn {
   align-items: center;
   gap: 8px;
   color: var(--text-2);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 .prefs-every .input {
@@ -3570,7 +4057,7 @@ a.reaction-btn {
   border-radius: var(--radius-pill);
   background: none;
   color: var(--text-2);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -3587,16 +4074,12 @@ a.reaction-btn {
   color: var(--accent);
 }
 
-/* ---------- Support: the contact form, and the administrators' tickets ---------- */
-.support-head {
-  max-width: 760px;
-}
-
-/* The form in the middle, under a centred title. */
-.support-page .support-head {
-  width: 100%;
-  margin-inline: auto;
-  text-align: center;
+/* ---------- Support: the contact form (what happens next beside it), and the administrators' tickets ---------- */
+.support-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
 }
 
 .support-form {
@@ -3604,9 +4087,84 @@ a.reaction-btn {
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 760px;
-  margin-inline: auto;
   padding: 24px;
+}
+
+.support-side {
+  display: grid;
+  gap: 14px;
+}
+
+.support-next,
+.support-links {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.support-next ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-next li {
+  display: flex;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+
+.support-next-no {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+
+.support-link {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  margin: 0 -10px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.support-link:hover {
+  background: var(--soft-fill);
+}
+
+.support-link > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.support-link > span {
+  display: grid;
+  gap: 2px;
+}
+
+.support-link strong {
+  font-size: var(--fs-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .support-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .support-pair {
@@ -3685,7 +4243,163 @@ a.reaction-btn {
 }
 
 .support-sent h1 {
-  font-size: 1.6rem;
+  font-size: var(--fs-section);
+}
+
+.support-sent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* A signed-in person's tickets: on the support page's side, and on their own page. */
+.support-account {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.support-account .btn {
+  justify-self: start;
+}
+
+.support-tickets {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-tickets li + li {
+  border-top: 1px solid var(--border);
+}
+
+.support-ticket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.support-ticket:hover {
+  background: var(--soft-fill);
+}
+
+.support-ticket-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.support-ticket-main strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-ticket.is-unread strong::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.support-tickets-card,
+.support-thread-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.support-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.support-ticket-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* One ticket's conversation: the person's messages and the team's answers. */
+.support-thread {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-msg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.support-msg-box {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--soft-fill);
+}
+
+.support-msg.is-staff .support-msg-box {
+  background: var(--accent-soft);
+}
+
+.support-msg-meta {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.support-msg-meta strong {
+  color: var(--text);
+}
+
+.support-msg-body {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.support-msg .support-files {
+  margin-top: 10px;
+}
+
+.support-waiting {
+  margin: 0;
+}
+
+.support-answer {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .support-tickets-card,
+  .support-thread-card {
+    padding: 16px;
+  }
 }
 
 .ticket-list {
@@ -3732,7 +4446,7 @@ a.reaction-btn {
 .ticket-preview {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -3743,7 +4457,7 @@ a.reaction-btn {
   align-items: center;
   gap: 4px 6px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
 }
 
 .ticket-meta svg {
@@ -3770,7 +4484,7 @@ a.reaction-btn {
 }
 
 .ticket-head h1 {
-  font-size: 1.6rem;
+  font-size: var(--fs-section);
 }
 
 .ticket-body {
@@ -3803,7 +4517,7 @@ a.reaction-btn {
   border-radius: 12px;
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
 }
 
 .ticket-image img {
@@ -3840,11 +4554,6 @@ a.reaction-btn {
 }
 
 @media (max-width: 640px) {
-  .prefs-head h1,
-  .support-head h1 {
-    font-size: 1.6rem;
-  }
-
   .prefs-card,
   .support-form,
   .ticket {
@@ -3865,125 +4574,83 @@ a.reaction-btn {
   }
 }
 
-/* ---------- Series: its parts above the text, the next one after it ---------- */
-.series-box {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 28px;
-  padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-}
-
-.series-box-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-}
-
-.series-box-label {
-  color: var(--accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.series-box-head strong {
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-}
-
-.series-box-part {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.series-box-parts {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding-left: 1.4em;
-  font-size: 0.95rem;
-}
-
-.series-box-parts a {
-  color: var(--text-2);
-}
-
-.series-box-parts a:hover {
-  color: var(--accent);
-}
-
-.series-box-parts .is-current {
-  color: var(--text);
-  font-weight: 700;
-}
-
-.series-next {
+/* ---------- The editor: its advanced settings (the summary and the address, search and sharing, comments), folded
+   away under a button; open, they follow it as the other cards do ---------- */
+.editor-advanced-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 32px;
-  padding: 16px 20px;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: none;
   color: var(--text);
-  text-decoration: none;
-  transition: border-color 0.18s, transform 0.18s var(--ease);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
 }
 
-.series-next:hover {
+.editor-advanced-toggle:hover,
+.editor-advanced-toggle.is-open {
+  border-style: solid;
   border-color: var(--accent-ring);
-  color: var(--text);
-  transform: translateY(-1px);
+  background: var(--accent-soft);
 }
 
-.series-next-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.series-next-label {
-  color: var(--accent);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.series-next strong {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-}
-
-.series-next > svg {
+.editor-advanced-toggle > svg:first-child {
   flex-shrink: 0;
   color: var(--accent);
 }
 
-/* The editor: naming a new series. */
-.series-new {
+.editor-advanced-text {
   display: flex;
-  gap: 8px;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
 }
 
-.series-new .input {
-  flex: 1;
-  min-width: 0;
+.editor-advanced-text strong {
+  font-size: var(--fs-strong);
+}
+
+.editor-advanced-text span {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  line-height: 1.35;
+}
+
+.editor-advanced-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+
+.editor-advanced-toggle.is-open .editor-advanced-chevron {
+  transform: rotate(180deg);
+}
+
+.editor-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  animation: advanced-in 0.22s var(--ease);
+}
+
+@keyframes advanced-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 
 /* Editor top bar: autosave state (wide screens; the save button tells on phones). */
 .autosave-status {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   white-space: nowrap;
 }
 
@@ -4004,10 +4671,6 @@ a.reaction-btn {
 @media (max-width: 640px) {
   .autosave-status {
     display: none;
-  }
-
-  .series-box-part {
-    margin-left: 0;
   }
 }
 
@@ -4068,12 +4731,12 @@ a.reaction-btn {
 
 .admin-hub-title {
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: var(--fs-card);
 }
 
 .admin-hub-hint {
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   line-height: 1.45;
 }
 
@@ -4094,13 +4757,13 @@ a.reaction-btn {
   margin-right: 4px;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: var(--fs-section);
   font-variant-numeric: tabular-nums;
 }
 
 .admin-hub-more {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--fs-small);
 }
 
 /* Something waiting (new tickets). */
@@ -4151,7 +4814,7 @@ a.reaction-btn {
 
   .admin-hub-title {
     grid-area: title;
-    font-size: 1.05rem;
+    font-size: var(--fs-body);
   }
 
   .admin-hub-hint {
@@ -4170,11 +4833,155 @@ a.reaction-btn {
   }
 
   .admin-hub-value strong {
-    font-size: 1.1rem;
+    font-size: var(--fs-card);
   }
 }
 
 /* ---------- A person's pages (/{username}/articole, /{username}/articole-salvate) ---------- */
+/* ---------- An account's pages, at the top (PageBand): the title and its line, the actions, then the page's own
+   tabs and, on a band, its tools (Settings, Profile, Notifications, Support, Saved; a person's page is the same shape:
+   PersonHeader). ---------- */
+/* Nothing clipped: the tools' menus (a filter's list) open over the card and what's under it. */
+.page-band {
+  margin-bottom: 18px;
+  padding: 22px 26px 0;
+}
+
+.page-band:not(:has(.page-band-tabs, .page-band-tools)) {
+  padding-bottom: 22px;
+}
+
+/* (in a page that spaces its parts itself) */
+:is(.prefs-page, .support-page, .notif-page) > .page-band {
+  margin-bottom: 0;
+}
+
+.page-band-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.page-band-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-band-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-page);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.page-band-line {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.page-band-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page-band-tabs {
+  display: flex;
+  gap: 22px;
+  margin: 18px -26px 0;
+  padding: 0 26px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.page-band-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.page-band-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 0 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-strong);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.page-band-tab:hover {
+  color: var(--text);
+}
+
+.page-band-tab.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+/* Last in the card: its background follows the card's rounded corners (inside its border). */
+.page-band-tools {
+  margin: 0 -26px;
+  padding: 14px 26px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+}
+
+@media (max-width: 640px) {
+  .page-band {
+    padding: 18px 16px 0;
+  }
+
+  .page-band:not(:has(.page-band-tabs, .page-band-tools)) {
+    padding-bottom: 18px;
+  }
+
+  .page-band-top {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .page-band-title {
+    font-size: var(--fs-page);
+  }
+
+  /* The actions: the width, in equal parts. */
+  .page-band-actions {
+    width: 100%;
+  }
+
+  .page-band-actions > * {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .page-band-tabs {
+    gap: 18px;
+    margin: 14px -16px 0;
+    padding: 0 16px;
+  }
+
+  .page-band-tools {
+    margin: 0 -16px;
+    padding: 12px 16px;
+  }
+}
+
+/* A section a tab leads to: under the site's bar, not behind it. */
+.prefs-card {
+  scroll-margin-top: 100px;
+}
+
 .person-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -4194,7 +5001,7 @@ a.reaction-btn {
   width: 76px;
   height: 76px;
   border-radius: 50%;
-  font-size: 1.9rem;
+  font-size: var(--fs-num);
 }
 
 .person-head-text {
@@ -4216,7 +5023,7 @@ a.reaction-btn {
 
 .person-role {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4257,7 +5064,7 @@ a.reaction-btn {
   border-bottom: 2px solid transparent;
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.93rem;
+  font-size: var(--fs-strong);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -4290,7 +5097,7 @@ a.reaction-btn {
   align-self: flex-start;
   max-width: 100%;
   color: var(--accent);
-  font-size: 0.86rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -4307,7 +5114,7 @@ a.reaction-btn {
     align-self: start;
     width: 60px;
     height: 60px;
-    font-size: 1.5rem;
+    font-size: var(--fs-page);
   }
 
   .person-head-actions {
@@ -4362,7 +5169,7 @@ a.reaction-btn {
 }
 
 .signin-text strong {
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
 }
 
 .signin-value {
@@ -4370,7 +5177,7 @@ a.reaction-btn {
   align-items: center;
   gap: 5px;
   color: var(--text-2);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 
@@ -4395,7 +5202,7 @@ a.reaction-btn {
   border-radius: var(--radius-sm);
   background: var(--success-soft);
   color: var(--success);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -4422,7 +5229,7 @@ a.reaction-btn {
 
 .signin-pick span {
   color: var(--text-2);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 /* The username's check, under its field. */
@@ -4473,7 +5280,7 @@ a.reaction-btn {
   border-radius: calc(var(--radius) - 2px);
   background: var(--danger-soft);
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   line-height: 1.5;
 }
 
@@ -4511,7 +5318,7 @@ a.reaction-btn {
 
 .auth-outcome h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--fs-section);
 }
 
 .auth-outcome > svg {
@@ -4545,8 +5352,8 @@ a.reaction-btn {
   gap: 3px;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 0.74rem;
-  font-weight: 650;
+  font-size: var(--fs-label);
+  font-weight: 600;
   vertical-align: 1px;
   white-space: nowrap;
 }
@@ -4564,7 +5371,7 @@ a.reaction-btn {
 .signin-sub {
   display: block;
   margin-top: 4px;
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   color: var(--muted);
   line-height: 1.45;
 }
@@ -4587,7 +5394,7 @@ a.reaction-btn {
   display: grid;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   line-height: 1.5;
 }
 
@@ -4606,7 +5413,7 @@ a.reaction-btn {
   padding: 16px 18px;
   display: grid;
   gap: 8px;
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 .terms-toc ol {
@@ -4630,7 +5437,7 @@ a.reaction-btn {
 }
 
 .terms-intro {
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .terms-section {
@@ -4640,7 +5447,7 @@ a.reaction-btn {
 
 .terms-section h2 {
   margin: 28px 0 10px;
-  font-size: 1.3rem;
+  font-size: var(--fs-card);
 }
 
 .terms-section p,
@@ -4669,7 +5476,7 @@ a.reaction-btn {
 .terms-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   line-height: 1.55;
 }
 
@@ -4683,7 +5490,7 @@ a.reaction-btn {
 
 .terms-table thead th {
   background: var(--highlight);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
 }
 
 .terms-table tbody tr:last-child > * {
@@ -4740,7 +5547,7 @@ a.reaction-btn {
 
   .terms-table tbody th {
     white-space: normal;
-    font-size: 0.95rem;
+    font-size: var(--fs-strong);
   }
 
   .terms-table td[data-label]::before {

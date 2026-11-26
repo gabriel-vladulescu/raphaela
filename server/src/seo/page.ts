@@ -1,14 +1,16 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
+import { freshAuthorCount } from '@/lib/follows';
 import { config } from '@/config';
-import { loadPostPage, VISIBLE_POST } from '@/lib/posts';
+import { bookSelect, chaptersOf, toBook } from '@/lib/books';
+import { loadPostPage, postPath, VISIBLE_POST } from '@/lib/posts';
 import { publicIdentity, site } from '@/lib/siteIdentity';
 import { publicSiteSettings, siteSettings } from '@/lib/siteSettings';
 import { escapeHtml, scriptJson } from '@/seo/html';
 import type { PageMeta } from '@/seo/html';
 import { BRAND_VERSION } from '@/seo/brand';
 import { OG_HEIGHT, OG_WIDTH, profileSharePath, siteShareImage } from '@/seo/og';
-import type { ProfileList } from '@/seo/og';
-import { findPerson } from '@/lib/people';
+import { findPerson, hasList, isPublicList, PERSON_LISTS } from '@/lib/people';
+import type { PersonList } from '@/lib/people';
 
 // What each page's HTML says before the app runs: the title, description and canonical address search engines use,
 // the share tags (Open Graph, X) link previews use, structured data (schema.org), and for posts the content itself,
@@ -19,7 +21,7 @@ const INDEX = 'index, follow, max-image-preview:large, max-snippet:-1, max-video
 const NO_INDEX = 'noindex, follow';
 /** Pages for signed-in people (or tools): never in search results. */
 const PRIVATE_PAGES =
-  /^\/(login|register|saved|articole-salvate|profil|setari|notificari|statistici|suport|parola-uitata|resetare-parola|confirmare-email|invitatie|setup)\/?$|^\/(admin|editor|previzualizare|newsletter)(\/|$)|^\/[^/]+\/articole\/[^/]+\/?$/;
+  /^\/(login|register|salvate|profil|setari|notificari|statistici|suport|parola-uitata|resetare-parola|confirmare-email|invitatie|setup|drumuri)\/?$|^\/(admin|editor|previzualizare|newsletter|jurnalul-meu|cartile-mele|suport\/tichete)(\/|$)|^\/[^/]+\/articole\/[^/]+\/?$|^\/[^/]+\/(jurnal|carti)\/.+/;
 
 export const siteOrigin = () => config.appUrl.replace(/\/+$/, '');
 const absolute = (url: string) => (/^https?:\/\//.test(url) ? url : `${siteOrigin()}${url}`);
@@ -130,17 +132,22 @@ const breadcrumb = (items: { name: string; url: string }[]) => ({
   itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, name: item.name, item: item.url })),
 });
 
-async function home(db: Pool, params: URLSearchParams): Promise<PageMeta> {
+/** The journal (/jurnal): the articles, a category's (?category=) or a search's (?q=). */
+async function journal(db: Pool, params: URLSearchParams): Promise<PageMeta> {
   const origin = siteOrigin();
+  const title = `Jurnal · ${site.name}`;
   // Search results: useful to visitors, not as pages in search engines.
-  if (params.get('q')) return page(200, site.name, { title: site.name, description: site.description, robots: NO_INDEX, image: siteImage() });
+  if (params.get('q')) return page(200, title, { title, description: site.description, robots: NO_INDEX, image: siteImage() });
 
   const slug = params.get('category');
-  if (slug) {
+  if (!slug) {
+    return page(200, title, { title, description: `Articolele din ${site.name}. ${site.description}`, canonical: `${origin}/jurnal`, robots: INDEX, image: siteImage() });
+  }
+  {
     const all = await categories(db);
     const category = [...all.values()].find((c) => c.slug === slug);
     if (!category) return notFound();
-    const canonical = `${origin}/?category=${encodeURIComponent(category.slug)}`;
+    const canonical = `${origin}/jurnal?category=${encodeURIComponent(category.slug)}`;
     const trail = trailOf(all, category.id);
     return page(200, `${category.name} · ${site.name}`, {
       title: category.name,
@@ -151,12 +158,18 @@ async function home(db: Pool, params: URLSearchParams): Promise<PageMeta> {
       jsonLd: [
         breadcrumb([
           { name: site.name, url: `${origin}/` },
-          ...trail.map((c) => ({ name: c.name, url: `${origin}/?category=${encodeURIComponent(c.slug)}` })),
+          ...trail.map((c) => ({ name: c.name, url: `${origin}/jurnal?category=${encodeURIComponent(c.slug)}` })),
         ]),
       ],
     });
   }
+}
 
+/** The home page ("Today"): the books, the subjects and the latest articles. */
+function home(params: URLSearchParams): PageMeta {
+  const origin = siteOrigin();
+  // Earlier addresses of the articles' list (/?category=, /?q=): it's the journal now.
+  if (params.get('q') || params.get('category')) return { ...notFound(), status: 301, redirect: `/jurnal?${params}` };
   return page(200, site.name, {
     title: site.name,
     description: site.description,
@@ -171,7 +184,7 @@ async function home(db: Pool, params: URLSearchParams): Promise<PageMeta> {
         url: `${origin}/`,
         inLanguage: site.language,
         description: site.description,
-        potentialAction: { '@type': 'SearchAction', target: `${origin}/?q={search_term_string}`, 'query-input': 'required name=search_term_string' },
+        potentialAction: { '@type': 'SearchAction', target: `${origin}/jurnal?q={search_term_string}`, 'query-input': 'required name=search_term_string' },
       },
       { '@context': 'https://schema.org', ...publisher() },
     ],
@@ -187,23 +200,7 @@ const CALENDAR =
 const CLOCK = '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>';
 const EYE = '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>';
 
-/** A series' parts above the text, as the post page shows them (Romanian, like the rest of the pre-render). */
-function seriesBox(post: LoadedPost) {
-  const parts = post.series?.parts ?? [];
-  if (!post.series || parts.length < 2) return '';
-  const index = parts.findIndex((part) => part.id === post.id);
-  const items = parts
-    .map((part) =>
-      part.id === post.id
-        ? `<li class="is-current"><span aria-current="page">${escapeHtml(part.title)}</span></li>`
-        : `<li><a href="/posts/${encodeURIComponent(part.slug)}">${escapeHtml(part.title)}</a></li>`,
-    )
-    .join('');
-  const place = index >= 0 ? `<span class="series-box-part">Partea ${index + 1} din ${parts.length}</span>` : '';
-  return `<nav class="series-box" aria-label="Seria"><p class="series-box-head"><span class="series-box-label">Seria</span><strong>${escapeHtml(post.series.title)}</strong>${place}</p><ol class="series-box-parts">${items}</ol></nav>`;
-}
-
-/** "1 vizualizare", "3 vizualizări", "20 de vizualizări" (as the client's plural()). */
+/** A count and its noun in Romanian's three plural forms (one, a few, twenty and more), as the client's plural(). */
 function romanianViews(n: number) {
   const count = new Intl.NumberFormat('ro-RO').format(n);
   if (n === 1) return '1 vizualizare';
@@ -223,16 +220,18 @@ function postRoot(post: LoadedPost, trail: CategoryRow[]) {
   const chips = trail
     .map(
       (c) =>
-        `<a href="/?category=${encodeURIComponent(c.slug)}" class="chip chip-link">${c.icon ? `<span aria-hidden="true">${escapeHtml(c.icon)}</span>` : ''}${escapeHtml(c.name)}</a>`,
+        `<a href="/jurnal?category=${encodeURIComponent(c.slug)}" class="chip chip-link">${c.icon ? `<span aria-hidden="true">${escapeHtml(c.icon)}</span>` : ''}${escapeHtml(c.name)}</a>`,
     )
     .join('');
   const banner = post.bannerUrl
     ? `<img class="post-hero-img" src="${escapeHtml(post.bannerUrl)}" alt="" fetchpriority="high">`
     : `<span class="post-hero-glyph" aria-hidden="true">${escapeHtml(post.category?.icon || '✦')}</span>`;
+  // A chapter leads back to its book; a post to the journal.
+  const back = post.book ? `<a href="/carti/${encodeURIComponent(post.book.slug)}" class="back-link">${icon(ARROW_LEFT, 16)} ${escapeHtml(post.book.title)}</a>` : `<a href="/jurnal" class="back-link">${icon(ARROW_LEFT, 16)} Înapoi la articole</a>`;
   return `<header class="site-header"><div class="container header-inner"></div></header>
 <main class="site-main">
-  <article class="post-page container">
-    <div class="post-topbar"><a href="/" class="back-link">${icon(ARROW_LEFT, 16)} Înapoi la articole</a></div>
+  <article class="post-page container${post.book ? ' is-chapter' : ''}">
+    <div class="post-topbar">${back}</div>
     <header class="post-hero${post.bannerUrl ? '' : ' is-plain'}">
       ${banner}
       <div class="post-hero-text">
@@ -242,7 +241,7 @@ function postRoot(post: LoadedPost, trail: CategoryRow[]) {
     </header>
     <div class="post-meta">${date ? `<span>${icon(CALENDAR, 15)} Publicat pe ${date}</span>` : ''}<span>${icon(CLOCK, 15)} ${post.readingMinutes} min de citit</span>${post.viewCount > 0 ? `<span>${icon(EYE, 15)} ${romanianViews(post.viewCount)}</span>` : ''}</div>
     <div class="post-layout">
-      <div class="post-main">${seriesBox(post)}<div class="prose post-content">${post.contentHtml}</div></div>
+      <div class="post-main"><div class="prose post-content">${post.contentHtml}</div></div>
       <aside class="post-side"></aside>
     </div>
   </article>
@@ -250,14 +249,16 @@ function postRoot(post: LoadedPost, trail: CategoryRow[]) {
 ${footer()}`;
 }
 
-async function postPage(db: Pool, slug: string): Promise<PageMeta> {
+/** A post (/posts/{slug}), or a chapter of a book (/carti/{book}/{slug}: `book` is its slug). */
+async function postPage(db: Pool, slug: string, book: string | null = null): Promise<PageMeta> {
   // The public version: drafts, scheduled and deleted posts are "not found" here (their author still sees them in
   // the app, which asks the API with their session).
-  const loaded = await loadPostPage(db, slug, null);
+  const loaded = await loadPostPage(db, slug, null, book);
   if (!loaded) return notFound();
   const { post, text, seo } = loaded;
   const origin = siteOrigin();
-  const canonical = `${origin}/posts/${encodeURIComponent(post.slug)}`;
+  const canonical = `${origin}${post.path}`;
+  const bookUrl = post.book ? `${origin}/carti/${encodeURIComponent(post.book.slug)}` : null;
   const trail = trailOf(await categories(db), post.category?.id);
   // The author's own search title, description and share image, when they set them.
   const image = { url: absolute(seo.image ?? post.shareImage), alt: post.title };
@@ -291,7 +292,7 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
       jsonLd: [
         {
           '@context': 'https://schema.org',
-          '@type': 'BlogPosting',
+          '@type': post.book ? 'Chapter' : 'BlogPosting',
           '@id': `${canonical}#article`,
           mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
           url: canonical,
@@ -308,13 +309,22 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
           wordCount: text.split(/\s+/).filter(Boolean).length,
           timeRequired: `PT${post.readingMinutes}M`,
           isAccessibleForFree: true,
-          ...(post.series ? { isPartOf: { '@type': 'CreativeWorkSeries', name: post.series.title }, position: post.series.part } : {}),
+          ...(post.book && bookUrl ? { isPartOf: { '@type': 'Book', name: post.book.title, url: bookUrl }, position: post.book.contents.find((c) => c.id === post.id)?.no } : {}),
         },
-        breadcrumb([
-          { name: site.name, url: `${origin}/` },
-          ...trail.map((c) => ({ name: c.name, url: `${origin}/?category=${encodeURIComponent(c.slug)}` })),
-          { name: post.title, url: canonical },
-        ]),
+        breadcrumb(
+          post.book && bookUrl
+            ? [
+                { name: site.name, url: `${origin}/` },
+                { name: 'Cărți', url: `${origin}/carti` },
+                { name: post.book.title, url: bookUrl },
+                { name: post.title, url: canonical },
+              ]
+            : [
+                { name: site.name, url: `${origin}/` },
+                ...trail.map((c) => ({ name: c.name, url: `${origin}/?category=${encodeURIComponent(c.slug)}` })),
+                { name: post.title, url: canonical },
+              ],
+        ),
       ],
     },
     postRoot(post, trail),
@@ -322,13 +332,16 @@ async function postPage(db: Pool, slug: string): Promise<PageMeta> {
   );
 }
 
-/** Where a post's old address now leads (its current slug), if it ever was one. */
+/** Where an address leads now, if it isn't a post's own (a chapter's slug: under its book; an old address: the new
+ *  one). Null: nowhere. */
 async function redirectFor(db: Pool, slug: string) {
   const [rows] = await db.execute<RowDataPacket[]>(
-    `SELECT p.slug FROM post_redirects r JOIN posts p ON p.id = r.post_id WHERE r.old_slug = ? AND ${VISIBLE_POST}`,
-    [slug],
+    `SELECT p.slug, bk.slug AS book_slug FROM posts p LEFT JOIN books bk ON bk.id = p.book_id
+      WHERE (p.slug = ? OR p.id = (SELECT r.post_id FROM post_redirects r WHERE r.old_slug = ?)) AND ${VISIBLE_POST}
+      ORDER BY p.slug = ? DESC LIMIT 1`,
+    [slug, slug, slug],
   );
-  return (rows[0]?.slug as string | undefined) ?? null;
+  return rows[0] ? postPath(rows[0].slug as string, (rows[0].book_slug as string | null) ?? null) : null;
 }
 
 /** A tag's page (/eticheta/{slug}): its posts, for search engines once it has some. */
@@ -350,27 +363,107 @@ async function tagPage(db: Pool, slug: string): Promise<PageMeta> {
   });
 }
 
+/** The library (/carti). */
+function library(): PageMeta {
+  const title = `Cărți · ${site.name}`;
+  return page(200, title, {
+    title,
+    description: `Cărțile din ${site.name}, citite capitol cu capitol.`,
+    canonical: `${siteOrigin()}/carti`,
+    robots: INDEX,
+    image: siteImage(),
+  });
+}
+
+/** A book (/carti/{slug}): its description, author and chapters, for search engines once a chapter is public. */
+async function bookPage(db: Pool, slug: string): Promise<PageMeta> {
+  const [rows] = await db.query<RowDataPacket[]>(`${bookSelect()} WHERE bk.slug = ? AND bk.deleted_at IS NULL`, [slug]);
+  if (!rows[0]) return notFound();
+  const book = toBook(rows[0]);
+  if (book.chapters === 0 || !book.published) return page(200, site.name, { title: site.name, description: site.description, robots: 'noindex' });
+  const origin = siteOrigin();
+  const canonical = `${origin}/carti/${encodeURIComponent(book.slug)}`;
+  const contents = (await chaptersOf(db, [book.id], null)).get(book.id) ?? [];
+  const title = `${book.title} · ${site.name}`;
+  const about = book.subject ? ` despre ${book.subject.name.toLowerCase()}` : '';
+  const description = book.description || `${book.title}, o carte de ${book.author.name}${about}, capitol cu capitol, pe ${site.name}.`;
+  return page(200, title, {
+    title: book.title,
+    description,
+    canonical,
+    robots: INDEX,
+    image: siteImage(),
+    jsonLd: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Book',
+        name: book.title,
+        description,
+        url: canonical,
+        inLanguage: site.language,
+        author: { '@type': 'Person', name: book.author.name },
+        publisher: publisher(),
+        ...(book.subject ? { genre: book.subject.name } : {}),
+        hasPart: contents
+          .filter((chapter) => chapter.slug)
+          .map((chapter) => ({ '@type': 'Chapter', name: chapter.title, position: chapter.no, url: `${origin}${postPath(chapter.slug!, book.slug)}` })),
+      },
+      breadcrumb([
+        { name: site.name, url: `${origin}/` },
+        { name: 'Cărți', url: `${origin}/carti` },
+        { name: book.title, url: canonical },
+      ]),
+    ],
+  });
+}
+
+function subjectsPage(): PageMeta {
+  const title = `Subiecte · ${site.name}`;
+  return page(200, title, { title, description: `Subiectele din ${site.name}: cărți și articole.`, canonical: `${siteOrigin()}/subiecte`, robots: INDEX, image: siteImage() });
+}
+
+async function subjectPage(db: Pool, slug: string): Promise<PageMeta> {
+  const all = await categories(db);
+  const category = [...all.values()].find((c) => c.slug === slug);
+  if (!category) return notFound();
+  const title = `${category.name} · ${site.name}`;
+  return page(200, title, {
+    title: category.name,
+    description: category.description || `${category.name}: cărți și articole din ${site.name}.`,
+    canonical: `${siteOrigin()}/subiecte/${encodeURIComponent(category.slug)}`,
+    robots: INDEX,
+    image: siteImage(),
+  });
+}
+
 function notFound(): PageMeta {
   return page(404, `Pagina nu există · ${site.name}`, { title: site.name, description: site.description, robots: 'noindex' });
 }
 
 /** The title, tags and initial content for the page at `url` (a path, with its query). */
-/** A person's list: their name and the list, with their share image; for search engines only when it's public. */
-async function personPage(db: Pool, username: string, list: ProfileList): Promise<PageMeta> {
+const LIST_TITLES: Record<PersonList, string> = { jurnal: 'Jurnal', carti: 'Cărți', salvate: 'Articole salvate' };
+
+/**
+ * A person's list (/{username}/jurnal, /carti, /salvate): their name and the list, with its share image. Private (or
+ * not theirs to have): not for search engines. Public: their journal and books are, their saved posts aren't.
+ */
+async function personPage(db: Pool, username: string, list: PersonList): Promise<PageMeta> {
   const person = await findPerson(db, username);
   if (!person) return notFound();
-  const isPublic = list === 'articole' ? person.publicArticles : person.publicSaved;
-  const title = `${list === 'articole' ? 'Articole de' : 'Articole salvate de'} ${person.name} · ${site.name}`;
-  if (!isPublic) return page(200, title, { title, description: site.description, robots: NO_INDEX });
+  const title = `${LIST_TITLES[list]} · ${person.name} · ${site.name}`;
+  if (!isPublicList(person, list)) return page(200, title, { title, description: site.description, robots: NO_INDEX });
+  const who = `${person.name}${person.occupation ? `, ${person.occupation}` : ''}`;
   const description =
-    list === 'articole'
-      ? `Articolele scrise de ${person.name}${person.occupation ? `, ${person.occupation}` : ''}, pe ${site.name}.`
-      : `Articolele salvate de ${person.name} pe ${site.name}.`;
+    list === 'jurnal'
+      ? `Articolele scrise de ${who}, pe ${site.name}.`
+      : list === 'carti'
+        ? `Cărțile scrise de ${who}, pe ${site.name}.`
+        : `Articolele salvate de ${person.name} pe ${site.name}.`;
   return page(200, title, {
     title,
     description,
     canonical: `${siteOrigin()}/${person.username}/${list}`,
-    robots: list === 'articole' ? INDEX : NO_INDEX,
+    robots: list === 'salvate' ? NO_INDEX : INDEX,
     image: { url: `${siteOrigin()}${profileSharePath(person, list)}`, alt: title },
   });
 }
@@ -381,6 +474,7 @@ async function personPage(db: Pool, username: string, list: ProfileList): Promis
  * "back soon" page (503, nothing of the content).
  */
 export async function describePage(db: Pool, url: string, viewer: { id: number; role: string } | null = null): Promise<PageMeta> {
+  await freshAuthorCount(db);
   const info = { identity: publicIdentity(), settings: publicSiteSettings(), brand: BRAND_VERSION };
   if (siteSettings().maintenance && viewer?.role !== 'owner') {
     return { ...page(503, site.name, { title: site.name, description: site.description, robots: 'noindex' }), site: info };
@@ -390,15 +484,31 @@ export async function describePage(db: Pool, url: string, viewer: { id: number; 
 
 async function describeRoute(db: Pool, url: string, viewer: { id: number; role: string } | null): Promise<PageMeta> {
   const { pathname, searchParams } = new URL(url, 'http://localhost');
-  if (pathname === '/' || pathname === '/index.html') return home(db, searchParams);
+  if (pathname === '/' || pathname === '/index.html') return home(searchParams);
+  if (pathname === '/jurnal' || pathname === '/jurnal/') return journal(db, searchParams);
+  if (pathname === '/carti' || pathname === '/carti/') return library();
+  const book = /^\/carti\/([^/]+)\/?$/.exec(pathname);
+  if (book) return bookPage(db, decodeURIComponent(book[1]!));
+  // A chapter, under its book (moved, or renamed: there for good).
+  const chapter = /^\/carti\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
+  if (chapter) {
+    const slug = decodeURIComponent(chapter[2]!);
+    const found = await postPage(db, slug, decodeURIComponent(chapter[1]!));
+    if (found.status !== 404) return found;
+    const moved = await redirectFor(db, slug);
+    return moved ? { ...found, status: 301, redirect: moved } : found;
+  }
+  if (pathname === '/subiecte' || pathname === '/subiecte/') return subjectsPage();
+  const subject = /^\/subiecte\/([^/]+)\/?$/.exec(pathname);
+  if (subject) return subjectPage(db, decodeURIComponent(subject[1]!));
   const post = /^\/posts\/([^/]+)\/?$/.exec(pathname);
   if (post) {
     const slug = decodeURIComponent(post[1]!);
     const found = await postPage(db, slug);
     if (found.status !== 404) return found;
-    // An old address of a post (its slug changed): there for good.
+    // A chapter (it's read under its book), or an old address of a post (its slug changed): there for good.
     const moved = await redirectFor(db, slug);
-    return moved ? { ...found, status: 301, redirect: `/posts/${encodeURIComponent(moved)}` } : found;
+    return moved ? { ...found, status: 301, redirect: moved } : found;
   }
   const tag = /^\/eticheta\/([^/]+)\/?$/.exec(pathname);
   if (tag) return tagPage(db, decodeURIComponent(tag[1]!));
@@ -412,27 +522,26 @@ async function describeRoute(db: Pool, url: string, viewer: { id: number; role: 
     });
   }
   if (PRIVATE_PAGES.test(pathname)) return page(200, site.name, { title: site.name, description: site.description, robots: 'noindex' });
-  const list = /^\/([a-z0-9.]{3,30})\/(articole|articole-salvate)\/?$/.exec(pathname);
-  if (list) return personPage(db, list[1]!, list[2] as ProfileList);
+  // The old addresses: a person's articles (now their journal), their saved posts, one's own saved posts.
+  const oldList = /^\/([a-z0-9.]{3,30})\/(articole|articole-salvate)\/?$/.exec(pathname);
+  if (oldList) return { ...notFound(), status: 301, redirect: `/${oldList[1]}/${oldList[2] === 'articole' ? 'jurnal' : 'salvate'}` };
+  if (/^\/(articole-salvate|saved)\/?$/.test(pathname)) return { ...notFound(), status: 301, redirect: '/salvate' };
+  const list = /^\/([a-z0-9.]{3,30})\/(jurnal|carti|salvate)\/?$/.exec(pathname);
+  if (list) return personPage(db, list[1]!, list[2] as PersonList);
   const person = /^\/([a-z0-9.]{3,30})\/?$/.exec(pathname);
   if (person) return personIndex(db, person[1]!, viewer);
   return notFound();
 }
 
 /**
- * Just /{username}: on to their list this viewer may see (as client/src/pages/PersonIndex.tsx chooses): their
- * articles if they write and the list is public (or the viewer manages it), else their saved posts; with neither
- * open, the articles for someone who writes, the saved posts otherwise (each page then says it's private). A
- * temporary redirect, since it follows their privacy settings.
+ * Just /{username} (as client/src/pages/PersonIndex.tsx chooses): the first of their lists this viewer may see (their
+ * own, or public): journal, books, saved posts; else nothing. A temporary redirect, since it follows who's looking and
+ * their privacy settings.
  */
 async function personIndex(db: Pool, username: string, viewer: { id: number; role: string } | null): Promise<PageMeta> {
   const found = await findPerson(db, username);
   if (!found) return notFound();
   const me = viewer?.id === found.id;
-  const manage = me || viewer?.role === 'owner';
-  const [[counts]] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM posts p WHERE p.author_id = ? AND ${VISIBLE_POST}`, [found.id]);
-  const writes = found.role === 'author' || Number(counts!.n) > 0 || (me && found.role === 'owner');
-  const savedOpen = found.role !== 'owner' && (found.publicSaved || me);
-  const target: ProfileList = writes && (found.publicArticles || manage) ? 'articole' : savedOpen ? 'articole-salvate' : writes ? 'articole' : 'articole-salvate';
-  return { ...notFound(), status: 302, redirect: `/${found.username}/${target}` };
+  const first = PERSON_LISTS.find((list) => (me ? hasList(found, list) : isPublicList(found, list)));
+  return first ? { ...notFound(), status: 302, redirect: `/${found.username}/${first}` } : notFound();
 }

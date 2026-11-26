@@ -23,7 +23,8 @@ export function SeoFields(props: {
   onChange: (patch: Partial<SeoValue>) => void;
   title: string;
   excerpt: string;
-  slug: string;
+  /** Where it's read: /posts/{slug}, or a chapter under its book. */
+  path: string;
   bannerUrl: string | null;
 }) {
   const { t, errorMessage } = useI18n();
@@ -60,7 +61,8 @@ export function SeoFields(props: {
     <div className="seo-fields">
       <div className="seo-preview" aria-label={t('editor.seoPreview')}>
         <span className="seo-preview-site">
-          {site.name} · {host}/posts/{props.slug || '…'}
+          {site.name} · {host}
+          {props.path}
         </span>
         <span className="seo-preview-title">{shownTitle.length > TITLE_MAX + 5 ? `${shownTitle.slice(0, TITLE_MAX)}…` : shownTitle}</span>
         <span className="seo-preview-description">

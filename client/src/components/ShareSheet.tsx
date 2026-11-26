@@ -7,6 +7,7 @@ import { Modal } from '@/components/Modal';
 import { track } from '@/lib/analytics';
 import { useI18n } from '@/lib/i18n';
 import type { PostSummary } from '@/lib/types';
+import { postPath } from '@/lib/paths';
 
 export interface Shareable {
   /** Absolute address of the page. */
@@ -92,13 +93,13 @@ export function ShareSheet({ item, onClose }: { item: Shareable; onClose: () => 
 
   return (
     <Modal title={item.heading ?? t('share.title')} onClose={onClose} closeOnBackdrop sheet className="share-sheet">
+      <div className="share-head">
+        <h2>{item.heading ?? t('share.title')}</h2>
+        <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
       <div className="share-body">
-        <div className="share-head">
-          <h2>{item.heading ?? t('share.title')}</h2>
-          <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
 
         {/* What the link looks like once shared. */}
         <div className="share-preview">
@@ -193,7 +194,7 @@ export function SharePageButton({ item }: { item: Shareable }) {
  * Opens the share sheet for a post (its canonical address and share image). `large`: with its name under the icon
  * (the post's bar and sidebar); otherwise just the icon (the home feed).
  */
-export function ShareButton({ post, large }: { post: Pick<PostSummary, 'id' | 'slug' | 'title' | 'excerpt' | 'shareImage'>; large?: boolean }) {
+export function ShareButton({ post, large }: { post: Pick<PostSummary, 'id' | 'slug' | 'path' | 'title' | 'excerpt' | 'shareImage'>; large?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const absolute = (path: string) => new URL(path, window.location.origin).href;
@@ -216,7 +217,7 @@ export function ShareButton({ post, large }: { post: Pick<PostSummary, 'id' | 's
       </button>
       {open && (
         <ShareSheet
-          item={{ url: absolute(`/posts/${post.slug}`), title: post.title, text: post.excerpt, image: absolute(post.shareImage), postId: post.id }}
+          item={{ url: absolute(postPath(post)), title: post.title, text: post.excerpt, image: absolute(post.shareImage), postId: post.id }}
           onClose={() => setOpen(false)}
         />
       )}

@@ -209,6 +209,8 @@ export interface NewsletterPost {
   summary: string;
   url: string;
   image: string | null;
+  /** A chapter: its book's title. */
+  book: string | null;
 }
 
 /** The unsubscribe line and header of every newsletter email (RFC 8058: one click from the mail app). */
@@ -216,62 +218,47 @@ function unsubscribe(lang: Lang, manageUrl: string, unsubscribeUrl: string) {
   return {
     footer:
       lang === 'en'
-        ? { text: `You subscribed to ${site.name}'s new articles.`, linkLabel: 'Change or unsubscribe', url: manageUrl }
-        : { text: `Te-ai abonat la articolele noi de pe ${site.name}.`, linkLabel: 'Schimbă sau dezabonează-te', url: manageUrl },
+        ? { text: `You get this because you subscribed on ${site.name}.`, linkLabel: 'Change or unsubscribe', url: manageUrl }
+        : { text: `Primești emailul pentru că te-ai abonat pe ${site.name}.`, linkLabel: 'Schimbă sau dezabonează-te', url: manageUrl },
     headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
   };
 }
 
-export function newsletterConfirmEmail(to: string, lang: Lang, url: string) {
+/** Confirming a subscription: to every new post, or (`book`) to a book's new chapters. */
+export function newsletterConfirmEmail(to: string, lang: Lang, url: string, book: string | null) {
   return render(to, lang, lang === 'en'
     ? {
         subject: 'Confirm your subscription',
         heading: 'One more step',
-        paragraphs: [`Confirm that you want ${site.name}'s new articles at ${to}.`],
+        paragraphs: [book ? `Confirm that you want an email at ${to} when a new chapter of “${book}” is out.` : `Confirm that you want ${site.name}'s new articles at ${to}.`],
         button: { label: 'Confirm the subscription', url },
         note: "If you didn't ask for it, ignore this email: you won't get anything.",
       }
     : {
         subject: 'Confirmă abonarea',
         heading: 'Încă un pas',
-        paragraphs: [`Confirmă că vrei articolele noi de pe ${site.name} la ${to}.`],
+        paragraphs: [book ? `Confirmă că vrei un email la ${to} când apare un capitol nou din „${book}”.` : `Confirmă că vrei articolele noi de pe ${site.name} la ${to}.`],
         button: { label: 'Confirmă abonarea', url },
         note: 'Dacă nu ai cerut tu, ignoră emailul: nu vei primi nimic.',
       }, 'newsletter_confirm');
 }
 
+/** A new post (or a book's new chapter), as it's out. */
 export function newsletterPostEmail(to: string, lang: Lang, post: NewsletterPost, manageUrl: string, unsubscribeUrl: string) {
   const extra = unsubscribe(lang, manageUrl, unsubscribeUrl);
+  const en = lang === 'en';
   const mail = render(
     to,
     lang,
     {
-      subject: post.title,
-      heading: lang === 'en' ? 'A new article' : 'Un articol nou',
+      subject: post.book ? `${post.book}: ${post.title}` : post.title,
+      heading: post.book ? (en ? `A new chapter of “${post.book}”` : `Un capitol nou din „${post.book}”`) : en ? 'A new article' : 'Un articol nou',
       paragraphs: [],
       posts: [post],
-      button: { label: lang === 'en' ? 'Read the article' : 'Citește articolul', url: post.url },
+      button: { label: post.book ? (en ? 'Read the chapter' : 'Citește capitolul') : en ? 'Read the article' : 'Citește articolul', url: post.url },
       footer: extra.footer,
     },
     'newsletter_post',
-  );
-  return { ...mail, headers: extra.headers };
-}
-
-export function newsletterDigestEmail(to: string, lang: Lang, posts: NewsletterPost[], manageUrl: string, unsubscribeUrl: string) {
-  const extra = unsubscribe(lang, manageUrl, unsubscribeUrl);
-  const mail = render(
-    to,
-    lang,
-    {
-      subject: lang === 'en' ? `This week on ${site.name}` : `Săptămâna aceasta pe ${site.name}`,
-      heading: lang === 'en' ? `${posts.length === 1 ? 'The new article' : `${posts.length} new articles`} this week` : `${posts.length === 1 ? 'Articolul nou' : `${posts.length} articole noi`} săptămâna aceasta`,
-      paragraphs: [],
-      posts,
-      button: { label: lang === 'en' ? 'All articles' : 'Toate articolele', url: siteLink('/') },
-      footer: extra.footer,
-    },
-    'newsletter_digest',
   );
   return { ...mail, headers: extra.headers };
 }
@@ -292,6 +279,33 @@ export function inviteEmail(to: string, lang: Lang, inviter: string, message: st
         button: { label: 'Acceptă invitația', url },
         note: 'Linkul este valabil 14 zile.',
       }, 'invite');
+}
+
+/**
+ * An administrator's answer to a support ticket: their text, and (sent signed in) the conversation in the app, where
+ * the person answers back; else a way to write again. Answering by email reaches the site's contact address, when
+ * it has one (Reply-To).
+ */
+export function supportReplyEmail(to: string, lang: Lang, reply: { title: string; body: string; url: string | null }) {
+  const paragraphs = reply.body.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  const mail = render(to, lang, lang === 'en'
+    ? {
+        subject: `Re: ${reply.title}`,
+        heading: 'An answer from support',
+        paragraphs: [`About “${reply.title}”:`, ...paragraphs],
+        button: reply.url ? { label: 'See the conversation', url: reply.url } : { label: 'Write to us again', url: siteLink('/suport') },
+        note: reply.url ? 'You can answer from your account: the whole conversation stays there.' : 'Signed in, you would find our answers in your account too, with the whole conversation.',
+        footer: { text: `You're receiving this email because you wrote to ${site.name}'s support.`, linkLabel: 'Support', url: siteLink('/suport') },
+      }
+    : {
+        subject: `Re: ${reply.title}`,
+        heading: 'Un răspuns de la suport',
+        paragraphs: [`Despre „${reply.title}”:`, ...paragraphs],
+        button: reply.url ? { label: 'Vezi conversația', url: reply.url } : { label: 'Scrie-ne din nou', url: siteLink('/suport') },
+        note: reply.url ? 'Poți răspunde din cont: toată conversația rămâne acolo.' : 'Dacă ne scrii autentificat, găsești răspunsurile și în cont, cu toată conversația.',
+        footer: { text: `Primești acest email pentru că ai scris la suportul ${site.name}.`, linkLabel: 'Suport', url: siteLink('/suport') },
+      }, 'support_reply');
+  return site.contactEmail ? { ...mail, headers: { 'Reply-To': site.contactEmail } } : mail;
 }
 
 export function testEmail(to: string) {

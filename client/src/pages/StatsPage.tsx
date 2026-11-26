@@ -20,6 +20,9 @@ import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/i18n/messages';
 
 type Days = 7 | 30 | 90;
+/** Everything, the journal's articles, or the books' chapters. */
+type Kind = 'all' | 'posts' | 'chapters';
+const KINDS: Kind[] = ['all', 'posts', 'chapters'];
 /** Posts listed before "Show all". */
 const POSTS_SHOWN = 10;
 /** Breakdown rows listed before "Show all". */
@@ -58,6 +61,8 @@ interface Stats {
     id: number;
     title: string;
     slug: string;
+    /** Where it's read (a chapter: under its book). */
+    path: string;
     views: number;
     visitors: number;
     avgSeconds: number;
@@ -131,24 +136,55 @@ function Change({ now, before, points = false }: { now: number; before: number; 
   );
 }
 
-/** A small line under a tile's number: the period's days. */
-function Sparkline({ values }: { values: number[] }) {
-  const max = Math.max(1, ...values);
-  const width = 100;
-  const height = 30;
-  const step = values.length > 1 ? width / (values.length - 1) : width;
-  const points = values.map((value, i) => `${(i * step).toFixed(2)},${(height - 1 - (value / max) * (height - 4)).toFixed(2)}`).join(' ');
+/**
+ * Small bars under a tile's number: the period in up to ten parts (a day each for a week; three days each for a
+ * month…), the latest one in full colour. Each says its days and its number when pointed at.
+ */
+function MiniBars({ daily, field, tone }: { daily: Stats['daily']; field: 'views' | 'visitors'; tone: 'views' | 'visitors' }) {
+  const { locale, formatNumber } = useI18n();
+  const size = Math.max(1, Math.ceil(daily.length / 10));
+  const parts: { value: number; from: string; to: string }[] = [];
+  // From the end, so the latest part is a whole one.
+  for (let end = daily.length; end > 0; end -= size) {
+    const slice = daily.slice(Math.max(0, end - size), end);
+    parts.unshift({ value: slice.reduce((sum, day) => sum + day[field], 0), from: slice[0]!.day, to: slice[slice.length - 1]!.day });
+  }
+  const max = Math.max(1, ...parts.map((part) => part.value));
+  const day = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' });
   return (
-    <svg className="stats-spark" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-      <polygon points={`0,${height} ${points} ${width},${height}`} className="stats-spark-area" />
-      <polyline points={points} className="stats-spark-line" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <span className={`stats-minibars is-${tone}`} aria-hidden="true">
+      {parts.map((part, i) => (
+        <span
+          key={part.from}
+          className={i === parts.length - 1 ? 'is-last' : undefined}
+          style={{ height: `${Math.max(8, (part.value / max) * 100)}%` }}
+          title={`${part.from === part.to ? day.format(new Date(part.from)) : `${day.format(new Date(part.from))} – ${day.format(new Date(part.to))}`}: ${formatNumber(part.value)}`}
+        />
+      ))}
+    </span>
   );
 }
 
-/** One of the four main numbers: its name, the number and how it changed, a note, and (views, visitors) its days. */
-function Kpi(props: { icon: LucideIcon; label: string; value: string; change: ReactNode; note?: string; spark?: number[] }) {
-  const { icon: Icon, label, value, change, note, spark } = props;
+/** A day's share of a total: whole from 10 up, else with a decimal ("≈ 0,2 pe zi", not "≈ 0"). */
+const perDay = (total: number, days: number) => (total / days >= 10 ? Math.round(total / days) : Math.round((total / days) * 10) / 10);
+
+/**
+ * A bar under a tile's number: how full it is (`value` of `max`), with a mark where it was in the period before
+ * (`before`), and the note under it saying what that was.
+ */
+function Meter({ value, max, before }: { value: number; max: number; before: number }) {
+  const at = (n: number) => `${Math.min(100, Math.max(0, (n / Math.max(max, 1)) * 100))}%`;
+  return (
+    <span className="stats-meter" aria-hidden="true">
+      <span className="stats-meter-fill" style={{ width: at(value) }} />
+      {before > 0 && <span className="stats-meter-mark" style={{ left: at(before) }} />}
+    </span>
+  );
+}
+
+/** One of the four main numbers: its name, the number and how it changed, a note, and a picture of it (`graphic`). */
+function Kpi(props: { icon: LucideIcon; label: string; value: string; change: ReactNode; note?: ReactNode; graphic?: ReactNode }) {
+  const { icon: Icon, label, value, change, note, graphic } = props;
   return (
     <div className="card stats-kpi">
       <span className="stats-kpi-label">
@@ -158,8 +194,8 @@ function Kpi(props: { icon: LucideIcon; label: string; value: string; change: Re
         <strong className="stats-kpi-value">{value}</strong>
         {change}
       </span>
+      {graphic && <span className="stats-kpi-graphic">{graphic}</span>}
       {note && <span className="stats-kpi-note">{note}</span>}
-      {spark && <Sparkline values={spark} />}
     </div>
   );
 }
@@ -388,7 +424,7 @@ function PostsList({ posts }: { posts: Stats['posts'] }) {
           <li key={post.id} className="stats-post">
             <span className="stats-post-rank">{index + 1}</span>
             <span className="stats-post-main">
-              <Link to={`/posts/${post.slug}`} className="stats-post-title">
+              <Link to={post.path} className="stats-post-title">
                 {post.title}
               </Link>
               <span className="stats-post-bar" aria-hidden="true">
@@ -424,11 +460,12 @@ function PostsList({ posts }: { posts: Stats['posts'] }) {
 function StatsView() {
   const { t, plural, formatDate, formatNumber: n } = useI18n();
   const [days, setDays] = useState<Days>(30);
+  const [kind, setKind] = useState<Kind>('all');
   const [stats, setStats] = useState<Stats | null>(null);
   /** The request the statistics on screen answer; while another is on its way, they're dimmed. */
   const [shown, setShown] = useState('');
   const [error, setError] = useState(false);
-  const request = `/stats?days=${days}`;
+  const request = `/stats?days=${days}&kind=${kind}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -463,6 +500,14 @@ function StatsView() {
           )}
         </div>
         <div className="stats-controls">
+          {/* Everything, or the journal's articles, or the books' chapters. */}
+          <div className="segmented stats-kind" role="group" aria-label={t('stats.kind')}>
+            {KINDS.map((option) => (
+              <button key={option} type="button" className={kind === option ? 'is-selected' : ''} aria-pressed={kind === option} onClick={() => setKind(option)}>
+                {t(`stats.kind.${option}`)}
+              </button>
+            ))}
+          </div>
           <div className="segmented stats-period" role="group" aria-label={t('stats.period')}>
             {([7, 30, 90] as const).map((option) => (
               <button key={option} type="button" className={days === option ? 'is-selected' : ''} aria-pressed={days === option} onClick={() => setDays(option)}>
@@ -478,28 +523,44 @@ function StatsView() {
         !error && <p className="muted">{t('common.loading')}</p>
       ) : (
         <div className={`stats-body${shown === request ? '' : ' is-loading'}`}>
+          {/* Each with a picture: the period in bars (views, visitors), or a bar with where it was before (time, read through). */}
           <div className="stats-kpis">
             <Kpi
               icon={Eye}
               label={t('stats.views')}
               value={n(totals.pageViews)}
               change={<Change now={totals.pageViews} before={previous.pageViews} />}
-              note={stats.author ? undefined : t('stats.postViews', { n: n(totals.postViews) })}
-              spark={stats.daily.map((d) => d.views)}
+              graphic={<MiniBars daily={stats.daily} field="views" tone="views" />}
+              note={
+                stats.author
+                  ? t('stats.perDay', { n: n(perDay(totals.pageViews, stats.days)) })
+                  : `${t('stats.perDay', { n: n(perDay(totals.pageViews, stats.days)) })} · ${t('stats.postViews', { n: n(totals.postViews) })}`
+              }
             />
             <Kpi
               icon={Users}
               label={t('stats.visitors')}
               value={n(totals.visitors)}
               change={<Change now={totals.visitors} before={previous.visitors} />}
-              spark={stats.daily.map((d) => d.visitors)}
+              graphic={<MiniBars daily={stats.daily} field="visitors" tone="visitors" />}
+              note={t('stats.perDay', { n: n(perDay(stats.daily.reduce((sum, d) => sum + d.visitors, 0), stats.days)) })}
             />
-            <Kpi icon={Clock} label={t('stats.avgTime')} value={duration(totals.avgSeconds)} change={<Change now={totals.avgSeconds} before={previous.avgSeconds} />} />
+            <Kpi
+              icon={Clock}
+              label={t('stats.avgTime')}
+              value={duration(totals.avgSeconds)}
+              change={<Change now={totals.avgSeconds} before={previous.avgSeconds} />}
+              // (its scale: the longer of the two, with room to spare)
+              graphic={<Meter value={totals.avgSeconds} before={previous.avgSeconds} max={Math.max(totals.avgSeconds, previous.avgSeconds) * 1.25} />}
+              note={t('stats.before', { value: duration(previous.avgSeconds) })}
+            />
             <Kpi
               icon={BookOpenCheck}
               label={t('stats.readThrough')}
               value={`${totals.readThrough}%`}
               change={<Change now={totals.readThrough} before={previous.readThrough} points />}
+              graphic={<Meter value={totals.readThrough} before={previous.readThrough} max={100} />}
+              note={t('stats.before', { value: `${previous.readThrough}%` })}
             />
           </div>
 
@@ -557,7 +618,7 @@ function StatsView() {
           </div>
 
           <section className="card stats-card">
-            <h2 className="side-title">{t('stats.posts')}</h2>
+            <h2 className="side-title">{t(kind === 'chapters' ? 'stats.chapters' : kind === 'posts' ? 'stats.posts' : 'stats.postsAll')}</h2>
             {stats.posts.length === 0 ? <p className="muted small">{t('stats.empty')}</p> : <PostsList posts={stats.posts} />}
           </section>
 

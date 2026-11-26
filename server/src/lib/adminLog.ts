@@ -1,10 +1,11 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import type { SessionUser } from '@/lib/session';
+import { logError } from '@/lib/errorLog';
 
 // What administrators did, for the admin panel's log (who changed what, and when). Each entry keeps the
 // administrator's name and the target's label as they were, so it still reads well after either changes.
 
-export type TargetType = 'user' | 'comment' | 'post' | 'category' | 'settings';
+export type TargetType = 'user' | 'comment' | 'post' | 'book' | 'category' | 'support' | 'settings';
 
 export interface AdminTarget {
   type: TargetType;
@@ -40,7 +41,7 @@ export async function logAdmin(
       [admin.id, admin.name.slice(0, 80), action, target.type, target.id, target.label.slice(0, 255), details ? JSON.stringify(details) : null],
     );
   } catch (err) {
-    console.warn('Admin log failed:', (err as Error).message);
+    logError('other', 'admin log', err);
   }
 }
 

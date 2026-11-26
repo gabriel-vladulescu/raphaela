@@ -69,7 +69,7 @@ export function SetupPage() {
           <label className="field">
             <span className="field-label">{t('setup.description')}</span>
             <textarea
-              className="input"
+              className="input textarea"
               rows={2}
               value={identity.description}
               onChange={(e) => setIdentity({ ...identity, description: e.target.value })}

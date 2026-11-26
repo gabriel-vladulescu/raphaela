@@ -139,7 +139,7 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const id = parseId(req.params.id) ?? 0;
-      const [[category]] = await db.execute<RowDataPacket[]>('SELECT parent_id, position FROM categories WHERE id = ?', [id]);
+      const [[category]] = await db.execute<RowDataPacket[]>('SELECT name, parent_id, position FROM categories WHERE id = ?', [id]);
       if (!category) return reply.code(404).send({ error: 'not_found' });
 
       const up = req.body.direction === 'up';
@@ -168,6 +168,8 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
       } finally {
         connection.release();
       }
+      // Moved a few places in a row: one note.
+      void logAdmin(db, req.user!, 'category.move', { type: 'category', id, label: category.name as string }, { direction: req.body.direction }, 10);
       return { ok: true };
     },
   );

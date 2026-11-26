@@ -1,5 +1,6 @@
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import { summaryOf, TEXT_START, VISIBLE_POST } from '@/lib/posts';
+import { postPath, summaryOf, TEXT_START, VISIBLE_POST } from '@/lib/posts';
+import { logError } from '@/lib/errorLog';
 import { pushTo } from '@/lib/push';
 import type { PushMessage } from '@/lib/push';
 
@@ -7,7 +8,8 @@ import type { PushMessage } from '@/lib/push';
 // notifications. Each account picks what it hears about (users.notify_settings, the Settings page). By role:
 // members hear about new posts and about replies and reactions to their own comments; authors also about what
 // happens on their posts, and its milestones; administrators (owners) only about new support tickets, reported
-// comments and deleted accounts waiting to be deleted for good.
+// comments, deleted accounts waiting to be deleted for good, and old data waiting to be deleted. Anyone who wrote to
+// support signed in hears when an administrator answers (always: it's their conversation).
 
 export type NotificationType =
   | 'comment'
@@ -25,7 +27,9 @@ export type NotificationType =
   | 'account_due'
   | 'comment_held'
   | 'mention'
-  | 'followed_post';
+  | 'followed_post'
+  | 'cleanup_due'
+  | 'support_reply';
 
 /** What a post's comments, likes and views are celebrated at. Comments count all of them: replies, and the
  *  author's own, too. */
@@ -56,7 +60,7 @@ export interface NotifySettings {
   support: boolean;
   /** Administrators: a comment was reported. */
   reports: boolean;
-  /** Administrators: a deleted account's 3 months are up (to delete it for good). */
+  /** Administrators: a deleted account's 3 months are up (to delete it for good), or data is past its time. */
   accountDeletions: boolean;
   /** Administrators: a comment waits for approval (the comment filters). */
   heldComments: boolean;
@@ -155,16 +159,18 @@ const SETTING: Partial<Record<NotificationType, (typeof SWITCHES)[number]>> = {
   support: 'support',
   report: 'reports',
   account_due: 'accountDeletions',
+  cleanup_due: 'accountDeletions',
   comment_held: 'heldComments',
   mention: 'mentions',
   followed_post: 'followedAuthors',
 };
 /** Only administrators hear about these (and administrators about nothing else). */
-const OWNERS_ONLY = new Set<NotificationType>(['support', 'report', 'account_due', 'comment_held']);
+const OWNERS_ONLY = new Set<NotificationType>(['support', 'report', 'account_due', 'comment_held', 'cleanup_due']);
 /** About an author's own posts. */
 const AUTHORS_ONLY = new Set<NotificationType>(['comment', 'reply', 'like', 'share', 'views', 'post_reaction', 'milestone']);
 
 function wants(to: Recipient, event: Event) {
+  if (event.type === 'support_reply') return true;
   if (to.role === 'owner' || OWNERS_ONLY.has(event.type)) return to.role === 'owner' && OWNERS_ONLY.has(event.type) && to.settings[SETTING[event.type]!];
   if (AUTHORS_ONLY.has(event.type) && to.role !== 'author') return false;
   if (event.type === 'milestone') return to.settings.milestones[event.detail as Metric]?.includes(event.value ?? 0) ?? false;
@@ -177,6 +183,8 @@ interface PostRef {
   authorId: number;
   title: string;
   slug: string;
+  /** Where it's read (a chapter: under its book). */
+  path: string;
 }
 
 interface Event {
@@ -201,10 +209,22 @@ interface Event {
   title?: string;
 }
 
+/** A post from its row (with `book_slug`: a chapter's book). */
+const refOf = (row: RowDataPacket): PostRef => ({
+  id: row.id as number,
+  authorId: row.author_id as number,
+  title: row.title as string,
+  slug: row.slug as string,
+  path: postPath(row.slug as string, (row.book_slug as string | null) ?? null),
+});
+
 async function postRef(db: Pool, postId: number): Promise<PostRef | null> {
-  const [rows] = await db.execute<RowDataPacket[]>('SELECT id, author_id, title, slug FROM posts WHERE id = ? AND deleted_at IS NULL', [postId]);
+  const [rows] = await db.execute<RowDataPacket[]>(
+    'SELECT p.id, p.author_id, p.title, p.slug, bk.slug AS book_slug FROM posts p LEFT JOIN books bk ON bk.id = p.book_id WHERE p.id = ? AND p.deleted_at IS NULL',
+    [postId],
+  );
   const row = rows[0];
-  return row ? { id: row.id as number, authorId: row.author_id as number, title: row.title as string, slug: row.slug as string } : null;
+  return row ? refOf(row) : null;
 }
 
 /** "10 comentarii", "50 de comentarii" (Romanian: "de" from 20 on, for the last two digits). */
@@ -230,7 +250,7 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
   const who = actor ?? 'Cineva';
   const post = event.post;
   const title = post ? `„${post.title}”` : '';
-  const discussion = post ? `/posts/${post.slug}#discussion-title` : '/notificari';
+  const discussion = post ? `${post.path}#discussion-title` : '/notificari';
   switch (event.type) {
     case 'comment':
       return { title: `${who} a comentat la ${title}`, body: event.excerpt ?? '', url: discussion, tag: `comment-${event.commentId}` };
@@ -247,7 +267,7 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
     case 'share':
       return { title: `${who} a distribuit ${title}`, body: SHARE_APPS[event.detail ?? ''] ?? '', url: '/notificari', tag: `share-${post?.id}` };
     case 'views':
-      return { title: `${title} a ajuns la ${count(event.value ?? 0, 'vizualizări')}`, body: '', url: `/posts/${post?.slug}`, tag: `views-${post?.id}` };
+      return { title: `${title} a ajuns la ${count(event.value ?? 0, 'vizualizări')}`, body: '', url: post?.path ?? '/notificari', tag: `views-${post?.id}` };
     case 'milestone': {
       const n = event.value ?? 0;
       const text =
@@ -262,12 +282,14 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
             : n === 1
               ? 'are prima vizualizare'
               : `a ajuns la ${count(n, 'vizualizări')}`;
-      return { title: `${title} ${text} 🎉`, body: 'Felicitări!', url: `/posts/${post?.slug}`, tag: `milestone-${post?.id}-${event.detail}-${n}` };
+      return { title: `${title} ${text} 🎉`, body: 'Felicitări!', url: post?.path ?? '/notificari', tag: `milestone-${post?.id}-${event.detail}-${n}` };
     }
     case 'new_post':
-      return { title: `Articol nou: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: `/posts/${post?.slug}`, tag: `post-${post?.id}` };
+      return { title: `Articol nou: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: post?.path ?? '/', tag: `post-${post?.id}` };
     case 'support':
       return { title: event.title ?? 'Tichet nou la suport', body: event.excerpt ?? '', url: `/admin/suport/${event.ticketId}`, tag: `support-${event.ticketId}` };
+    case 'support_reply':
+      return { title: event.title ?? 'Un răspuns de la suport', body: event.excerpt ?? '', url: `/suport/tichete/${event.ticketId}`, tag: `support-${event.ticketId}` };
     case 'report':
       return { title: `Comentariu raportat la ${title}`, body: event.excerpt ?? '', url: '/admin/comentarii?filter=reported', tag: `report-${event.commentId}` };
     case 'comment_held':
@@ -275,13 +297,20 @@ function pushMessage(event: Event, actor: string | null): PushMessage {
     case 'mention':
       return { title: `${who} te-a menționat la ${title}`, body: event.excerpt ?? '', url: discussion, tag: `mention-${event.commentId}` };
     case 'followed_post':
-      return { title: `${who} a publicat: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: `/posts/${post?.slug}`, tag: `post-${post?.id}` };
+      return { title: `${who} a publicat: ${post?.title ?? ''}`, body: event.excerpt ?? '', url: post?.path ?? '/', tag: `post-${post?.id}` };
     case 'account_due':
       return {
         title: event.title ?? 'Un cont așteaptă ștergerea definitivă',
         body: 'Cele 3 luni au trecut. Vezi ce a ales persoana, în administrare.',
         url: `/admin/utilizatori?status=deleted&id=${event.accountId}`,
         tag: `account-${event.accountId}`,
+      };
+    case 'cleanup_due':
+      return {
+        title: event.title ?? 'Date vechi de șters',
+        body: 'Au trecut de perioada de păstrare. Le ștergi din administrare.',
+        url: '/admin/jurnal?tab=cleanup',
+        tag: 'cleanup',
       };
   }
 }
@@ -325,10 +354,10 @@ async function notify(db: Pool, userId: number, event: Event): Promise<boolean> 
     );
     const [actors] = event.actorId ? await db.execute<RowDataPacket[]>('SELECT name FROM users WHERE id = ? AND deleted_at IS NULL', [event.actorId]) : [[]];
     const actor = (actors[0]?.name as string | undefined) ?? null;
-    await pushTo(db, 'user_id = ? AND activity = 1', [userId], pushMessage(event, actor));
+    await pushTo(db, 'user_id = ? AND activity = 1', [userId], pushMessage(event, actor), { kind: event.type, userId });
     return true;
   } catch (err) {
-    console.warn('Notification failed:', (err as Error).message);
+    logError('notification', 'notification', err);
     return false;
   }
 }
@@ -385,7 +414,7 @@ export async function notifyComment(db: Pool, input: { postId: number; commentId
     const [[row]] = await db.execute<RowDataPacket[]>('SELECT COUNT(*) AS n FROM comments WHERE post_id = ? AND deleted_at IS NULL', [post.id]);
     await milestone(db, post, 'comments', Number(row!.n));
   } catch (err) {
-    console.warn('Comment notification failed:', (err as Error).message);
+    logError('notification', 'comment notification', err);
   }
 }
 
@@ -402,7 +431,7 @@ export async function notifyReaction(db: Pool, input: { commentId: number; actor
     await notify(db, writer, { ...base, type: 'comment_reaction', group: 'comment', excerpt: String(comment.body).slice(0, 140) });
     if (post.authorId !== writer) await notify(db, post.authorId, { ...base, type: 'post_reaction', group: 'post' });
   } catch (err) {
-    console.warn('Reaction notification failed:', (err as Error).message);
+    logError('notification', 'reaction notification', err);
   }
 }
 
@@ -415,7 +444,7 @@ export async function notifyLike(db: Pool, input: { postId: number; actorId: num
     const [[row]] = await db.execute<RowDataPacket[]>('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ? AND removed_at IS NULL', [post.id]);
     await milestone(db, post, 'likes', Number(row!.n));
   } catch (err) {
-    console.warn('Like notification failed:', (err as Error).message);
+    logError('notification', 'like notification', err);
   }
 }
 
@@ -434,7 +463,7 @@ export async function notifyViews(db: Pool, input: { postId: number; total: numb
     const to = await recipient(db, post.authorId);
     if (to && input.total % to.settings.viewsEvery === 0) await notify(db, post.authorId, { type: 'views', post, value: input.total });
   } catch (err) {
-    console.warn('Views notification failed:', (err as Error).message);
+    logError('notification', 'views notification', err);
   }
 }
 
@@ -460,7 +489,7 @@ export async function notifyReport(db: Pool, input: { commentId: number; postId:
       });
     }
   } catch (err) {
-    console.warn('Report notification failed:', (err as Error).message);
+    logError('notification', 'report notification', err);
   }
 }
 
@@ -472,7 +501,7 @@ export async function notifyHeld(db: Pool, input: { commentId: number; postId: n
       await notify(db, id, { type: 'comment_held', post, commentId: input.commentId, actorId: input.actorId, excerpt: input.excerpt });
     }
   } catch (err) {
-    console.warn('Held comment notification failed:', (err as Error).message);
+    logError('notification', 'held comment notification', err);
   }
 }
 
@@ -483,25 +512,60 @@ export async function notifyAccountDue(db: Pool, input: { accountId: number; nam
       await notify(db, id, { type: 'account_due', accountId: input.accountId, title: `Cont de șters definitiv: ${input.name}` });
     }
   } catch (err) {
-    console.warn('Account notification failed:', (err as Error).message);
+    logError('notification', 'account notification', err);
+  }
+}
+
+/** Administrators are reminded about data past its time at most this often (while some is left). */
+const CLEANUP_REMIND_DAYS = 7;
+
+/**
+ * Data is past the time the Terms promise to keep it (lib/retention.ts): administrators hear they can delete it, at
+ * most once every CLEANUP_REMIND_DAYS each.
+ */
+export async function notifyCleanupDue(db: Pool, total: number) {
+  try {
+    for (const id of await owners(db)) {
+      const [recent] = await db.execute<RowDataPacket[]>(
+        "SELECT 1 FROM notifications WHERE user_id = ? AND type = 'cleanup_due' AND created_at > UTC_TIMESTAMP() - INTERVAL ? DAY LIMIT 1",
+        [id, CLEANUP_REMIND_DAYS],
+      );
+      if (recent.length) continue;
+      await notify(db, id, { type: 'cleanup_due', value: total, title: `Date vechi de șters: ${total}` });
+    }
+  } catch (err) {
+    logError('notification', 'clean-up notification', err);
   }
 }
 
 /** A new support ticket: the administrators hear about it. */
-export async function notifySupport(db: Pool, ticket: { id: number; title: string; email: string; userId: number | null }) {
+export async function notifySupport(db: Pool, ticket: { id: number; title: string; email: string; userId: number | null; answer?: string }) {
   try {
     for (const owner of await owners(db)) {
       await notify(db, owner, {
         type: 'support',
         ticketId: ticket.id,
         actorId: ticket.userId,
-        title: `Tichet nou la suport: ${ticket.title}`,
-        excerpt: ticket.email,
+        // The sender answered in the conversation (detail "reply"), or a new ticket.
+        detail: ticket.answer !== undefined ? 'reply' : null,
+        title: ticket.answer !== undefined ? `Răspuns nou la tichetul „${ticket.title}”` : `Tichet nou la suport: ${ticket.title}`,
+        excerpt: ticket.answer !== undefined ? ticket.answer.slice(0, 140) : ticket.email,
       });
     }
   } catch (err) {
-    console.warn('Support notification failed:', (err as Error).message);
+    logError('notification', 'support notification', err);
   }
+}
+
+/** The person who sent a ticket signed in: an administrator answered (in the app, and pushed to their devices). */
+export async function notifySupportReply(db: Pool, reply: { ticketId: number; userId: number; title: string; excerpt: string; actorId: number }) {
+  await notify(db, reply.userId, {
+    type: 'support_reply',
+    ticketId: reply.ticketId,
+    actorId: reply.actorId,
+    title: `Răspuns de la suport: ${reply.title}`,
+    excerpt: reply.excerpt.slice(0, 140),
+  });
 }
 
 /** A post is new news for this long after it went public; older ones aren't announced (see announceNewPosts). */
@@ -509,8 +573,9 @@ const ANNOUNCE_DAYS = 7;
 
 /**
  * New posts, once they're public (published now, or a scheduled time that has come), announced once: in the app to
- * the accounts that want to hear about them (and pushed to their devices with push on), and pushed to the signed-out
- * devices that asked for them (the bell's switch). Runs every minute (index.ts).
+ * the accounts that want to hear about them (and pushed to their devices with push on), pushed to the signed-out
+ * devices that asked for them (the bell's switch), and a chapter to the devices that follow its book. Runs every
+ * minute (index.ts).
  */
 export async function announceNewPosts(db: Pool) {
   try {
@@ -521,13 +586,14 @@ export async function announceNewPosts(db: Pool) {
         WHERE p.announced_at IS NULL AND ${VISIBLE_POST} AND p.published_at < UTC_TIMESTAMP() - INTERVAL ${ANNOUNCE_DAYS} DAY`,
     );
     const [posts] = await db.query<RowDataPacket[]>(
-      `SELECT p.id, p.author_id, p.title, p.slug, p.excerpt, ${TEXT_START} FROM posts p WHERE p.announced_at IS NULL AND ${VISIBLE_POST}`,
+      `SELECT p.id, p.author_id, p.title, p.slug, p.book_id, bk.slug AS book_slug, bk.title AS book_title, p.excerpt, ${TEXT_START} FROM posts p LEFT JOIN books bk ON bk.id = p.book_id
+        WHERE p.announced_at IS NULL AND ${VISIBLE_POST}`,
     );
     for (const row of posts) {
       // Claimed first, so a post is never announced twice.
       const [claimed] = await db.execute<ResultSetHeader>('UPDATE posts SET announced_at = UTC_TIMESTAMP() WHERE id = ? AND announced_at IS NULL', [row.id]);
       if (claimed.affectedRows === 0) continue;
-      const post: PostRef = { id: row.id as number, authorId: row.author_id as number, title: row.title as string, slug: row.slug as string };
+      const post = refOf(row);
       const summary = summaryOf(row);
       const [readers] = await db.execute<RowDataPacket[]>("SELECT id FROM users WHERE role IN ('member', 'author') AND id <> ? AND deleted_at IS NULL", [post.authorId]);
       const [follows] = await db.execute<RowDataPacket[]>('SELECT user_id FROM author_follows WHERE author_id = ?', [post.authorId]);
@@ -540,9 +606,19 @@ export async function announceNewPosts(db: Pool) {
       }
       // The newsletter takes it from here (lib/newsletter.ts).
       await db.execute('UPDATE posts SET newsletter_at = COALESCE(newsletter_at, UTC_TIMESTAMP()) WHERE id = ?', [post.id]);
-      await pushTo(db, 'new_posts = 1 AND user_id IS NULL', [], pushMessage({ type: 'new_post', post, excerpt: summary }, null));
+      await pushTo(db, 'new_posts = 1 AND user_id IS NULL', [], pushMessage({ type: 'new_post', post, excerpt: summary }, null), { kind: 'new_post' });
+      // A chapter: the devices that asked for its book's new chapters ("Notify me"), but those just told.
+      if (row.book_id) {
+        await pushTo(
+          db,
+          'id IN (SELECT subscription_id FROM push_books WHERE book_id = ?) AND NOT (new_posts = 1 AND user_id IS NULL)',
+          [row.book_id],
+          { title: `Capitol nou din „${row.book_title}”`, body: post.title, url: post.path, tag: `post-${post.id}` },
+          { kind: 'chapter' },
+        );
+      }
     }
   } catch (err) {
-    console.warn('Announcing new posts failed:', (err as Error).message);
+    logError('job', 'announcing new posts', err);
   }
 }

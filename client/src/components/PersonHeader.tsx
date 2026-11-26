@@ -6,34 +6,39 @@ import { Avatar } from '@/components/Avatar';
 import { SharePageButton } from '@/components/ShareSheet';
 import { site } from '@/config';
 import { useI18n } from '@/lib/i18n';
-import { articlesPath, savedPath } from '@/lib/paths';
-import { isPublicList } from '@/lib/people';
+import type { MessageKey } from '@/lib/i18n/messages';
+import { personListPath } from '@/lib/paths';
+import { hasList, isPublicList, PERSON_LISTS } from '@/lib/people';
 import type { PersonList, PersonView } from '@/lib/people';
 
+/** Each list's tab, its page title ("{name}'s journal") and the line its share carries. */
+const LIST_TEXT: Record<PersonList, { tab: MessageKey; title: MessageKey; share: MessageKey }> = {
+  jurnal: { tab: 'people.tabJournal', title: 'people.journalOf', share: 'people.shareJournal' },
+  carti: { tab: 'people.tabBooks', title: 'people.booksOf', share: 'people.shareBooks' },
+  salvate: { tab: 'people.tabSaved', title: 'people.savedOf', share: 'people.shareSaved' },
+};
+
 /**
- * The top of a person's pages: who they are, their lists the viewer may open (the one shown is marked), and sharing
- * the list when it's public. On their own pages, whether the list is public, with the way to Settings.
+ * The top of a person's public pages (/{username}/jurnal, /carti, /salvate): who they are, and as tabs under them the
+ * lists of theirs the viewer may open (their own: all they have, the private ones marked; anyone else: the public
+ * ones), the one shown marked, with its share button while it's public. On their own pages, whether it's public, and
+ * the way to Settings.
  */
 export function PersonHeader({ view, list, actions }: { view: PersonView; list: PersonList; actions?: ReactNode }) {
   const { t, formatNumber } = useI18n();
-  const { person, me, manage } = view;
+  const { person, me } = view;
   const isPublic = isPublicList(person, list);
-  const listName = (which: PersonList) => t(which === 'articole' ? 'people.articlesOf' : 'people.savedOf', { name: person.name });
-  // An administrator's own article list is every post (they write in authors' names).
-  const everyone = me && person.role === 'owner';
+  const title = t(LIST_TEXT[list].title, { name: person.name });
 
   useEffect(() => {
-    document.title = `${listName(list)} · ${site.name}`;
+    document.title = `${title} · ${site.name}`;
     return () => {
       document.title = site.name;
     };
-  }, [list, person.name]);
+  }, [title]);
 
-  // Their lists: the one shown, and the others this viewer may open.
-  const writes = person.role === 'author' || person.articles > 0 || everyone;
-  const lists = (['articole', 'articole-salvate'] as const).filter(
-    (which) => which === list || (which === 'articole' ? writes && (person.publicArticles || manage) : person.role !== 'owner' && (person.publicSaved || me)),
-  );
+  const lists = PERSON_LISTS.filter((which) => which === list || (me ? hasList(person, which) : isPublicList(person, which)));
+  const count = (which: PersonList) => (which === 'jurnal' ? person.articles : which === 'carti' ? person.books : null);
 
   return (
     <>
@@ -48,9 +53,9 @@ export function PersonHeader({ view, list, actions }: { view: PersonView; list: 
           {isPublic && (
             <SharePageButton
               item={{
-                url: new URL(list === 'articole' ? articlesPath(person.username) : savedPath(person.username), window.location.origin).href,
-                title: listName(list),
-                text: t(list === 'articole' ? 'people.shareArticles' : 'people.shareSaved', { name: person.name, site: site.name }),
+                url: new URL(personListPath(person.username, list), window.location.origin).href,
+                title,
+                text: t(LIST_TEXT[list].share, { name: person.name, site: site.name }),
                 image: new URL(view.shareImages[list], window.location.origin).href,
                 heading: t('share.titleList'),
               }}
@@ -59,22 +64,25 @@ export function PersonHeader({ view, list, actions }: { view: PersonView; list: 
           {actions}
         </div>
         <nav className="person-lists" aria-label={person.name}>
-          {lists.map((which) => (
-            <Link
-              key={which}
-              to={which === 'articole' ? articlesPath(person.username) : savedPath(person.username)}
-              className={which === list ? 'is-selected' : undefined}
-              aria-current={which === list ? 'page' : undefined}
-            >
-              {which === 'articole' ? t(everyone ? 'people.allArticles' : 'nav.manage') : t('nav.saved')}
-              {which === 'articole' && !everyone && <span className="count-pill">{formatNumber(person.articles)}</span>}
-              {me && !everyone && !isPublicList(person, which) && <Lock size={13} aria-label={t('people.private')} />}
-            </Link>
-          ))}
+          {lists.map((which) => {
+            const n = count(which);
+            return (
+              <Link
+                key={which}
+                to={personListPath(person.username, which)}
+                className={which === list ? 'is-selected' : undefined}
+                aria-current={which === list ? 'page' : undefined}
+              >
+                {t(LIST_TEXT[which].tab)}
+                {n !== null && <span className="count-pill">{formatNumber(n)}</span>}
+                {me && !isPublicList(person, which) && <Lock size={13} aria-label={t('people.private')} />}
+              </Link>
+            );
+          })}
         </nav>
       </section>
-      {/* Their own list: who sees it (an administrator's every-post list is theirs alone). */}
-      {me && !everyone && (
+      {/* Their own list: who sees it. */}
+      {me && (
         <p className={`notice person-privacy${isPublic ? ' is-public' : ''}`}>
           <span>
             {isPublic ? <Globe size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}

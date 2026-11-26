@@ -3,13 +3,15 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Check } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
+import { PageBand } from '@/components/PageBand';
 import { PushToggles } from '@/components/PushToggles';
+import { followAuthors } from '@/components/FollowButton';
 import { FollowingCard, NewsletterCard } from '@/components/SubscriptionCards';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/i18n/messages';
-import { articlesPath, savedPath } from '@/lib/paths';
+import { personListPath } from '@/lib/paths';
 import type { User } from '@/lib/types';
 
 const METRICS = ['comments', 'likes', 'views'] as const;
@@ -57,6 +59,33 @@ export function SettingsPage() {
   const latest = useRef<NotifySettings | null>(null);
   const request = useRef(0);
 
+  // The page's sections, as tabs at the top: a tap goes to one; scrolling marks the one in view.
+  // The tabs, short (a phone shows them all): the cards keep their full titles.
+  const sections = [
+    { id: 'prefs-device', label: t('prefs.tab.device') },
+    ...(isOwner ? [] : [{ id: 'prefs-privacy', label: t('prefs.tab.privacy') }]),
+    { id: 'prefs-notifications', label: t('nav.notifications') },
+    ...(canWrite && !isOwner ? [{ id: 'prefs-milestones', label: t('prefs.milestones') }] : []),
+  ];
+  const [section, setSection] = useState(sections[0]!.id);
+  const sectionKey = sections.map((entry) => entry.id).join(',');
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const seen = entries.find((entry) => entry.isIntersecting);
+        if (seen) setSection(seen.target.id);
+      },
+      { rootMargin: '-25% 0px -65% 0px' },
+    );
+    for (const { id } of sections) {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    }
+    return () => observer.disconnect();
+    // Again once the notification sections are there (loaded).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey, settings !== null]);
+
   useEffect(() => {
     api<{ settings: NotifySettings }>('/me/notification-settings')
       .then((data) => {
@@ -92,7 +121,7 @@ export function SettingsPage() {
   }, [every]);
 
   // Their lists, public or not: shown at once, put back if the server says no.
-  async function savePrivacy(change: Partial<Pick<User, 'publicArticles' | 'publicSaved'>>) {
+  async function savePrivacy(change: Partial<Pick<User, 'publicArticles' | 'publicBooks' | 'publicSaved'>>) {
     const before = me;
     setUser({ ...me, ...change });
     setStatus('saving');
@@ -107,7 +136,7 @@ export function SettingsPage() {
     }
   }
 
-  const privacyRow = (key: 'publicArticles' | 'publicSaved', label: MessageKey, path: string) => (
+  const privacyRow = (key: 'publicArticles' | 'publicBooks' | 'publicSaved', label: MessageKey, path: string) => (
     <div className="prefs-row">
       <label className="switch-field">
         <span className="switch-text">
@@ -147,31 +176,44 @@ export function SettingsPage() {
   return (
     <div className="container prefs-page">
       <HeaderBackLink />
-      <div className="prefs-head">
-        <div>
-          <h1>{t('prefs.title')}</h1>
-          <p className="muted">{t('prefs.subtitle')}</p>
-        </div>
-        <span className={`prefs-status${status === 'error' ? ' is-error' : ''}`} role="status">
-          {status === 'saving' ? t('prefs.saving') : status === 'saved' ? (
-            <>
-              <Check size={15} aria-hidden="true" /> {t('prefs.saved')}
-            </>
-          ) : status === 'error' ? t('error.generic') : ''}
-        </span>
-      </div>
+      <PageBand
+        title={t('prefs.title')}
+        line={t('prefs.subtitle')}
+        // (everything saves as it changes: whether it did, here)
+        actions={
+          <span className={`prefs-status${status === 'error' ? ' is-error' : ''}`} role="status">
+            {status === 'saving' ? t('prefs.saving') : status === 'saved' ? (
+              <>
+                <Check size={15} aria-hidden="true" /> {t('prefs.saved')}
+              </>
+            ) : status === 'error' ? t('error.generic') : ''}
+          </span>
+        }
+        tabsLabel={t('prefs.sections')}
+        tabs={sections.map(({ id, label }) => ({
+          key: id,
+          label,
+          active: section === id,
+          onClick: () => {
+            setSection(id);
+            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          },
+        }))}
+      />
 
       <div className="prefs-grid">
-        <section className="card prefs-card">
+        <section id="prefs-device" className="card prefs-card">
           <h2 className="side-title">{t('prefs.device')}</h2>
           <PushToggles mode="account" />
         </section>
 
         {!isOwner && (
-        <section className="card prefs-card">
+        <section id="prefs-privacy" className="card prefs-card">
           <h2 className="side-title">{t('prefs.privacy')}</h2>
-          {canWrite && privacyRow('publicArticles', 'prefs.publicArticles', articlesPath(me.username))}
-          {privacyRow('publicSaved', 'prefs.publicSaved', savedPath(me.username))}
+          {/* Each list, public or not: an author's journal and books, anyone's saved posts. */}
+          {me.role === 'author' && privacyRow('publicArticles', 'prefs.publicArticles', personListPath(me.username, 'jurnal'))}
+          {me.role === 'author' && privacyRow('publicBooks', 'prefs.publicBooks', personListPath(me.username, 'carti'))}
+          {privacyRow('publicSaved', 'prefs.publicSaved', personListPath(me.username, 'salvate'))}
         </section>
         )}
 
@@ -180,7 +222,7 @@ export function SettingsPage() {
         ) : !settings ? (
           <p className="muted">{t('common.loading')}</p>
         ) : isOwner ? (
-          <section className="card prefs-card">
+          <section id="prefs-notifications" className="card prefs-card">
             <h2 className="side-title">{t('nav.notifications')}</h2>
             <p className="muted small">{t('prefs.adminNote')}</p>
             {row('support', 'prefs.support', 'prefs.supportHint')}
@@ -190,10 +232,11 @@ export function SettingsPage() {
           </section>
         ) : (
           <>
-            <section className="card prefs-card">
+            <section id="prefs-notifications" className="card prefs-card">
               <h2 className="side-title">{t('prefs.forYou')}</h2>
               {row('newPosts', 'prefs.newPosts', 'prefs.newPostsHint')}
-              {row('followedAuthors', 'prefs.followedAuthors', 'prefs.followedAuthorsHint')}
+              {/* Following authors only where the site has more than one. */}
+              {followAuthors() && row('followedAuthors', 'prefs.followedAuthors', 'prefs.followedAuthorsHint')}
               {row('myCommentReplies', 'prefs.myCommentReplies', 'prefs.myCommentRepliesHint')}
               {row('myCommentReactions', 'prefs.myCommentReactions', 'prefs.myCommentReactionsHint')}
               {row('mentions', 'prefs.mentions', 'prefs.mentionsHint')}
@@ -233,7 +276,7 @@ export function SettingsPage() {
             )}
 
             {canWrite && (
-              <section className="card prefs-card">
+              <section id="prefs-milestones" className="card prefs-card">
                 <h2 className="side-title">{t('prefs.milestones')}</h2>
                 <p className="muted small">{t('prefs.milestonesHint')}</p>
                 {METRICS.map((metric) => (

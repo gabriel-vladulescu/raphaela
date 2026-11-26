@@ -575,4 +575,255 @@ export const migrations: string[][] = [
                        'post_reaction', 'milestone', 'support', 'report', 'account_due', 'comment_held', 'mention',
                        'followed_post') NOT NULL`,
   ],
+  // 16: a banner's credit (an image from a library: who made it, its licence) and where it comes from.
+  [
+    `ALTER TABLE posts
+      ADD COLUMN banner_credit VARCHAR(300) NULL AFTER banner_url,
+      ADD COLUMN banner_credit_url VARCHAR(500) NULL AFTER banner_credit`,
+  ],
+  // 17: administrators hear when data is past the time the Terms promise to keep it (they delete it themselves).
+  [
+    `ALTER TABLE notifications
+      MODIFY type ENUM('comment', 'reply', 'like', 'share', 'views', 'new_post', 'comment_reply', 'comment_reaction',
+                       'post_reaction', 'milestone', 'support', 'report', 'account_due', 'comment_held', 'mention',
+                       'followed_post', 'cleanup_due') NOT NULL`,
+  ],
+  // 18: links sent by email aren't deleted when they stop working: a used one is marked used, and one that stopped
+  // before (a newer one, the password or the address changed, the account was deleted...) says why. The records go
+  // when an administrator deletes old data (lib/retention.ts).
+  [
+    `ALTER TABLE email_tokens
+      ADD COLUMN used_at DATETIME NULL AFTER expires_at,
+      ADD COLUMN revoked_at DATETIME NULL AFTER used_at,
+      ADD COLUMN revoked_reason ENUM('replaced', 'password_changed', 'address_changed', 'verified', 'cancelled', 'google',
+                                     'account_deleted') NULL AFTER revoked_at,
+      ADD INDEX email_tokens_time (created_at)`,
+  ],
+  // 19: sign-ins that end (signing out, a new password, a suspension...) are kept as a record, with why; and an
+  // account keeps the history of its address, name and username (kept with the account).
+  [
+    `ALTER TABLE sessions
+      ADD COLUMN ended_at DATETIME NULL AFTER expires_at,
+      ADD COLUMN end_reason ENUM('signed_out', 'password_changed', 'password_reset', 'google', 'suspended', 'account_deleted') NULL AFTER ended_at`,
+    `CREATE TABLE account_changes (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT UNSIGNED NOT NULL,
+      field      ENUM('email', 'name', 'username') NOT NULL,
+      old_value  VARCHAR(255) NULL,
+      new_value  VARCHAR(255) NULL,
+      via        ENUM('profile', 'email_link', 'google', 'admin') NOT NULL,
+      changed_at DATETIME NOT NULL,
+      INDEX account_changes_user (user_id, changed_at),
+      INDEX account_changes_old (old_value),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+  ],
+  // 20: books. A book is read chapter by chapter: each chapter is a post (same editor, comments, likes, statistics)
+  // with the book and its number. A book has one subject (a category), a cover drawn from a design (layout, ornament,
+  // colours: client/src/lib/covers.ts) and is on the site once one of its chapters is. Saved cover designs are shared
+  // by the writers. Signed-in readers' progress in each post (guests keep theirs in the browser) and the days they
+  // read, for "continue reading" and the streak; kept as long as the account (deleted with it).
+  [
+    `CREATE TABLE books (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      author_id        INT UNSIGNED NOT NULL,
+      category_id      INT UNSIGNED NULL,
+      title            VARCHAR(160) NOT NULL,
+      slug             VARCHAR(180) NOT NULL UNIQUE,
+      description      VARCHAR(1000) NOT NULL DEFAULT '',
+      cover            JSON NOT NULL,
+      planned_chapters SMALLINT UNSIGNED NULL,
+      completed_at     DATETIME NULL,
+      created_at       DATETIME NOT NULL,
+      updated_at       DATETIME NOT NULL,
+      deleted_at       DATETIME NULL,
+      INDEX books_author (author_id),
+      INDEX books_category (category_id),
+      FOREIGN KEY (author_id) REFERENCES users(id),
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    )`,
+    `ALTER TABLE posts
+      ADD COLUMN book_id INT UNSIGNED NULL AFTER series_part,
+      ADD COLUMN chapter_no SMALLINT UNSIGNED NULL AFTER book_id,
+      ADD INDEX posts_book (book_id, chapter_no),
+      ADD CONSTRAINT posts_book_fk FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL`,
+    `CREATE TABLE cover_templates (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name       VARCHAR(40) NOT NULL,
+      design     JSON NOT NULL,
+      created_by INT UNSIGNED NULL,
+      created_at DATETIME NOT NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE reading_progress (
+      user_id     INT UNSIGNED NOT NULL,
+      post_id     INT UNSIGNED NOT NULL,
+      progress    TINYINT UNSIGNED NOT NULL,
+      updated_at  DATETIME NOT NULL,
+      finished_at DATETIME NULL,
+      PRIMARY KEY (user_id, post_id),
+      INDEX reading_recent (user_id, updated_at),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE reading_days (
+      user_id INT UNSIGNED NOT NULL,
+      day     DATE NOT NULL,
+      PRIMARY KEY (user_id, day),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+  ],
+  // 21: chapters and posts apart (still one table: comments, likes, views and the rest are the same for both). A
+  // chapter always has a book and a number, and no category (its book has one); a post has no book. A book can't be
+  // removed from under its chapters (they'd turn into posts). Series are gone: the books took their place.
+  [
+    'UPDATE posts SET category_id = NULL WHERE book_id IS NOT NULL',
+    'ALTER TABLE posts DROP FOREIGN KEY posts_book_fk',
+    'ALTER TABLE posts ADD CONSTRAINT posts_book_fk FOREIGN KEY (book_id) REFERENCES books(id)',
+    'ALTER TABLE posts DROP FOREIGN KEY posts_series_fk',
+    'ALTER TABLE posts DROP INDEX posts_series, DROP COLUMN series_id, DROP COLUMN series_part',
+    'DROP TABLE series',
+  ],
+  // 22: a book is published or not, by its author: unpublished, it and its chapters are hidden from readers (its author
+  // and administrators still see them). The books there were stay as they were: published.
+  [
+    'ALTER TABLE books ADD COLUMN published_at DATETIME NULL AFTER completed_at',
+    'UPDATE books SET published_at = created_at',
+  ],
+  // 23: a tag can have a colour and a sign (tagStyles.ts), and its name a shape: lower case, the words joined by
+  // dashes ("Full Moon" -> "full-moon"). The tags there were take it (their addresses, the slugs, stay).
+  [
+    'ALTER TABLE tags ADD COLUMN color VARCHAR(16) NULL AFTER slug, ADD COLUMN icon VARCHAR(16) NULL AFTER color',
+    `UPDATE tags SET name = TRIM(BOTH '-' FROM REGEXP_REPLACE(LOWER(name), '[^[:alnum:]]+', '-'))`,
+    `UPDATE tags SET name = TRIM(TRAILING '-' FROM LEFT(name, 40))`,
+    `UPDATE tags SET name = slug WHERE name = ''`,
+  ],
+  // 24: a person's books can be public too (/{username}/carti, as their journal and saved posts: Settings), and a
+  // comment's thread start (root_id) is a real relation, going with it as its parent does.
+  [
+    'ALTER TABLE users ADD COLUMN public_books TINYINT(1) NOT NULL DEFAULT 0 AFTER public_articles',
+    'ALTER TABLE comments ADD CONSTRAINT comments_root_fk FOREIGN KEY (root_id) REFERENCES comments(id) ON DELETE CASCADE',
+  ],
+  // 25: the newsletter has no frequency (each new post by email, when it's out; no weekly digest), and it can be for
+  // some books only: "Notify me" at the end of an unfinished book, by email (newsletter_books) or on a device
+  // (push_books). An address gets every new post (all_posts), the chapters of its books, or both.
+  [
+    `ALTER TABLE newsletter_subscribers
+      DROP INDEX newsletter_active,
+      DROP COLUMN frequency,
+      DROP COLUMN last_digest_at,
+      ADD COLUMN all_posts TINYINT(1) NOT NULL DEFAULT 1 AFTER lang,
+      ADD INDEX newsletter_active (confirmed_at, unsubscribed_at)`,
+    `CREATE TABLE newsletter_books (
+      subscriber_id INT UNSIGNED NOT NULL,
+      book_id       INT UNSIGNED NOT NULL,
+      created_at    DATETIME NOT NULL,
+      PRIMARY KEY (subscriber_id, book_id),
+      INDEX (book_id),
+      FOREIGN KEY (subscriber_id) REFERENCES newsletter_subscribers(id) ON DELETE CASCADE,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE push_books (
+      subscription_id INT UNSIGNED NOT NULL,
+      book_id         INT UNSIGNED NOT NULL,
+      created_at      DATETIME NOT NULL,
+      PRIMARY KEY (subscription_id, book_id),
+      INDEX (book_id),
+      FOREIGN KEY (subscription_id) REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    )`,
+  ],
+  // 26: what the site did and what went wrong, for the admin panel's logs. The server's errors (a failed request, a
+  // background job, a push the push service refused), the same one counted up while it repeats. Each push sent (to
+  // how many devices, how many got it). Each sign-in attempt, with how it went and the browser (never the IP
+  // address); sign-ins remember their browser too, and can be ended by an administrator. Devices with push say which
+  // browser they are. Support tickets become conversations: a state, and replies (an administrator's go out by email,
+  // and into the app when the ticket was sent signed in; the sender answers from the app).
+  [
+    `CREATE TABLE error_log (
+      id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      created_at DATETIME NOT NULL,
+      last_at    DATETIME NOT NULL,
+      times      INT UNSIGNED NOT NULL DEFAULT 1,
+      source     VARCHAR(20) CHARACTER SET ascii NOT NULL,
+      context    VARCHAR(255) NOT NULL DEFAULT '',
+      message    VARCHAR(500) NOT NULL,
+      detail     TEXT NULL,
+      user_id    INT UNSIGNED NULL,
+      seen_at    DATETIME NULL,
+      INDEX error_log_time (created_at, id),
+      INDEX error_log_last (last_at),
+      INDEX error_log_same (source, last_at),
+      INDEX error_log_unseen (seen_at)
+    )`,
+    `CREATE TABLE push_log (
+      id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      created_at DATETIME NOT NULL,
+      kind       VARCHAR(30) CHARACTER SET ascii NOT NULL,
+      title      VARCHAR(255) NOT NULL,
+      url        VARCHAR(500) NULL,
+      user_id    INT UNSIGNED NULL,
+      devices    INT UNSIGNED NOT NULL,
+      sent       INT UNSIGNED NOT NULL,
+      failed     INT UNSIGNED NOT NULL,
+      gone       INT UNSIGNED NOT NULL,
+      error      VARCHAR(500) NULL,
+      INDEX push_log_time (created_at, id),
+      INDEX push_log_user (user_id, created_at),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE auth_log (
+      id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      created_at DATETIME NOT NULL,
+      user_id    INT UNSIGNED NULL,
+      email      VARCHAR(190) NULL,
+      method     ENUM('password', 'google', 'signup', 'reset', 'invite') NOT NULL,
+      outcome    ENUM('ok', 'wrong_password', 'unknown_email', 'google_only', 'suspended', 'deleted', 'failed') NOT NULL,
+      device     VARCHAR(80) NULL,
+      INDEX auth_log_time (created_at, id),
+      INDEX auth_log_user (user_id, created_at),
+      INDEX auth_log_email (email, created_at),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+    `ALTER TABLE sessions
+      ADD COLUMN device VARCHAR(80) NULL AFTER created_at,
+      MODIFY end_reason ENUM('signed_out', 'password_changed', 'password_reset', 'google', 'suspended', 'account_deleted', 'admin') NULL`,
+    'ALTER TABLE push_subscriptions ADD COLUMN device VARCHAR(80) NULL AFTER visitor_id',
+    `ALTER TABLE support_tickets
+      ADD COLUMN status ENUM('open', 'answered', 'closed') NOT NULL DEFAULT 'open' AFTER body,
+      ADD COLUMN updated_at DATETIME NULL AFTER created_at,
+      ADD INDEX support_tickets_user (user_id, created_at),
+      ADD INDEX support_tickets_status (status, created_at)`,
+    'UPDATE support_tickets SET updated_at = created_at',
+    `CREATE TABLE support_replies (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      ticket_id   INT UNSIGNED NOT NULL,
+      author_id   INT UNSIGNED NULL,
+      author_name VARCHAR(80) NOT NULL,
+      staff       TINYINT(1) NOT NULL,
+      body        TEXT NOT NULL,
+      created_at  DATETIME NOT NULL,
+      emailed     TINYINT(1) NOT NULL DEFAULT 0,
+      INDEX support_replies_ticket (ticket_id, created_at),
+      FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE,
+      FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `ALTER TABLE notifications
+      MODIFY type ENUM('comment', 'reply', 'like', 'share', 'views', 'new_post', 'comment_reply', 'comment_reaction',
+                       'post_reaction', 'milestone', 'support', 'report', 'account_due', 'comment_held', 'mention',
+                       'followed_post', 'cleanup_due', 'support_reply') NOT NULL`,
+  ],
+  // 27: an email goes out only through an SMTP server, in development too (no more "written to the server's log"). What
+  // was only logged never went out: it failed, and the support answers it carried weren't emailed.
+  [
+    `UPDATE support_replies r
+        JOIN support_tickets t ON t.id = r.ticket_id
+        SET r.emailed = 0
+      WHERE r.staff = 1 AND EXISTS (
+        SELECT 1 FROM email_log e
+         WHERE e.status = 'logged' AND e.kind = 'support_reply' AND e.to_email = t.email
+           AND e.created_at BETWEEN r.created_at - INTERVAL 1 MINUTE AND r.created_at + INTERVAL 1 MINUTE)`,
+    "UPDATE email_log SET status = 'failed', error = 'Niciun server SMTP setat' WHERE status = 'logged'",
+    "ALTER TABLE email_log MODIFY status ENUM('sent', 'failed') NOT NULL",
+  ],
 ];

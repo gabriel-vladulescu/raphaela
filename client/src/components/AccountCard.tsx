@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { Check, Clock, KeyRound, Mail, TriangleAlert } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
+import { EmailOffModal, isEmailOff } from '@/components/EmailOffModal';
 import { GoogleLogo } from '@/components/GoogleButton';
 import { AlertModal, ConfirmModal, Modal } from '@/components/Modal';
 import { useAuth } from '@/context/auth';
@@ -43,6 +44,8 @@ export function AccountCard() {
   const [notice, setNotice] = useState<{ key: MessageKey; vars?: Record<string, string> } | null>(null);
   const [resending, setResending] = useState(false);
   const [emailError, setEmailError] = useState('');
+  /** The site's email isn't working: the confirmation link can't go again (a dialog says so). */
+  const [mailOff, setMailOff] = useState(false);
   const [alert, setAlert] = useState<MessageKey | null>(null);
   const [pending, setPending] = useState<PendingGoogle | null>(null);
 
@@ -89,7 +92,8 @@ export function AccountCard() {
       await api('/me/verify-email', { method: 'POST', body: { lang } });
       setNotice({ key: 'verify.sent', vars: { email: me.email } });
     } catch (err) {
-      setEmailError(err instanceof ApiError && err.code === 'rate_limited' ? t('verify.wait') : errorMessage(err));
+      if (isEmailOff(err)) setMailOff(true);
+      else setEmailError(err instanceof ApiError && err.code === 'rate_limited' ? t('verify.wait') : errorMessage(err));
     } finally {
       setResending(false);
     }
@@ -237,6 +241,7 @@ export function AccountCard() {
         />
       )}
       {alert && <AlertModal title={t('account.googleFailedTitle')} message={t(alert)} onClose={() => setAlert(null)} />}
+      {mailOff && <EmailOffModal detail={t('mail.offVerify')} onClose={() => setMailOff(false)} />}
     </section>
   );
 }
@@ -254,7 +259,7 @@ function FormDialog(props: {
 }) {
   const { t } = useI18n();
   return (
-    <Modal title={props.title} onClose={props.busy ? undefined : props.onCancel}>
+    <Modal title={props.title} onClose={props.busy ? undefined : props.onCancel} head>
       <form
         className="modal-body signin-dialog"
         onSubmit={(event) => {
@@ -262,7 +267,6 @@ function FormDialog(props: {
           props.onSubmit();
         }}
       >
-        <h2>{props.title}</h2>
         {props.children}
         {props.error && <p className="form-error">{props.error}</p>}
         <div className="modal-actions">
@@ -283,18 +287,21 @@ function useSubmit(onDone: (user: User) => void) {
   const { errorMessage } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Refused because the site's email isn't working (a new address needs its link): the dialog saying so. */
+  const [mailOff, setMailOff] = useState(false);
   const submit = async (send: () => Promise<{ user: User }>) => {
     setBusy(true);
     setError('');
     try {
       onDone((await send()).user);
     } catch (err) {
-      setError(errorMessage(err));
+      if (isEmailOff(err)) setMailOff(true);
+      else setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
-  return { busy, error, setError, submit };
+  return { busy, error, setError, submit, mailOff, setMailOff };
 }
 
 /** The password that proves it's them (if the account has one), or the new one it needs (if it hasn't). */
@@ -330,7 +337,7 @@ function EmailDialog({ onCancel, onDone }: { onCancel: () => void; onDone: (user
   const [fresh, setFresh] = useState('');
   // The server answers with the new address still waiting for its link (`pending`), or already changed.
   const pendingRef = useRef<string | null>(null);
-  const { busy, error, setError, submit } = useSubmit((user) => onDone(user, pendingRef.current));
+  const { busy, error, setError, submit, mailOff, setMailOff } = useSubmit((user) => onDone(user, pendingRef.current));
   return (
     <FormDialog
       title={t('account.emailTitle')}
@@ -368,6 +375,7 @@ function EmailDialog({ onCancel, onDone }: { onCancel: () => void; onDone: (user
         setFresh={setFresh}
         freshHint={t('account.newPasswordNeeded')}
       />
+      {mailOff && <EmailOffModal detail={t('mail.offEmailChange')} onClose={() => setMailOff(false)} />}
     </FormDialog>
   );
 }

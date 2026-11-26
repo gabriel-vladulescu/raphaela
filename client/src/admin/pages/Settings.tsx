@@ -1,28 +1,35 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useSearchParams } from 'react-router';
-import { ChevronDown, CircleCheck, Info, Mail, MailWarning, Send, TriangleAlert } from 'lucide-react';
+import { Navigate, useSearchParams } from 'react-router';
+import { CircleCheck, MailWarning, Send } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
-import type { EmailLog, MailSettings, SiteSettings, SmtpSecurity } from '@/admin/types';
+import type { MailSettings, SmtpSecurity } from '@/admin/types';
 import { GeneralSettings, IdentitySettings } from '@/admin/pages/SiteSettings';
-import { Badge, Card, Empty, ErrorNote, Field, LoadMore, Loading, PageHead, SearchBox, Select, Tabs } from '@/admin/ui';
-import type { Tone } from '@/admin/ui';
+import { Card, ErrorNote, Field, Loading, PageHead, Select, Tabs } from '@/admin/ui';
 import { useAuth } from '@/context/auth';
 import { api, ApiError } from '@/lib/api';
 
-type Tab = 'general' | 'identity' | 'email' | 'history';
-const TABS: Tab[] = ['general', 'identity', 'email', 'history'];
+type Tab = 'general' | 'identity' | 'email';
+const TABS: Tab[] = ['general', 'identity', 'email'];
+/** Tabs that moved to Logs (what the site sent, the old data): their links lead there. */
+const MOVED: Record<string, string> = { history: 'emails', cleanup: 'cleanup' };
 
 /**
- * The site's settings, in tabs (kept in the address): its rules, who it is (name, links, logo), the email server,
- * and what it sent.
+ * The site's settings, in tabs (kept in the address): its rules, who it is (name, links, logo) and the email server.
+ * What it sent and the clean-up of old data are in Logs.
  */
 export function SettingsPage() {
   const { t } = useAdminI18n();
   const [params, setParams] = useSearchParams();
+  const moved = MOVED[params.get('tab') ?? ''];
   const tab = TABS.find((value) => value === params.get('tab')) ?? 'general';
+  if (moved) {
+    const next = new URLSearchParams(params);
+    next.set('tab', moved);
+    return <Navigate to={`/admin/jurnal?${next.toString()}`} replace />;
+  }
   return (
     <>
       <PageHead title={t('nav.settings')} subtitle={t('settings.subtitle')} />
@@ -32,141 +39,13 @@ export function SettingsPage() {
         onChange={(value) => setParams(value === 'general' ? {} : { tab: value })}
         items={TABS.map((value) => ({ value, label: t(`settings.tab.${value}` as AdminKey) }))}
       />
-      {tab === 'general' ? <GeneralSettings /> : tab === 'identity' ? <IdentitySettings /> : tab === 'email' ? <EmailSettings /> : <EmailHistory />}
-    </>
-  );
-}
-
-const STATUS_TONE: Record<string, Tone> = { sent: 'good', failed: 'bad', logged: 'info' };
-const KINDS = ['verify', 'reset', 'change', 'deleted', 'restored', 'suspended', 'invite', 'newsletter_confirm', 'newsletter_post', 'newsletter_digest', 'test'] as const;
-type StatusFilter = 'all' | 'sent' | 'failed' | 'logged';
-
-/** Every email the site tried to send: to whom, what, and whether the server took it (its error if not). */
-function EmailHistory() {
-  const { t, formatDateTime, formatNumber } = useAdminI18n();
-  const [params, setParams] = useSearchParams();
-  const status = (['all', 'sent', 'failed', 'logged'] as const).find((value) => value === params.get('status')) ?? 'all';
-  const kind = params.get('kind') ?? '';
-  const q = params.get('q') ?? '';
-  const [data, setData] = useState<EmailLog | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [more, setMore] = useState(false);
-  const [open, setOpen] = useState<number | null>(null);
-
-  const query = useCallback(
-    (offset: number) =>
-      `/admin/email-log?offset=${offset}&limit=25${status !== 'all' ? `&status=${status}` : ''}${kind ? `&kind=${kind}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-    [status, kind, q],
-  );
-  const load = useCallback(() => {
-    setFailed(false);
-    api<EmailLog>(query(0))
-      .then(setData)
-      .catch(() => setFailed(true));
-  }, [query]);
-  useEffect(load, [load]);
-
-  const set = (key: string, value: string) =>
-    setParams((current) => {
-      const next = new URLSearchParams(current);
-      if (value) next.set(key, value);
-      else next.delete(key);
-      return next;
-    });
-
-  async function loadMore() {
-    if (!data) return;
-    setMore(true);
-    try {
-      const next = await api<EmailLog>(query(data.emails.length));
-      setData({ ...next, emails: [...data.emails, ...next.emails] });
-    } finally {
-      setMore(false);
-    }
-  }
-
-  const usage = data?.usage;
-  const share = usage && usage.dailyLimit > 0 ? Math.min(100, Math.round((usage.sentToday / usage.dailyLimit) * 100)) : null;
-  return (
-    <>
-      {usage && (
-        <div className="adm-kpis is-3">
-          <div className="adm-kpi">
-            <div className="adm-kpi-top">{t('emails.sentToday')}</div>
-            <div className="adm-kpi-value">
-              {formatNumber(usage.sentToday)}
-              {usage.dailyLimit > 0 && <span className="adm-kpi-of"> / {formatNumber(usage.dailyLimit)}</span>}
-            </div>
-            {share !== null ? (
-              <div className={`adm-meter${share >= 80 ? ' is-warn' : ''}`} role="meter" aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} aria-label={t('emails.limitUsed', { n: share })}>
-                <div style={{ width: `${share}%` }} />
-              </div>
-            ) : (
-              <span className="adm-muted adm-small">{t('emails.noLimit')}</span>
-            )}
-          </div>
-          <div className="adm-kpi">
-            <div className="adm-kpi-top">{t('emails.failedToday')}</div>
-            <div className={`adm-kpi-value${usage.failedToday ? ' is-bad' : ''}`}>{formatNumber(usage.failedToday)}</div>
-            <span className="adm-muted adm-small">{t('emails.failed24h', { n: usage.failed24h })}</span>
-          </div>
-          <div className="adm-kpi">
-            <div className="adm-kpi-top">{t('emails.total')}</div>
-            <div className="adm-kpi-value">{formatNumber(data!.counts.all)}</div>
-            <span className="adm-muted adm-small">{t('emails.kept')}</span>
-          </div>
-        </div>
+      {tab === 'general' ? (
+        <GeneralSettings />
+      ) : tab === 'identity' ? (
+        <IdentitySettings />
+      ) : (
+        <EmailSettings />
       )}
-      <Card flush>
-        <div className="adm-toolbar">
-          <Tabs<StatusFilter>
-            label={t('emails.status')}
-            value={status}
-            onChange={(value) => set('status', value === 'all' ? '' : value)}
-            items={(['all', 'sent', 'failed', 'logged'] as const).map((value) => ({ value, label: t(`emails.status.${value}` as AdminKey), count: data?.counts[value] }))}
-          />
-          <div className="adm-toolbar-row">
-            <SearchBox value={q} onChange={(value) => set('q', value)} placeholder={t('emails.search')} />
-            <Select<string>
-              label={t('emails.kind')}
-              value={kind}
-              onChange={(value) => set('kind', value)}
-              options={[{ value: '', label: t('emails.allKinds') }, ...KINDS.map((value) => ({ value, label: t(`emails.kind.${value}` as AdminKey) }))]}
-            />
-          </div>
-        </div>
-        {failed ? (
-          <ErrorNote message={t('common.loadFailed')} onRetry={load} />
-        ) : !data ? (
-          <Loading />
-        ) : data.emails.length === 0 ? (
-          <div className="adm-pad">
-            <Empty icon={Mail} title={t('emails.none')} />
-          </div>
-        ) : (
-          <ul className="adm-emails">
-            {data.emails.map((email) => (
-              <li key={email.id} className={email.status === 'failed' ? 'is-failed' : undefined}>
-                <button type="button" className="adm-email" aria-expanded={open === email.id} onClick={() => setOpen(open === email.id ? null : email.id)}>
-                  <Badge tone={STATUS_TONE[email.status] ?? 'neutral'}>{t(`emails.state.${email.status}` as AdminKey)}</Badge>
-                  <span className="adm-email-main">
-                    <strong>{email.subject}</strong>
-                    <span className="adm-muted adm-small">
-                      {email.to} · {t(`emails.kind.${email.kind}` as AdminKey)}
-                    </span>
-                  </span>
-                  <time className="adm-muted adm-small adm-nowrap" dateTime={email.createdAt}>
-                    {formatDateTime(email.createdAt)}
-                  </time>
-                  {email.error && <ChevronDown size={15} className="adm-email-chevron" aria-hidden="true" />}
-                </button>
-                {open === email.id && email.error && <pre className="adm-email-error">{email.error}</pre>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {data?.hasMore && <LoadMore busy={more} onClick={() => void loadMore()} />}
-      </Card>
     </>
   );
 }
@@ -174,7 +53,6 @@ function EmailHistory() {
 interface MailState {
   settings: MailSettings;
   configured: boolean;
-  production: boolean;
 }
 
 /** Well-known servers, to fill the form in one click (the address and password stay the administrator's to type). */
@@ -262,9 +140,7 @@ function EmailSettings() {
 
   const status = state.configured
     ? { tone: 'good', icon: CircleCheck, title: t('mail.on'), body: t('mail.onBody', { email: state.settings.fromEmail }) }
-    : state.production
-      ? { tone: 'bad', icon: MailWarning, title: t('mail.off'), body: t('mail.offBody') }
-      : { tone: 'info', icon: Info, title: t('mail.dev'), body: t('mail.devBody') };
+    : { tone: 'bad', icon: MailWarning, title: t('mail.off'), body: t('mail.offBody') };
 
   return (
     <>

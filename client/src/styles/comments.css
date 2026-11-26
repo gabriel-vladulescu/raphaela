@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 2rem;
+  font-size: var(--fs-num);
 }
 
 .discussion-head .segmented button {
@@ -151,7 +151,7 @@
   justify-content: center;
   gap: 8px 12px;
   padding: 6px 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 .t-item {
@@ -360,7 +360,7 @@
 
 .discussion-off p {
   color: var(--text-2);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .t-text {
@@ -407,7 +407,7 @@
   border-radius: 8px;
   background: none;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   cursor: pointer;
 }
@@ -434,7 +434,7 @@
 }
 
 .rx-trigger-emoji {
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 .rx-dock {
@@ -471,7 +471,7 @@
   border: 0;
   border-radius: 50%;
   background: none;
-  font-size: 1.45rem;
+  font-size: var(--fs-section);
   cursor: pointer;
   transition: transform 0.18s var(--ease), background 0.18s;
   /* "backwards", so the hover lift isn't held back once the entrance is over */
@@ -536,7 +536,7 @@
   border-radius: 999px;
   background: var(--surface);
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -560,7 +560,7 @@
 }
 
 .rx-bubble {
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
 }
 
 .rx-total {
@@ -602,7 +602,7 @@
   border-radius: 10px;
   background: none;
   color: var(--text);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   text-align: left;
 }
 
@@ -620,7 +620,7 @@ button.rx-row:hover {
 }
 
 .rx-row .emoji {
-  font-size: 1.15rem;
+  font-size: var(--fs-card);
   text-align: center;
 }
 
@@ -646,7 +646,7 @@ button.rx-row:hover {
     gap: 14px;
   }
 
-  /* "Discuție" and the sort stay on one line (with very large text, the title gives way first). */
+  /* "Discussion" and the sort stay on one line (with very large text, the title gives way first). */
   .discussion-head {
     flex-wrap: nowrap;
     gap: 10px;
@@ -655,7 +655,7 @@ button.rx-row:hover {
   .discussion-head h2 {
     gap: 8px;
     min-width: 0;
-    font-size: 1.5rem;
+    font-size: var(--fs-page);
     white-space: nowrap;
   }
 
@@ -678,7 +678,7 @@ button.rx-row:hover {
   .discussion-head .segmented button {
     padding: 5px 10px;
     border-radius: 8px;
-    font-size: 0.8rem;
+    font-size: var(--fs-small);
   }
 
   /* Writing: no card around the box, and a rounded field like the bubbles. */
@@ -761,7 +761,7 @@ button.rx-row:hover {
 
   .t-meta {
     gap: 2px 6px;
-    font-size: 0.84rem;
+    font-size: var(--fs-small);
   }
 
   .t-meta .author-badge {
@@ -777,11 +777,11 @@ button.rx-row:hover {
   .t-text {
     margin-top: 1px;
     color: var(--text);
-    font-size: 0.95rem;
+    font-size: var(--fs-strong);
     line-height: 1.42;
   }
 
-  /* "3 h   ☺+   Răspunde   ⋯          ❤️✨ 4" */
+  /* "3 h   ☺+   Reply   ⋯          ❤️✨ 4" */
   .t-actions {
     position: relative; /* the emoji dock opens from here */
     gap: 0 10px;
@@ -792,15 +792,15 @@ button.rx-row:hover {
   .t-when-below {
     display: inline;
     color: var(--muted);
-    font-size: 0.76rem;
-    font-weight: 500;
+    font-size: var(--fs-label);
+    font-weight: 400;
   }
 
   .t-actions .text-btn {
     min-height: 26px;
     padding: 0;
     border-radius: 4px;
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
     font-weight: 700;
   }
 
@@ -829,7 +829,7 @@ button.rx-row:hover {
   }
 
   .rx-trigger-emoji {
-    font-size: 1.05rem;
+    font-size: var(--fs-body);
   }
 
   /* Replies stay open, as on Facebook: a closed thread still offers "Show N replies". */
@@ -862,7 +862,7 @@ button.rx-row:hover {
   .rx-dock-btn {
     width: 36px;
     height: 36px;
-    font-size: 1.35rem;
+    font-size: var(--fs-card);
   }
 
   /* The reactions so far, plain at the end of the row. */
@@ -873,7 +873,7 @@ button.rx-row:hover {
     border: 0;
     background: none;
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: var(--fs-label);
   }
 
   .rx-summary:hover {
@@ -894,7 +894,7 @@ button.rx-row:hover {
   }
 
   .rx-bubble {
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
   }
 
   .t-reply-form {
@@ -903,7 +903,7 @@ button.rx-row:hover {
 
   .t-more-main .text-btn {
     padding: 0;
-    font-size: 0.8rem;
+    font-size: var(--fs-small);
     font-weight: 700;
   }
 
@@ -923,7 +923,7 @@ button.rx-row:hover {
 .comment-sheet .menu-item {
   gap: 14px;
   padding: 14px 12px;
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 /* A deleted account's comment: no name, just "deleted account". */

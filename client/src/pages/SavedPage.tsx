@@ -1,35 +1,36 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
-import { Bookmark, Lock } from 'lucide-react';
+import { Link, Navigate } from 'react-router';
+import { Bookmark, Globe, Lock } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
-import { PersonHeader } from '@/components/PersonHeader';
+import { PageBand } from '@/components/PageBand';
 import { PostCard } from '@/components/PostCard';
 import { useAuth } from '@/context/auth';
 import { useReactions } from '@/context/reactions';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { savedPath } from '@/lib/paths';
-import { usePerson } from '@/lib/people';
+import { personListPath, savedPath } from '@/lib/paths';
 import type { PostSummary } from '@/lib/types';
-import { GridSkeleton, PageError, PersonHeaderSkeleton, PersonMissing } from '@/pages/ArticlesPage';
+import { GridSkeleton } from '@/pages/ArticlesPage';
+
+type Kind = 'all' | 'articles' | 'chapters';
 
 /**
- * Saved posts. /articole-salvate: a guest's, kept in this browser (signed in, their own page instead).
- * /{username}/articole-salvate: someone's, theirs to see, or anyone's if they made the list public (Settings).
+ * One's own saved posts (/salvate): a guest's, kept in this browser; signed in, their account's. Articles and
+ * chapters, the latest saved first, with tabs to show just one kind. Whether the list is public (Settings) and its
+ * public page (/{username}/salvate) are at the top. Someone else's saved posts: their public page (PersonPage).
  */
 export function SavedPage() {
-  const { username } = useParams();
   const { user, loading } = useAuth();
   const { t } = useI18n();
   if (loading) return <div className="container page-loading">{t('common.loading')}</div>;
   // Administrators don't save posts.
-  if (user?.role === 'owner' && (!username || username.toLowerCase() === user.username)) return <Navigate to="/admin" replace />;
-  if (!username) return user ? <Navigate to={savedPath(user.username)} replace /> : <GuestSaved />;
-  return <PersonSaved username={username} own={user?.username === username.toLowerCase()} />;
+  if (user?.role === 'owner') return <Navigate to="/admin" replace />;
+  return <OwnSaved />;
 }
 
 /** The viewer's own saved posts, as they save and unsave them (signed in or not); `enabled`: on their own pages. */
-function useMyBookmarks(enabled = true) {
+export function useMyBookmarks(enabled = true) {
   const { bookmarks } = useReactions();
   const { errorMessage } = useI18n();
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -59,85 +60,63 @@ function useMyBookmarks(enabled = true) {
   return { saved, loading: loading && saved.length === 0, error };
 }
 
-function GuestSaved() {
+function OwnSaved() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { saved, loading, error } = useMyBookmarks();
+  const [kind, setKind] = useState<Kind>('all');
+  const articles = saved.filter((post) => !post.book);
+  const chapters = saved.filter((post) => post.book);
+  const shown = kind === 'articles' ? articles : kind === 'chapters' ? chapters : saved;
+  const isPublic = Boolean(user?.publicSaved);
+
   return (
-    <div className="container">
+    <div className="container saved-page">
       <HeaderBackLink />
-      <section className="page-hero">
-        <div className="page-hero-text">
-          <h1>{t('saved.title')}</h1>
-          <p className="muted">
-            {t('saved.guest')} <Link to={`/login?next=${encodeURIComponent(savedPath())}`}>{t('auth.login.submit')}</Link>
-          </p>
-        </div>
-      </section>
-      <SavedGrid posts={saved} loading={loading} error={error} empty={t('saved.empty')} />
+      <PageBand
+        title={t('saved.title')}
+        line={
+          user ? (
+            t('saved.user')
+          ) : (
+            <>
+              {t('saved.guest')} <Link to={`/login?next=${encodeURIComponent(savedPath())}`}>{t('auth.login.submit')}</Link>
+            </>
+          )
+        }
+        actions={
+          user && (
+            <Link to={isPublic ? personListPath(user.username, 'salvate') : '/setari'} className="btn btn-soft btn-sm">
+              {isPublic ? <Globe size={15} /> : <Lock size={15} />} {t(isPublic ? 'saved.publicPage' : 'saved.private')}
+            </Link>
+          )
+        }
+        tabsLabel={t('saved.kinds')}
+        tabs={
+          saved.length > 0
+            ? [
+                { key: 'all', label: t('saved.all'), count: saved.length, active: kind === 'all', onClick: () => setKind('all') },
+                { key: 'articles', label: t('saved.articles'), count: articles.length, active: kind === 'articles', onClick: () => setKind('articles') },
+                { key: 'chapters', label: t('saved.chapters'), count: chapters.length, active: kind === 'chapters', onClick: () => setKind('chapters') },
+              ]
+            : undefined
+        }
+      />
+      <SavedGrid posts={shown} loading={loading} error={error} />
     </div>
   );
 }
 
-function PersonSaved({ username, own }: { username: string; own: boolean }) {
-  const { t, errorMessage } = useI18n();
-  const view = usePerson(username);
-  const mine = useMyBookmarks(own);
-  const [theirs, setTheirs] = useState<{ username: string; value: PostSummary[] | 'private' | 'missing' | string } | null>(null);
-
-  // Someone else's: from the server (their own list follows what they save and unsave, as they do it).
-  useEffect(() => {
-    if (own) return;
-    let cancelled = false;
-    api<{ posts: PostSummary[] }>(`/u/${encodeURIComponent(username)}/articole-salvate`)
-      .then((data) => !cancelled && setTheirs({ username, value: data.posts }))
-      .catch((err) => {
-        if (cancelled) return;
-        const code = err instanceof ApiError ? err.code : '';
-        setTheirs({ username, value: code === 'private' ? 'private' : code === 'not_found' ? 'missing' : errorMessage(err) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [username, own]);
-
-  const list = own ? mine.saved : theirs?.username === username ? theirs.value : null;
-  if (view === 'missing' || list === 'missing') return <PersonMissing />;
-  if (view === 'error') return <PageError message={t('error.generic')} />;
-
-  return (
-    <div className="container person-page">
-      <HeaderBackLink />
-      {view === null ? <PersonHeaderSkeleton /> : <PersonHeader view={view} list="articole-salvate" />}
-      {list === 'private' ? (
-        <div className="empty-state card">
-          <Lock size={34} className="empty-icon" aria-hidden="true" />
-          <p>{t('people.private')}</p>
-        </div>
-      ) : typeof list === 'string' ? (
-        <p className="form-error">{list}</p>
-      ) : (
-        <SavedGrid
-          posts={list ?? []}
-          loading={own ? mine.loading : list === null}
-          error={own ? mine.error : ''}
-          empty={t(own ? 'saved.empty' : 'people.emptySaved')}
-        />
-      )}
-    </div>
-  );
-}
-
-function SavedGrid({ posts, loading, error, empty }: { posts: PostSummary[]; loading: boolean; error: string; empty: string }) {
+/** Saved posts as cards (a person's public list too: PersonPage); none yet: an empty state. */
+export function SavedGrid({ posts, loading, error, empty }: { posts: PostSummary[]; loading: boolean; error: string; empty?: string }) {
+  const { t } = useI18n();
   return (
     <>
       {error && <p className="form-error">{error}</p>}
       {loading ? (
         <GridSkeleton />
       ) : posts.length === 0 ? (
-        <div className="empty-state card">
-          <Bookmark size={36} className="empty-icon" aria-hidden="true" />
-          <p>{empty}</p>
-        </div>
+        <EmptyState icon={Bookmark} title={t('saved.emptyTitle')} text={empty ?? t('saved.empty')} />
       ) : (
         <div className="post-grid post-grid-3">
           {posts.map((post) => (

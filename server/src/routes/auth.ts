@@ -8,15 +8,21 @@ import {
   accountBlock,
   ACTIVE_ACCOUNT,
   blockQuery,
+  canSendReset,
+  checkEmailToken,
   createEmailToken,
-  emailTokenValid,
+  revokeEmailTokens,
   sendVerification,
   STATUS_COLUMNS,
   takeEmailToken,
 } from '@/lib/accounts';
+import type { LinkResult } from '@/lib/accounts';
+import { recordAccountChange } from '@/lib/accountChanges';
 import type { AccountBlock } from '@/lib/accounts';
+import { logSignIn } from '@/lib/authLog';
+import type { SignInOutcome } from '@/lib/authLog';
 import { langOf, resetEmail, siteLink } from '@/lib/emails';
-import { canSendMail, sendMail } from '@/lib/mail';
+import { mailConfigured, sendMail } from '@/lib/mail';
 import { burnPasswordCheck, hashPassword, verifyPassword } from '@/lib/password';
 import { claimGuestLikes } from '@/lib/likes';
 import { canClaimEmail, endAllSessions, endSession, roleOverrideFor, setGoogleLink, startSession } from '@/lib/session';
@@ -44,7 +50,7 @@ async function upsertGoogleUser(
   db: Pool,
   profile: TokenPayload & { email: string },
   acceptedTerms: boolean,
-): Promise<{ userId: number } | { block: AccountBlock }> {
+): Promise<{ userId: number } | { block: AccountBlock; userId: number }> {
   const email = profile.email.toLowerCase();
   const role = roleOverrideFor(email);
   const select = `SELECT u.id, u.email_verified_at, ${STATUS_COLUMNS} FROM users u`;
@@ -55,12 +61,13 @@ async function upsertGoogleUser(
 
   if (existing) {
     const block = accountBlock(existing);
-    if (block) return { block };
+    if (block) return { block, userId: existing.id as number };
     // An account with this address that never confirmed it: whoever made it didn't prove the address was theirs, and
     // Google just did. It becomes this person's alone: its password goes and it's signed out everywhere else.
     if (!byGoogleId[0] && existing.email_verified_at === null) {
       await db.execute('UPDATE users SET password_hash = NULL WHERE id = ?', [existing.id]);
-      await endAllSessions(db, existing.id as number);
+      await endAllSessions(db, existing.id as number, 'google');
+      await revokeEmailTokens(db, existing.id as number, ['reset'], 'google');
     }
     // Links Google to an email/password account with the same (Google-verified) email.
     await db.execute(
@@ -69,6 +76,8 @@ async function upsertGoogleUser(
         WHERE id = ?`,
       [profile.sub, profile.picture ?? null, role, existing.id],
     );
+    // Google proved the address: links to confirm it have nothing left to do.
+    await revokeEmailTokens(db, existing.id as number, ['verify'], 'verified');
     return { userId: existing.id as number };
   }
 
@@ -178,13 +187,19 @@ const authRoutes: FastifyPluginAsync = async (app) => {
           return reply.redirect(`${profilePage}?google=${outcome}`);
         }
         const outcome = await upsertGoogleUser(db, { ...profile, email: profile.email }, acceptedTerms);
-        if ('block' in outcome) return reply.redirect(`${config.appUrl}/login?${blockQuery(outcome.block)}`);
+        const email = profile.email.toLowerCase();
+        if ('block' in outcome) {
+          await logSignIn(db, req, { userId: outcome.userId, email, method: 'google', outcome: blockOutcome(outcome.block) });
+          return reply.redirect(`${config.appUrl}/login?${blockQuery(outcome.block)}`);
+        }
         const { userId } = outcome;
         await startSession(db, reply, userId);
+        await logSignIn(db, req, { userId, email, method: 'google', outcome: 'ok' });
         await claimGuestLikes(db, userId, req.visitor.id); // likes given before signing in
         return reply.redirect(`${config.appUrl}${next}`);
       } catch (err) {
         req.log.error(err, 'Google sign-in failed');
+        if (!linking) await logSignIn(db, req, { userId: null, email: null, method: 'google', outcome: 'failed' });
         return reply.redirect(failRedirect);
       }
     },
@@ -210,6 +225,9 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       const email = req.body.email.trim().toLowerCase();
       if (req.body.acceptTerms !== true) return reply.code(400).send({ error: 'terms_required' });
       if (name.length < 2) return reply.code(400).send({ error: 'name_invalid' });
+      // The account's address is confirmed by an emailed link: no account without a way to send it (Google signs up
+      // without one, the address proven).
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
 
       const [existing] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ?', [email]);
       if (existing[0]) return reply.code(409).send({ error: 'email_taken' });
@@ -223,10 +241,10 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       );
       await assignUsername(db, result.insertId, name);
       await startSession(db, reply, result.insertId);
+      await logSignIn(db, req, { userId: result.insertId, email, method: 'signup', outcome: 'ok' });
       await claimGuestLikes(db, result.insertId, req.visitor.id); // likes given before signing in
-      const verificationSent = canSendMail();
-      if (verificationSent) void sendVerification(db, { id: result.insertId, email, name }, langOf(req.body.lang));
-      return { ok: true, verificationSent };
+      void sendVerification(db, { id: result.insertId, email, name }, langOf(req.body.lang));
+      return { ok: true };
     },
   );
 
@@ -243,22 +261,29 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       const [rows] = await db.execute<RowDataPacket[]>(`SELECT u.id, u.password_hash, ${STATUS_COLUMNS} FROM users u WHERE u.email = ?`, [email]);
       const user = rows[0];
 
+      const attempt = (outcome: SignInOutcome) => logSignIn(db, req, { userId: (user?.id as number | undefined) ?? null, email, method: 'password', outcome });
       if (!user?.password_hash) {
         await burnPasswordCheck(req.body.password);
+        await attempt(user ? 'google_only' : 'unknown_email');
         return reply.code(401).send({ error: user ? 'use_google' : 'invalid_credentials' });
       }
       if (!(await verifyPassword(req.body.password, user.password_hash))) {
+        await attempt('wrong_password');
         return reply.code(401).send({ error: 'invalid_credentials' });
       }
       // Said only to whoever knows the password: a deleted account (and when it will be gone), or a suspended one.
       const block = accountBlock(user);
-      if (block) return reply.code(403).send(block);
+      if (block) {
+        await attempt(blockOutcome(block));
+        return reply.code(403).send(block);
+      }
 
       await db.execute(
         'UPDATE users SET role = COALESCE(?, role), last_login_at = CURRENT_TIMESTAMP WHERE id = ?',
         [roleOverrideFor(email), user.id],
       );
       await startSession(db, reply, user.id);
+      await attempt('ok');
       await claimGuestLikes(db, user.id, req.visitor.id); // likes given before signing in
       return { ok: true };
     },
@@ -285,11 +310,12 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (req, reply) => {
-      if (!canSendMail()) return reply.code(503).send({ error: 'email_unavailable' });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
       const email = req.body.email.trim().toLowerCase();
       const [rows] = await db.execute<RowDataPacket[]>(`SELECT u.id, u.name FROM users u WHERE u.email = ? AND ${ACTIVE_ACCOUNT}`, [email]);
       const user = rows[0];
-      if (user) {
+      // (Past a few an hour, nothing more is sent, so an inbox can't be flooded; the answer stays the same.)
+      if (user && (await canSendReset(db, user.id as number))) {
         const token = await createEmailToken(db, user.id as number, 'reset', email);
         void sendMail(resetEmail(email, langOf(req.body.lang), user.name as string, siteLink(`/resetare-parola?token=${token}`)));
       }
@@ -297,11 +323,14 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // Whether a new-password link still works (the page asks before showing its form).
+  // Whether a new-password link still works (the page asks before showing its form), or why not.
   app.get<{ Querystring: { token?: string } }>(
     '/auth/reset-password',
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
-    async (req) => ({ valid: await emailTokenValid(db, String(req.query.token ?? '').slice(0, 100), 'reset') }),
+    async (req) => {
+      const link = await checkEmailToken(db, String(req.query.token ?? '').slice(0, 100), 'reset');
+      return link.ok ? { valid: true } : { valid: false, ...linkProblem(link) };
+    },
   );
 
   // The new password, through the emailed link. It also confirms the address (the link reached it); every other
@@ -321,18 +350,25 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const used = await takeEmailToken(db, req.body.token, ['reset']);
-      if (!used) return reply.code(400).send({ error: 'link_invalid' });
+      if (!used.ok) return reply.code(400).send(linkProblem(used));
       const [rows] = await db.execute<RowDataPacket[]>(`SELECT u.id, u.email, ${STATUS_COLUMNS} FROM users u WHERE u.id = ?`, [used.userId]);
       const user = rows[0];
       if (!user || user.email !== used.email) return reply.code(400).send({ error: 'link_invalid' }); // the address changed since
       const block = accountBlock(user);
-      if (block) return reply.code(403).send(block);
+      if (block) {
+        await logSignIn(db, req, { userId: used.userId, email: used.email, method: 'reset', outcome: blockOutcome(block) });
+        return reply.code(403).send(block);
+      }
       await db.execute('UPDATE users SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, UTC_TIMESTAMP()) WHERE id = ?', [
         await hashPassword(req.body.password),
         used.userId,
       ]);
-      await endAllSessions(db, used.userId);
+      // The other new-password links stop (the password is set), and so do links to confirm the address (this did).
+      await revokeEmailTokens(db, used.userId, ['reset'], 'password_changed');
+      await revokeEmailTokens(db, used.userId, ['verify'], 'verified');
+      await endAllSessions(db, used.userId, 'password_reset');
       await startSession(db, reply, used.userId);
+      await logSignIn(db, req, { userId: used.userId, email: used.email, method: 'reset', outcome: 'ok' });
       return { ok: true };
     },
   );
@@ -347,28 +383,48 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const used = await takeEmailToken(db, req.body.token, ['verify', 'change']);
-      if (!used) return reply.code(400).send({ error: 'link_invalid' });
+      if (!used.ok) {
+        // Opened again (or opened first by the mail's link checker), when what it does is done: said so, not an error.
+        if ((used.error === 'link_used' || used.error === 'link_revoked') && used.userId) {
+          const [[row]] = await db.execute<RowDataPacket[]>('SELECT email, email_verified_at, deleted_at FROM users WHERE id = ?', [used.userId]);
+          if (row && !row.deleted_at && row.email === used.email && row.email_verified_at) return { ok: true, purpose: used.purpose, email: used.email, already: true };
+        }
+        return reply.code(400).send(linkProblem(used));
+      }
       if (used.purpose === 'verify') {
         const [result] = await db.execute<ResultSetHeader>(
           'UPDATE users SET email_verified_at = COALESCE(email_verified_at, UTC_TIMESTAMP()) WHERE id = ? AND email = ? AND deleted_at IS NULL',
           [used.userId, used.email],
         );
         if (result.affectedRows === 0) return reply.code(400).send({ error: 'link_invalid' });
+        await revokeEmailTokens(db, used.userId, ['verify'], 'verified');
         return { ok: true, purpose: 'verify', email: used.email };
       }
+      const [[before]] = await db.execute<RowDataPacket[]>('SELECT email FROM users WHERE id = ?', [used.userId]);
       try {
         const [result] = await db.execute<ResultSetHeader>(
           'UPDATE users SET email = ?, google_id = NULL, email_verified_at = UTC_TIMESTAMP() WHERE id = ? AND deleted_at IS NULL',
           [used.email, used.userId],
         );
         if (result.affectedRows === 0) return reply.code(400).send({ error: 'link_invalid' });
+        await recordAccountChange(db, used.userId, 'email', (before?.email as string | undefined) ?? null, used.email, 'email_link');
       } catch (err) {
         if ((err as { code?: string }).code === 'ER_DUP_ENTRY') return reply.code(409).send({ error: 'email_in_use' });
         throw err;
       }
+      // Links sent to the old address (a new password, confirming it) and any other new address stop working.
+      await revokeEmailTokens(db, used.userId, ['reset', 'verify', 'change'], 'address_changed');
       return { ok: true, purpose: 'change', email: used.email };
     },
   );
 };
+
+/** A blocked account's attempt, as the sign-in history names it. */
+const blockOutcome = (block: AccountBlock): SignInOutcome => (block.error === 'account_deleted' ? 'deleted' : 'suspended');
+
+/** A link that doesn't work, as the answer says it: why, and (when it stopped before being used) what stopped it. */
+function linkProblem(link: Extract<LinkResult, { ok: false }>) {
+  return { error: link.error, ...(link.reason ? { reason: link.reason } : {}) };
+}
 
 export default authRoutes;

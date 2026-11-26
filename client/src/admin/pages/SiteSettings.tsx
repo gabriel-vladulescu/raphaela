@@ -52,7 +52,7 @@ const parseWords = (text: string) => [...new Set(text.split(/[\n,]/).map((w) => 
 export function GeneralSettings() {
   const { t, errorMessage } = useAdminI18n();
   const { refreshOverview } = useAdmin();
-  const [state, setState] = useState<{ settings: SiteSettings; mailConfigured: boolean; production: boolean } | null>(null);
+  const [state, setState] = useState<{ settings: SiteSettings; mailConfigured: boolean } | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -91,7 +91,7 @@ export function GeneralSettings() {
 
   if (!state || !announcement) return error ? <ErrorNote message={error} /> : <Loading />;
   const s = state.settings;
-  const noMail = state.production && !state.mailConfigured;
+  const noMail = !state.mailConfigured;
   const wordsDirty = wordsText(parseWords(words)) !== wordsText(s.blockedWords);
   const announcementDirty = JSON.stringify(announcement) !== JSON.stringify(s.announcement);
   const announcementLinkBad = announcement.linkUrl !== '' && !/^(https:\/\/|\/)\S*$/.test(announcement.linkUrl);

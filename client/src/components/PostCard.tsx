@@ -1,10 +1,25 @@
 import { Link } from 'react-router';
-import { Eye, MessageCircle, Pin } from 'lucide-react';
+import { BookOpen, Eye, MessageCircle, Pin } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { BookmarkButton, LikeButton } from '@/components/ReactionButtons';
 import { ShareButton } from '@/components/ShareSheet';
+import { bookPath, roman } from '@/lib/books';
 import { useI18n } from '@/lib/i18n';
+import { postPath } from '@/lib/paths';
 import type { PostSummary } from '@/lib/types';
+
+/** A chapter (on a tag's page, in a search, among saved ones): its book and number, where a post has its category. */
+function BookChip({ book, className = '' }: { book: NonNullable<PostSummary['book']>; className?: string }) {
+  const { t } = useI18n();
+  return (
+    <Link to={bookPath(book.slug)} className={`chip chip-link ${className}`}>
+      <BookOpen size={13} aria-hidden="true" />
+      <span className="feed-post-category-name">
+        {book.title} · {t('today.chapterRoman', { n: roman(book.chapter) })}
+      </span>
+    </Link>
+  );
+}
 
 /** Newer than this, a feed post says how long ago it came out ("3 h", "2 z"); older ones show the date. */
 const RECENT_MS = 7 * 86_400_000;
@@ -41,16 +56,20 @@ export function PostCard({ post, featured }: { post: PostSummary; featured?: boo
       <div className="post-card-body">
         <div className="post-card-tags">
           <FeaturedBadge post={post} featured={featured} />
-          {post.category && (
-            <Link to={`/?category=${post.category.slug}`} className="chip chip-link">
-              {post.category.icon && <span aria-hidden="true">{post.category.icon}</span>}
-              {post.category.name}
-            </Link>
+          {post.book ? (
+            <BookChip book={post.book} />
+          ) : (
+            post.category && (
+              <Link to={`/jurnal?category=${post.category.slug}`} className="chip chip-link">
+                {post.category.icon && <span aria-hidden="true">{post.category.icon}</span>}
+                {post.category.name}
+              </Link>
+            )
           )}
         </div>
 
         <h3 className="post-card-title">
-          <Link to={`/posts/${post.slug}`}>{post.title}</Link>
+          <Link to={postPath(post)}>{post.title}</Link>
         </h3>
         <p className="post-card-excerpt">{post.excerpt}</p>
         <p className="post-card-meta muted small">
@@ -121,18 +140,22 @@ export function FeedPost({ post, featured }: { post: PostSummary; featured?: boo
             <span>{t('post.readingTime', { n: post.readingMinutes })}</span>
           </span>
         </div>
-        {post.category && (
-          <Link to={`/?category=${post.category.slug}`} className="chip chip-link feed-post-category">
-            {post.category.icon && <span aria-hidden="true">{post.category.icon}</span>}
-            <span className="feed-post-category-name">{post.category.name}</span>
-          </Link>
+        {post.book ? (
+          <BookChip book={post.book} className="feed-post-category" />
+        ) : (
+          post.category && (
+            <Link to={`/jurnal?category=${post.category.slug}`} className="chip chip-link feed-post-category">
+              {post.category.icon && <span aria-hidden="true">{post.category.icon}</span>}
+              <span className="feed-post-category-name">{post.category.name}</span>
+            </Link>
+          )
         )}
       </header>
 
       <div className="feed-post-text">
         <FeaturedBadge post={post} featured={featured} />
         <h2 className="feed-post-title">
-          <Link to={`/posts/${post.slug}`}>{post.title}</Link>
+          <Link to={postPath(post)}>{post.title}</Link>
         </h2>
         <p className="feed-post-excerpt">{post.excerpt}</p>
       </div>
@@ -150,7 +173,7 @@ export function FeedPost({ post, featured }: { post: PostSummary; featured?: boo
       <footer className="feed-post-actions">
         <LikeButton post={post} />
         {post.commentsEnabled && (
-          <Link to={`/posts/${post.slug}#discussion-title`} className="reaction-btn" aria-label={t('post.comments')} title={t('post.comments')}>
+          <Link to={`${postPath(post)}#discussion-title`} className="reaction-btn" aria-label={t('post.comments')} title={t('post.comments')}>
             <MessageCircle size={17} />
             <span>{post.commentCount}</span>
           </Link>

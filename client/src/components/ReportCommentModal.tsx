@@ -33,9 +33,8 @@ export function ReportCommentModal({ commentId, onClose }: { commentId: number; 
   }
 
   return (
-    <Modal title={t('report.title')} onClose={onClose} sheet className="report-modal">
+    <Modal title={t('report.title')} onClose={onClose} sheet className="report-modal" head>
       <form className="modal-body" onSubmit={submit}>
-        <h2>{t('report.title')}</h2>
         <p className="muted">{t('report.body')}</p>
         <div className="report-reasons" role="radiogroup" aria-label={t('report.reason')}>
           {REASONS.map((value) => (

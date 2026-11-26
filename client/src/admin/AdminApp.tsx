@@ -3,6 +3,7 @@ import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router';
 import {
   ArrowUpRight,
   BarChart3,
+  BookOpen,
   FileText,
   FolderTree,
   History,
@@ -63,6 +64,7 @@ const NAV: { group: AdminKey; items: NavItem[] }[] = [
     group: 'nav.content',
     items: [
       { to: '/admin/articole', label: 'nav.posts', icon: FileText },
+      { to: '/admin/carti', label: 'nav.books', icon: BookOpen },
       { to: '/admin/categorii', label: 'nav.categories', icon: FolderTree },
       { to: '/admin/media', label: 'nav.media', icon: Images },
     ],
@@ -79,8 +81,8 @@ const NAV: { group: AdminKey; items: NavItem[] }[] = [
   {
     group: 'nav.system',
     items: [
-      { to: '/admin/setari', label: 'nav.settings', icon: Settings, badge: (o) => (o.mail.production && !o.mail.configured ? 1 : 0) },
-      { to: '/admin/jurnal', label: 'nav.log', icon: History },
+      { to: '/admin/setari', label: 'nav.settings', icon: Settings, badge: (o) => (o.mail.configured ? 0 : 1) },
+      { to: '/admin/jurnal', label: 'nav.log', icon: History, badge: (o) => o.errors.unseen },
     ],
   },
 ];

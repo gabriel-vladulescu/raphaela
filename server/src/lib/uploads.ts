@@ -10,6 +10,8 @@ const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'imag
 
 /** Longest side of a stored image: 1080p, the largest the site shows (the 1192px-wide post banner, sharp on dense screens). */
 export const MAX_IMAGE_SIDE = 1920;
+/** Profile pictures' file names start with it. */
+export const AVATAR_PREFIX = 'avatar-';
 
 /**
  * Saves an uploaded image as WebP under the uploads folder and returns its URL (/uploads/<prefix><random>.webp).

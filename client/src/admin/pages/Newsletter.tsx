@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { CalendarDays, Mail, MailX, Send, Trash2, Users, Zap } from 'lucide-react';
+import { BookOpen, Mail, MailX, Send, Trash2, Users } from 'lucide-react';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
 import type { Subscriber } from '@/admin/types';
@@ -14,7 +14,7 @@ type Status = (typeof STATUSES)[number];
 interface SubscriberList {
   subscribers: Subscriber[];
   hasMore: boolean;
-  counts: Record<Status | 'instant' | 'weekly', number>;
+  counts: Record<Status | 'booksOnly', number>;
   enabled: boolean;
   mail: boolean;
 }
@@ -86,8 +86,7 @@ export function NewsletterPage() {
       {data && (
         <div className="adm-kpis">
           <Kpi icon={Users} label={t('newsletter.active')} value={formatNumber(data.counts.active)} />
-          <Kpi icon={Zap} label={t('newsletter.instant')} value={formatNumber(data.counts.instant)} />
-          <Kpi icon={CalendarDays} label={t('newsletter.weekly')} value={formatNumber(data.counts.weekly)} />
+          <Kpi icon={BookOpen} label={t('newsletter.booksOnly')} value={formatNumber(data.counts.booksOnly)} />
           <Kpi icon={MailX} label={t('newsletter.unsubscribed')} value={formatNumber(data.counts.unsubscribed)} />
         </div>
       )}
@@ -119,7 +118,7 @@ export function NewsletterPage() {
               <thead>
                 <tr>
                   <th scope="col">{t('newsletter.email')}</th>
-                  <th scope="col">{t('newsletter.frequency')}</th>
+                  <th scope="col">{t('newsletter.gets')}</th>
                   <th scope="col">{t('newsletter.since')}</th>
                   <th scope="col" className="is-num">
                     <Send size={14} aria-label={t('newsletter.received')} />
@@ -136,8 +135,9 @@ export function NewsletterPage() {
                       <span className="adm-cell-title">{s.email}</span>
                       {s.account && <span className="adm-muted adm-small">{t('newsletter.account', { name: s.account })}</span>}
                     </th>
-                    <td data-label={t('newsletter.frequency')}>
-                      <Badge tone={s.frequency === 'instant' ? 'accent' : 'neutral'}>{t(`newsletter.${s.frequency}` as AdminKey)}</Badge>{' '}
+                    <td data-label={t('newsletter.gets')}>
+                      {s.allPosts && <Badge tone="accent">{t('newsletter.allPosts')}</Badge>}{' '}
+                      {s.books && <span className="adm-small">{s.books}</span>}{' '}
                       <span className="adm-muted adm-small">{s.lang.toUpperCase()}</span>
                     </td>
                     <td data-label={t('newsletter.since')} className="adm-nowrap">

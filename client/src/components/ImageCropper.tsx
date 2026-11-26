@@ -159,9 +159,8 @@ export function ImageCropper(props: {
   const working = busy || rendering;
 
   return (
-    <Modal title={props.title} onClose={working ? undefined : props.onCancel} className={`crop-modal${round ? ' crop-modal-round' : ''}`}>
+    <Modal title={props.title} onClose={working ? undefined : props.onCancel} className={`crop-modal${round ? ' crop-modal-round' : ''}`} head>
       <div className="modal-body">
-        <h2>{props.title}</h2>
         <p className="muted small">{t('crop.hint')}</p>
         <div
           ref={frameRef}

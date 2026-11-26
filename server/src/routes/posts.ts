@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
 import { loadCategoryIndex } from '@/lib/categories';
-import { parseId, requireUser } from '@/lib/guards';
+import { canWrite, parseId, requireUser, requireWriter } from '@/lib/guards';
 import { likeCount, setLike } from '@/lib/likes';
-import { escapeLike, loadPostPage, loadPreviewPage, postSelect, toPostSummary, VISIBLE_POST } from '@/lib/posts';
-import { popularTags } from '@/lib/tags';
+import { escapeLike, IS_POST, loadPostPage, loadPreviewPage, postPath, postSelect, toPostSummary, VISIBLE_POST, visibleTo } from '@/lib/posts';
+import type { SessionUser } from '@/lib/session';
+import { createTag, findTag, popularTags } from '@/lib/tags';
 import { keepVisitor } from '@/lib/visitor';
 
 interface ListQuery {
@@ -65,7 +66,11 @@ const postRoutes: FastifyPluginAsync = async (app) => {
         params.push(idList);
       }
 
-      // The home page (nothing narrowed): the posts an administrator featured come first, the latest featured on top.
+      // The journal is the articles: the books' chapters are in the books. A search finds both, and so do a tag
+      // (both have tags) and saved ones (ids).
+      if (!q?.trim() && ids === undefined && !tag) where.push(IS_POST);
+
+      // The journal (nothing narrowed): the posts an administrator featured come first, the latest featured on top.
       const home = !q && !category && !tag && ids === undefined;
       const [rows] = await db.query<RowDataPacket[]>(
         `${postSelect()} WHERE ${where.join(' AND ')}
@@ -76,16 +81,37 @@ const postRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // Authors can also open their own drafts and scheduled posts (preview); owners anything, deleted posts too.
+  /**
+   * Where a slug leads now, when it isn't a post's (or chapter's) own any more: a chapter under its book, or the new
+   * address of a renamed one (an old one: shared links, search engines). Null: nowhere.
+   */
+  async function movedTo(slug: string, user: SessionUser | null) {
+    const [rows] = await db.query<RowDataPacket[]>(
+      `SELECT p.slug, bk.slug AS book_slug FROM posts p LEFT JOIN books bk ON bk.id = p.book_id
+        WHERE (p.slug = ? OR p.id = (SELECT r.post_id FROM post_redirects r WHERE r.old_slug = ?)) AND ${visibleTo(user)}
+        ORDER BY p.slug = ? DESC LIMIT 1`,
+      [slug, slug, slug],
+    );
+    return rows[0] ? postPath(rows[0].slug as string, (rows[0].book_slug as string | null) ?? null) : null;
+  }
+
+  // A post. Authors can also open their own drafts and scheduled posts (preview); owners anything, deleted posts
+  // too. A chapter's slug, or an old address: `moved`, with where to go.
   app.get<{ Params: { slug: string } }>('/posts/:slug', async (req, reply) => {
     const page = await loadPostPage(db, req.params.slug, req.user);
     if (page) return { post: page.post };
-    // An old address: the page goes to the new one.
-    const [moved] = await db.query<RowDataPacket[]>(
-      `SELECT p.slug FROM post_redirects r JOIN posts p ON p.id = r.post_id WHERE r.old_slug = ? AND ${VISIBLE_POST}`,
-      [req.params.slug],
-    );
-    if (moved[0]) return reply.code(404).send({ error: 'moved', slug: moved[0].slug });
+    const path = await movedTo(req.params.slug, req.user);
+    if (path) return reply.code(404).send({ error: 'moved', path });
+    return reply.code(404).send({ error: 'not_found' });
+  });
+
+  // A chapter, under its book (the same page as a post's, with the book's contents). Moved (a renamed chapter,
+  // or one moved to another book): `moved`, with where to go.
+  app.get<{ Params: { book: string; slug: string } }>('/books/:book/chapters/:slug', async (req, reply) => {
+    const page = await loadPostPage(db, req.params.slug, req.user, req.params.book);
+    if (page) return { post: page.post };
+    const path = await movedTo(req.params.slug, req.user);
+    if (path) return reply.code(404).send({ error: 'moved', path });
     return reply.code(404).send({ error: 'not_found' });
   });
 
@@ -97,24 +123,59 @@ const postRoutes: FastifyPluginAsync = async (app) => {
     return { post: page.post };
   });
 
-  // Tags: the most used (with their public posts), or those matching `q` (the editor's suggestions).
-  app.get<{ Querystring: { q?: string; limit: number } }>(
+  // Tags: the most used (with their public posts), or those matching `q`. `all`, for writers (the editor's picker):
+  // those without public posts too.
+  app.get<{ Querystring: { q?: string; limit: number; all?: boolean } }>(
     '/tags',
     {
       schema: {
         querystring: {
           type: 'object',
-          properties: { q: { type: 'string', maxLength: 60 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
+          properties: {
+            q: { type: 'string', maxLength: 60 },
+            limit: { type: 'integer', minimum: 1, maximum: 300, default: 30 },
+            all: { type: 'boolean' },
+          },
         },
       },
     },
-    async (req) => ({ tags: await popularTags(db, req.query.q?.trim() || undefined, req.query.limit) }),
+    async (req) => {
+      const all = Boolean(req.query.all && req.user && canWrite(req.user));
+      return { tags: await popularTags(db, req.query.q?.trim() || undefined, all ? req.query.limit : Math.min(req.query.limit, 100), all) };
+    },
+  );
+
+  // A new tag (the editor's picker): its name in shape ("full-moon"), a colour and a sign. One with the same words
+  // is there already: that one comes back (200), as it is.
+  app.post<{ Body: { name: string; color?: string | null; icon?: string | null } }>(
+    '/tags',
+    {
+      preHandler: requireWriter,
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 80 },
+            color: { type: ['string', 'null'], maxLength: 16 },
+            icon: { type: ['string', 'null'], maxLength: 16 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const made = await createTag(db, req.body);
+      if (!made) return reply.code(400).send({ error: 'tag_name' });
+      return reply.code(made.created ? 201 : 200).send(made);
+    },
   );
 
   app.get<{ Params: { slug: string } }>('/tags/:slug', async (req, reply) => {
-    const [rows] = await db.execute<RowDataPacket[]>('SELECT name, slug FROM tags WHERE slug = ?', [req.params.slug]);
-    if (!rows[0]) return reply.code(404).send({ error: 'not_found' });
-    return { tag: { name: rows[0].name as string, slug: rows[0].slug as string } };
+    const tag = await findTag(db, req.params.slug);
+    if (!tag) return reply.code(404).send({ error: 'not_found' });
+    return { tag };
   });
 
   // Likes are public: an account's, or a guest's browser's (lib/likes.ts). Crawlers and scripts can't like.

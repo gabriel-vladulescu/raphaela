@@ -20,9 +20,9 @@ const KINDS = {
   reactions: ['post_reaction'],
   views: ['views'],
   milestones: ['milestone'],
-  support: ['support'],
+  support: ['support', 'support_reply'],
   reports: ['report'],
-  accounts: ['account_due'],
+  accounts: ['account_due', 'cleanup_due'],
   held: ['comment_held'],
 } as const;
 type Kind = keyof typeof KINDS;

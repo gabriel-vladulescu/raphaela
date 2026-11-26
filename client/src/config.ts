@@ -31,6 +31,8 @@ export interface PublicSettings {
   maintenance: { message: string } | null;
   newsletter: boolean;
   commentsRequireVerifiedEmail: boolean;
+  /** Following authors (Follow, Settings' list): only where the site has more than one author. */
+  follow: boolean;
   setupNeeded: boolean;
 }
 
@@ -54,6 +56,7 @@ export const siteSettings: PublicSettings = {
   maintenance: null,
   newsletter: true,
   commentsRequireVerifiedEmail: false,
+  follow: false,
   setupNeeded: false,
   ...injected.settings,
 };

@@ -47,7 +47,7 @@ function useI18nValue() {
       (messages[lang][key] ?? ro[key] ?? key).replace(/\{(\w+)\}/g, (match, name: string) => String(vars?.[name] ?? match));
 
     /** "1 răspuns / 3 răspunsuri / 20 de răspunsuri" in Romanian, "1 reply / 3 replies" in English. */
-    const plural = (base: 'comments.replies' | 'post.views' | 'follow.count' | 'notif.comments' | 'notif.likes' | 'stats.visitorsN' | 'stats.comparedWith', n: number) => {
+    const plural = (base: 'comments.replies' | 'post.views' | 'follow.count' | 'notif.comments' | 'notif.likes' | 'stats.visitorsN' | 'stats.comparedWith' | 'books.count' | 'journal.count', n: number) => {
       const romanianDe = lang === 'ro' && n !== 0 && !(n % 100 >= 1 && n % 100 <= 19);
       const form = n === 1 ? 'one' : romanianDe ? 'other' : 'few';
       return t(`${base}.${form}`, { n: new Intl.NumberFormat(locale).format(n) });

@@ -36,10 +36,16 @@ interface Reactions {
   mine: string[];
 }
 
-function toComment(row: RowDataPacket, reactions: Reactions = { reactions: {}, mine: [] }) {
+/** Replies a page of threads brings under each thread's first comment; the rest come when asked (REPLY_PAGE at a
+ *  time, GET /comments/:id/replies), as do the replies to replies. A long discussion never arrives whole. */
+const REPLY_PREVIEW = 3;
+
+function toComment(row: RowDataPacket, reactions: Reactions = { reactions: {}, mine: [] }, replyCount = 0) {
   return {
     id: row.id as number,
     parentId: row.parent_id as number | null,
+    /** Its replies (direct ones) the viewer can see; only some may have been sent. */
+    replyCount,
     body: row.body as string,
     createdAt: row.created_at as Date,
     editedAt: row.edited_at as Date | null,
@@ -81,6 +87,26 @@ async function loadReactions(db: Pool, where: string, params: unknown[], viewerI
 }
 
 /** A post the viewer can see, with whether its comments are on. */
+/** What a viewer sees of a discussion: owners everything (deleted comments greyed out); others the live comments, and
+ *  those waiting for approval only when they wrote them. */
+const liveFor = (user: SessionUser | null | undefined) => (alias: string) =>
+  user?.role === 'owner' ? '' : `AND ${alias}.deleted_at IS NULL AND (${alias}.held_at IS NULL OR ${alias}.user_id = ${Number(user?.id ?? 0)})`;
+
+/** How many replies each comment has (direct ones), as the viewer sees them. */
+async function replyCounts(db: Pool, ids: number[], live: (alias: string) => string) {
+  if (ids.length === 0) return new Map<number, number>();
+  const [rows] = await db.query<RowDataPacket[]>(`SELECT r.parent_id, COUNT(*) AS n FROM comments r WHERE r.parent_id IN (?) ${live('r')} GROUP BY r.parent_id`, [ids]);
+  return new Map(rows.map((row) => [row.parent_id as number, Number(row.n)]));
+}
+
+/** Comments as the client gets them: each with its reactions (the viewer's own marked) and its number of replies. */
+async function toComments(db: Pool, rows: RowDataPacket[], viewerId: number, live: (alias: string) => string) {
+  const ids = rows.map((row) => row.id as number);
+  if (ids.length === 0) return [];
+  const [reactions, counts] = await Promise.all([loadReactions(db, 'm.id IN (?)', [ids], viewerId), replyCounts(db, ids, live)]);
+  return rows.map((row) => toComment(row, reactions.get(row.id as number), counts.get(row.id as number) ?? 0));
+}
+
 async function findPost(db: Pool, user: SessionUser | null, postId: number) {
   const [rows] = await db.query<RowDataPacket[]>(`SELECT p.id, p.comments_enabled FROM posts p WHERE p.id = ? AND ${visibleTo(user)}`, [postId]);
   return rows[0] ? { id: rows[0].id as number, commentsEnabled: Boolean(rows[0].comments_enabled) } : null;
@@ -142,8 +168,9 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // A page of threads (a top-level comment with all its replies), "top" (most reactions and replies) or "new"
-  // first. While comments are off, nobody sees them (they come back if the author turns comments on again).
+  // A page of threads, "top" (most reactions and replies) or "new" first: each thread's first comment with its first
+  // replies (REPLY_PREVIEW, oldest first), each with how many replies it has; the rest come when asked
+  // (/comments/:id/replies). While comments are off, nobody sees them (they come back if the author turns them on).
   app.get<{ Params: { id: string }; Querystring: { sort: 'top' | 'new'; offset: number; limit: number } }>(
     '/posts/:id/comments',
     {
@@ -170,8 +197,7 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
       // with it, so a live comment's thread root is live too.)
       // Comments waiting for approval: only their writer's (and administrators') to see.
       const viewerId = Number(req.user?.id ?? 0);
-      const live = (alias: string) =>
-        req.user?.role === 'owner' ? '' : `AND ${alias}.deleted_at IS NULL AND (${alias}.held_at IS NULL OR ${alias}.user_id = ${viewerId})`;
+      const live = liveFor(req.user);
       const [[count]] = await db.execute<RowDataPacket[]>(
         'SELECT COUNT(*) AS n FROM comments WHERE post_id = ? AND deleted_at IS NULL AND held_at IS NULL',
         [post.id],
@@ -200,13 +226,52 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
       const page = { enabled: true, requireVerifiedEmail, total: Number(count.n), order, hasMore: roots.length > limit };
       if (order.length === 0) return { ...page, comments: [] };
 
+      // The threads' first comments, and the first replies to each.
       const [rows] = await db.query<RowDataPacket[]>(
-        `${COMMENT_SELECT} WHERE m.post_id = ? AND m.root_id IN (?) ${live('m')} ORDER BY m.created_at, m.id`,
-        [post.id, order],
+        `${COMMENT_SELECT}
+          WHERE m.id IN (?)
+             OR m.id IN (SELECT first.id FROM (
+                  SELECT r.id, ROW_NUMBER() OVER (PARTITION BY r.parent_id ORDER BY r.created_at, r.id) AS n
+                    FROM comments r WHERE r.parent_id IN (?) ${live('r')}
+                ) first WHERE first.n <= ?)
+          ORDER BY m.created_at, m.id`,
+        [order, order, REPLY_PREVIEW],
       );
-      const ids = rows.map((row) => row.id as number);
-      const reactions = await loadReactions(db, 'm.id IN (?)', [ids], req.user?.id ?? 0);
-      return { ...page, comments: rows.map((row) => toComment(row, reactions.get(row.id))) };
+      return { ...page, comments: await toComments(db, rows, viewerId, live) };
+    },
+  );
+
+  // A comment's replies (direct ones, oldest first), a page at a time: "view more replies" under it.
+  app.get<{ Params: { id: string }; Querystring: { offset: number; limit: number } }>(
+    '/comments/:id/replies',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            offset: { type: 'integer', minimum: 0, default: 0 },
+            limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const live = liveFor(req.user);
+      // The comment, as this viewer may see it, on a post they can see with comments on.
+      const [found] = await db.query<RowDataPacket[]>(
+        `SELECT m.id, m.post_id FROM comments m WHERE m.id = ? ${live('m')}`,
+        [parseId(req.params.id) ?? 0],
+      );
+      const parent = found[0];
+      const post = parent ? await findPost(db, req.user, parent.post_id as number) : null;
+      if (!parent || !post?.commentsEnabled) return reply.code(404).send({ error: 'not_found' });
+      const { offset, limit } = req.query;
+      const [rows] = await db.query<RowDataPacket[]>(
+        `${COMMENT_SELECT} WHERE m.parent_id = ? ${live('m')} ORDER BY m.created_at, m.id LIMIT ? OFFSET ?`,
+        [parent.id, limit + 1, offset],
+      );
+      const total = (await replyCounts(db, [parent.id as number], live)).get(parent.id as number) ?? 0;
+      return { replies: await toComments(db, rows.slice(0, limit), Number(req.user?.id ?? 0), live), total, hasMore: rows.length > limit };
     },
   );
 
@@ -254,7 +319,7 @@ const commentRoutes: FastifyPluginAsync = async (app) => {
         parent = answered;
       }
 
-      // The comment filters (admin panel → Setări): administrators and authors aren't checked.
+      // The comment filters (admin panel → Settings): administrators and authors aren't checked.
       const user = req.user!;
       let held: string | null = null;
       if (user.role === 'member') {

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft, CircleAlert } from 'lucide-react';
+import { EmailOffModal, isEmailOff } from '@/components/EmailOffModal';
 import { GoogleButton } from '@/components/GoogleButton';
 import { TERMS_PATH } from '@/config';
 import { useAuth } from '@/context/auth';
@@ -66,6 +67,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [mailOff, setMailOff] = useState(false);
   const [error, setError] = useState(params.get('error') === 'google' ? t('auth.googleFailed') : '');
   const [block, setBlock] = useState<Block | null>(() => blockOf(params.get('error'), (key) => params.get(key)));
   const agreeRef = useRef<HTMLInputElement>(null);
@@ -89,16 +91,18 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setError('');
     setBlock(null);
     try {
-      const result = await api<{ ok: true; verificationSent?: boolean }>(isLogin ? '/auth/login' : '/auth/register', {
+      await api(isLogin ? '/auth/login' : '/auth/register', {
         method: 'POST',
         body: isLogin ? { email, password } : { name, email, password, acceptTerms: agreed, lang },
       });
       await refresh();
-      if (result.verificationSent) showToast({ message: t('verify.sent', { email }) }, 10_000);
+      if (!isLogin) showToast({ message: t('verify.sent', { email }) }, 10_000);
       navigate(next, { replace: true });
     } catch (err) {
       const blocked = err instanceof ApiError ? blockOf(err.code, (key) => err.data[key]) : null;
       if (blocked) setBlock(blocked);
+      // Signing up emails the link that confirms the address: without the site's email, no account (Google still works).
+      else if (isEmailOff(err)) setMailOff(true);
       else setError(errorMessage(err));
       setSubmitting(false);
     }
@@ -122,6 +126,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
 
         {block && <BlockedNotice block={block} />}
+        {mailOff && <EmailOffModal detail={t('mail.offSignup')} onClose={() => setMailOff(false)} />}
 
         {!isLogin && (
           <div className={`auth-terms${agreeError && !agreed ? ' is-missing' : ''}`}>

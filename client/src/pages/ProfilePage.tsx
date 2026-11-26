@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Avatar';
 import { DataExportCard } from '@/components/DataExportCard';
 import { DeleteAccountCard } from '@/components/DeleteAccountCard';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
+import { PageBand } from '@/components/PageBand';
 import { ImageCropper } from '@/components/ImageCropper';
 import type { CropSpec } from '@/components/ImageCropper';
 import { AlertModal } from '@/components/Modal';
@@ -154,12 +155,7 @@ export function ProfilePage() {
     <div className={`container profile-page${single ? ' is-single' : ''}`}>
       <HeaderBackLink />
       <div className="profile-shell">
-        <section className="page-hero">
-          <div className="page-hero-text">
-            <h1>{t('profile.title')}</h1>
-            <p className="muted">{t('profile.subtitle')}</p>
-          </div>
-        </section>
+        <PageBand title={t('profile.title')} line={t('profile.subtitle')} />
 
         <div className={`profile-layout${single ? ' is-single' : ''}`}>
           <div className="profile-main">
@@ -221,14 +217,14 @@ export function ProfilePage() {
                     </>
                   ) : usernameStatus === 'available' ? (
                     <>
-                      <Check size={14} aria-hidden="true" /> {t('profile.usernameAvailable', { url: `/${form.username}/articole-salvate` })}
+                      <Check size={14} aria-hidden="true" /> {t('profile.usernameAvailable', { url: `/${form.username}` })}
                     </>
                   ) : usernameProblem ? (
                     <>
                       <X size={14} aria-hidden="true" /> {t(`error.${usernameProblem}`)}
                     </>
                   ) : (
-                    t('profile.usernameHint', { url: `/${form.username || me.username}/articole-salvate` })
+                    t('profile.usernameHint', { url: `/${form.username || me.username}` })
                   )}
                 </span>
               </label>
@@ -289,6 +285,7 @@ export function ProfilePage() {
               <h2 className="side-title">{t('profile.preview')}</h2>
               <AuthorSignature
                 author={{ name: form.name.trim() || me.name, picture: me.picture, occupation: form.occupation.trim() || null, quote: form.quote.trim() || null }}
+                label={t('post.aboutAuthor')}
               />
             </aside>
           )}

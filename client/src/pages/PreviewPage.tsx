@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { CalendarClock, Clock, Eye } from 'lucide-react';
 import { AuthorSignature } from '@/components/AuthorSignature';
+import { BannerCredit } from '@/components/BannerCredit';
+import { TagChip } from '@/components/TagChip';
 import { site } from '@/config';
 import { api, ApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { Post } from '@/lib/types';
+import { postPath } from '@/lib/paths';
 
 /**
  * A post opened by its preview link (/previzualizare/:token), which its author can send to someone before it goes
@@ -66,7 +69,7 @@ export function PreviewPage() {
         </span>
         <span className="muted">{t(live ? 'preview.live' : 'preview.notice')}</span>
         {live && (
-          <Link to={`/posts/${post.slug}`} className="btn btn-secondary btn-sm">
+          <Link to={postPath(post)} className="btn btn-secondary btn-sm">
             {t('preview.open')}
           </Link>
         )}
@@ -74,7 +77,10 @@ export function PreviewPage() {
 
       <header className={`post-hero${post.bannerUrl ? '' : ' is-plain'}`}>
         {post.bannerUrl ? (
-          <img className="post-hero-img" src={post.bannerUrl} alt="" />
+          <>
+            <img className="post-hero-img" src={post.bannerUrl} alt="" />
+            <BannerCredit credit={post.bannerCredit} />
+          </>
         ) : (
           <span className="post-hero-glyph" aria-hidden="true">
             {post.category?.icon || '✦'}
@@ -89,7 +95,7 @@ export function PreviewPage() {
               </span>
             </nav>
           )}
-          <h1 className="post-title">{post.title}</h1>
+          <h1 className="post-title">{post.title || t('post.untitled')}</h1>
         </div>
       </header>
 
@@ -110,14 +116,12 @@ export function PreviewPage() {
         {post.tags.length > 0 && (
           <div className="post-tags">
             {post.tags.map((tag) => (
-              <span key={tag.slug} className="chip">
-                #{tag.name}
-              </span>
+              <TagChip key={tag.slug} tag={tag} />
             ))}
           </div>
         )}
         <div className="card side-card preview-author">
-          <AuthorSignature author={post.author} />
+          <AuthorSignature author={post.author} label={t('post.aboutAuthor')} side />
         </div>
       </div>
     </article>

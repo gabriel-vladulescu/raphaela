@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+import { countAuthors } from '@/lib/follows';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
 import { parseId } from '@/lib/guards';
 import { VISIBLE_POST } from '@/lib/posts';
 import { logoImage, postShareImage, profileShareImage, profileShareVersion, shareImageVersion, siteShareImage } from '@/seo/og';
-import { findPerson } from '@/lib/people';
+import { findPerson, isPublicList, PERSON_LISTS } from '@/lib/people';
+import type { PersonList } from '@/lib/people';
 import { publicIdentity } from '@/lib/siteIdentity';
 import { publicSiteSettings } from '@/lib/siteSettings';
 import { BRAND_VERSION } from '@/seo/brand';
@@ -28,7 +30,10 @@ const seoRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // What every page needs (window.__SITE__ comes with the page; this is for after a change in the admin panel).
-  app.get('/site', async () => ({ identity: publicIdentity(), settings: publicSiteSettings(), brand: BRAND_VERSION }));
+  app.get('/site', async () => {
+    await countAuthors(db);
+    return { identity: publicIdentity(), settings: publicSiteSettings(), brand: BRAND_VERSION };
+  });
 
   // A post's share image (link previews): its banner with the title, category and site name over it.
   app.get<{ Params: { file: string }; Querystring: { v?: string } }>('/og/posts/:file', async (req, reply) => {
@@ -51,12 +56,12 @@ const seoRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/og/logo.png', async (_req, reply) => sendImage(reply, await logoImage(), 'image/png', false));
 
-  // A person's list (/{username}/articole, /{username}/articole-salvate), when it's public.
+  // A person's list (/{username}/jurnal, /carti, /salvate), when it's public.
   app.get<{ Params: { username: string; file: string }; Querystring: { v?: string } }>('/og/u/:username/:file', async (req, reply) => {
-    const list = req.params.file.replace(/\.jpg$/, '');
-    if (list !== 'articole' && list !== 'articole-salvate') return reply.code(404).send({ error: 'not_found' });
+    const list = req.params.file.replace(/\.jpg$/, '') as PersonList;
+    if (!PERSON_LISTS.includes(list)) return reply.code(404).send({ error: 'not_found' });
     const person = await findPerson(db, req.params.username);
-    if (!person || !(list === 'articole' ? person.publicArticles : person.publicSaved)) return reply.code(404).send({ error: 'not_found' });
+    if (!person || !isPublicList(person, list)) return reply.code(404).send({ error: 'not_found' });
     return sendImage(reply, await profileShareImage(person, list), 'image/jpeg', req.query.v === profileShareVersion(person, list));
   });
 };

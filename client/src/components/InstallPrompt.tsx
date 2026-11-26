@@ -1,21 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
 import { Share } from 'lucide-react';
 import { site } from '@/config';
 import { track } from '@/lib/analytics';
 import { useI18n } from '@/lib/i18n';
+import { isIOSSafari, promptInstall, useInstallWay } from '@/lib/install';
 
 const VISITS = 'pwa.visits';
 const COUNTED = 'pwa.counted'; // per tab session, so a visit counts once
 const LATER = 'pwa.laterAt';
 const LATER_MS = 30 * 24 * 60 * 60 * 1000;
 const DELAY_MS = 20_000;
-
-/** Chrome's and Edge's install event. */
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
 
 function store<T>(read: () => T, fallback: T): T {
   try {
@@ -36,45 +31,33 @@ const countVisit = () =>
   }, 0);
 
 const askedRecently = () => store(() => Date.now() - Number(localStorage.getItem(LATER) ?? 0) < LATER_MS, true);
-const installed = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
-/** Safari on an iPhone or iPad: no install prompt there, so it gets the steps instead. */
-const iosSafari = () => {
-  const ua = navigator.userAgent;
-  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  return ios && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
-};
 
 /**
  * From the second visit, after a little reading: offers to add the site to the home screen. Chrome and Edge show
- * their own install dialog; on iPhones it explains the two taps. Never when already installed, and not again for a
- * month after "Not now".
+ * their own install dialog (lib/install.ts); on iPhones (Safari) it explains the two taps. Never when already
+ * installed, and not again for a month after "Not now". (The account sheet has a button for it any time.)
  */
 export function InstallPrompt() {
   const { t } = useI18n();
   const { pathname } = useLocation();
+  const way = useInstallWay();
+  const [eligible, setEligible] = useState(false);
   const [mode, setMode] = useState<'prompt' | 'ios' | null>(null);
-  const deferred = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    const visit = countVisit();
-    if (installed() || visit < 2 || askedRecently()) return;
-    let timer = 0;
-    const onPrompt = (event: Event) => {
-      event.preventDefault(); // shown on our terms, not the browser's mini bar
-      deferred.current = event as BeforeInstallPromptEvent;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setMode('prompt'), DELAY_MS);
-    };
-    const onInstalled = () => setMode(null);
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', onInstalled);
-    if (iosSafari()) timer = window.setTimeout(() => setMode('ios'), DELAY_MS);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('beforeinstallprompt', onPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
+    setEligible(countVisit() >= 2 && !askedRecently());
   }, []);
+
+  // Once the browser offers its dialog (or on an iPhone's Safari), after a little reading; gone once it's done.
+  useEffect(() => {
+    const offer = way === 'prompt' ? 'prompt' : way === 'ios' && isIOSSafari() ? 'ios' : null;
+    if (!eligible || !offer) {
+      setMode(null);
+      return;
+    }
+    const timer = window.setTimeout(() => setMode(offer), DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [eligible, way]);
 
   // Not over sign-in and the work pages.
   const shown = mode !== null && !/^\/(login|register|editor|admin)/.test(pathname);
@@ -85,17 +68,15 @@ export function InstallPrompt() {
 
   const later = () => {
     store(() => localStorage.setItem(LATER, String(Date.now())), undefined);
+    setEligible(false);
     setMode(null);
   };
 
   const install = async () => {
-    const event = deferred.current;
-    if (!event) return;
-    await event.prompt();
-    const { outcome } = await event.userChoice;
-    track(outcome === 'accepted' ? 'install_accepted' : 'install_dismissed');
-    deferred.current = null;
-    if (outcome === 'accepted') setMode(null);
+    const accepted = await promptInstall();
+    if (accepted === null) return;
+    track(accepted ? 'install_accepted' : 'install_dismissed');
+    if (accepted) setMode(null);
     else later();
   };
 

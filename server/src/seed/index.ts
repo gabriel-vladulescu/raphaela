@@ -29,8 +29,9 @@ import {
 } from '@/seed/content';
 import type { AccountKey, SeedCategory } from '@/seed/content';
 import { assignUsername } from '@/lib/usernames';
+import { BOOKS, chapterHtml, COVER_TEMPLATES } from '@/seed/books';
 
-type SeedTable = 'users' | 'categories' | 'posts';
+type SeedTable = 'users' | 'categories' | 'posts' | 'books' | 'cover_templates';
 
 const EMAIL_DOMAIN = '@seed.local';
 const FILE_PREFIX = 'seed-';
@@ -64,6 +65,14 @@ async function clear(db: Pool, quiet = false) {
     : [[]];
   const postIds = [...new Set([...(await tracked(db, 'posts')), ...authored.map((row) => row.id as number)])];
   if (postIds.length) await db.query('DELETE FROM posts WHERE id IN (?)', [postIds]);
+
+  // Seed books (and any a seed account started), and the saved cover designs.
+  const bookIds = await tracked(db, 'books');
+  if (bookIds.length || userIds.length) {
+    await db.query('DELETE FROM books WHERE id IN (?) OR author_id IN (?)', [bookIds.length ? bookIds : [0], userIds.length ? userIds : [0]]);
+  }
+  const templateIds = await tracked(db, 'cover_templates');
+  if (templateIds.length) await db.query('DELETE FROM cover_templates WHERE id IN (?)', [templateIds]);
 
   // Categories deepest-first, so children go before their parents.
   const index = await loadCategoryIndex(db);
@@ -193,6 +202,94 @@ async function seed(db: Pool) {
     if (publishedAt && publishedAt.getTime() <= now) visiblePosts.push({ id: result.insertId, publishedAt, title: post.title });
   }
 
+  // Books: each chapter a post, published every few days; the next ones scheduled.
+  let chapterCount = 0;
+  const chapterIds: Record<string, number[]> = {};
+  for (const book of BOOKS) {
+    const first = book.lastDaysAgo + (book.published - 1) * book.every;
+    const [result] = await db.execute<ResultSetHeader>(
+      `INSERT INTO books (author_id, category_id, title, slug, description, cover, planned_chapters, completed_at, published_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        users[book.author],
+        categories[book.subject] ?? null,
+        book.title,
+        await uniqueSlug(db, 'books', book.title),
+        book.description,
+        JSON.stringify(book.cover),
+        book.planned,
+        book.complete ? daysAgo(book.lastDaysAgo) : null,
+        daysAgo(first + 2),
+        daysAgo(first + 2),
+        daysAgo(book.lastDaysAgo),
+      ],
+    );
+    chapterIds[book.key] = [];
+    await track(db, 'books', result.insertId);
+    for (const [index, title] of book.chapters.slice(0, book.published + book.scheduled).entries()) {
+      const publishedAt = daysAgo(first - index * book.every);
+      const html = sanitizePostHtml(chapterHtml(book, index));
+      const text = htmlToText(html);
+      const out = publishedAt.getTime() <= now;
+      const [chapter] = await db.execute<ResultSetHeader>(
+        // A chapter has no category: its book has one.
+        `INSERT INTO posts (author_id, title, slug, excerpt, content_html, content_text, reading_minutes, status, published_at,
+                            book_id, chapter_no, created_at, updated_at, announced_at, newsletter_at)
+         VALUES (?, ?, ?, '', ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          users[book.author],
+          title,
+          await uniqueSlug(db, 'posts', title),
+          html,
+          text,
+          readingMinutes(text) + 4, // the demo texts are short; real chapters are longer
+          publishedAt,
+          result.insertId,
+          index + 1,
+          daysAgo(first - index * book.every + 1),
+          out ? publishedAt : daysAgo(0.1),
+          out ? publishedAt : null,
+          out ? publishedAt : null,
+        ],
+      );
+      await track(db, 'posts', chapter.insertId);
+      chapterIds[book.key]!.push(chapter.insertId);
+      chapterCount++;
+      if (out) visiblePosts.push({ id: chapter.insertId, publishedAt, title });
+    }
+  }
+  for (const template of COVER_TEMPLATES) {
+    const [result] = await db.execute<ResultSetHeader>('INSERT INTO cover_templates (name, design, created_by, created_at) VALUES (?, ?, ?, ?)', [
+      template.name,
+      JSON.stringify(template.design),
+      users.victor,
+      daysAgo(10),
+    ]);
+    await track(db, 'cover_templates', result.insertId);
+  }
+
+  // Readers part-way through books: Mihai reads most evenings (his streak, his journeys); the others here and there.
+  const hoursAgo = (hours: number) => new Date(now - hours * 3_600_000);
+  const readUpTo = async (userId: number, bookKey: string, finished: number, current: number, at: Date) => {
+    const ids = chapterIds[bookKey] ?? [];
+    for (const [index, id] of ids.slice(0, finished).entries()) {
+      const when = new Date(at.getTime() - (finished - index) * 2 * DAY_MS);
+      await db.execute('INSERT INTO reading_progress (user_id, post_id, progress, updated_at, finished_at) VALUES (?, ?, 100, ?, ?)', [userId, id, when, when]);
+    }
+    if (current > 0 && ids[finished]) {
+      await db.execute('INSERT INTO reading_progress (user_id, post_id, progress, updated_at) VALUES (?, ?, ?, ?)', [userId, ids[finished], current, at]);
+    }
+  };
+  await readUpTo(users.mihai, 'ritmuri', 4, 62, hoursAgo(20));
+  await readUpTo(users.mihai, 'drumul', 4, 35, hoursAgo(30));
+  await readUpTo(users.mihai, 'umbra', 1, 20, hoursAgo(80));
+  for (let day = 1; day <= 6; day++) {
+    await db.execute('INSERT IGNORE INTO reading_days (user_id, day) VALUES (?, ?)', [users.mihai, daysAgo(day).toISOString().slice(0, 10)]);
+  }
+  await readUpTo(users.ioana, 'linistea', 8, 0, hoursAgo(50));
+  await readUpTo(users.ioana, 'casele', 3, 70, hoursAgo(6));
+  await readUpTo(users.elena, 'rugaciuni', 2, 40, hoursAgo(100));
+
   // Likes, bookmarks and comments on published posts
   const members = ACCOUNTS.filter((a) => a.role === 'member').map((a) => users[a.key]);
   const writers = ACCOUNTS.filter((a) => a.role !== 'member').map((a) => users[a.key]);
@@ -297,7 +394,7 @@ async function seed(db: Pool) {
   const scheduled = POSTS.filter((p) => p.status !== 'draft' && p.daysAgo < 0).length;
   const drafts = POSTS.filter((p) => p.status === 'draft').length;
   console.log(
-    `\nSeeded ${ACCOUNTS.length} accounts, ${Object.keys(categories).length} categories, ${POSTS.length} posts ` +
+    `\nSeeded ${ACCOUNTS.length} accounts, ${Object.keys(categories).length} categories, ${BOOKS.length} books (${chapterCount} chapters), ${POSTS.length} posts ` +
       `(${visiblePosts.length} published, ${scheduled} scheduled, ${drafts} draft), ${likes} likes, ` +
       `${comments} comments (${edited} edited, ${deletedIds.size} deleted), ${reactions} comment reactions.`,
   );

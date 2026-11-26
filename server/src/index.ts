@@ -10,7 +10,9 @@ import { config } from '@/config';
 import { connectDb } from '@/db';
 import '@/lib/guards'; // Fastify type augmentation (app.db, req.user)
 import { accountHousekeeping } from '@/lib/accounts';
+import { logError, setErrorLogPool } from '@/lib/errorLog';
 import { loadMailSettings } from '@/lib/mail';
+import { countAuthors } from '@/lib/follows';
 import { newsletterTick } from '@/lib/newsletter';
 import { initSetup } from '@/lib/setup';
 import { loadSiteIdentity } from '@/lib/siteIdentity';
@@ -21,23 +23,25 @@ import { initPush } from '@/lib/push';
 import { ensureUsernames } from '@/lib/usernames';
 import { identify, loadVisitorSalt } from '@/lib/visitor';
 import authRoutes from '@/routes/auth';
+import bookRoutes from '@/routes/books';
 import categoryRoutes from '@/routes/categories';
 import commentRoutes from '@/routes/comments';
 import feedRoutes from '@/routes/feeds';
 import meRoutes from '@/routes/me';
 import adminRoutes from '@/routes/admin';
 import adminContentRoutes from '@/routes/adminContent';
+import adminHistoryRoutes from '@/routes/adminHistory';
 import followRoutes from '@/routes/follows';
 import inviteRoutes from '@/routes/invites';
 import newsletterRoutes from '@/routes/newsletter';
 import setupRoutes from '@/routes/setup';
 import notificationRoutes from '@/routes/notifications';
 import peopleRoutes from '@/routes/people';
+import writingRoutes from '@/routes/writing';
 import postRoutes from '@/routes/posts';
 import pushRoutes from '@/routes/push';
 import pwaRoutes from '@/routes/pwa';
 import seoRoutes from '@/routes/seo';
-import seriesRoutes from '@/routes/series';
 import settingsRoutes from '@/routes/settings';
 import statsRoutes from '@/routes/stats';
 import supportRoutes from '@/routes/support';
@@ -48,6 +52,7 @@ import { describePage } from '@/seo/page';
 
 const app = Fastify({ logger: true, bodyLimit: 4 * 1024 * 1024, trustProxy: config.trustProxy });
 const db = await connectDb(config.db);
+setErrorLogPool(db); // from here on, errors reach the admin panel's log too
 await ensureUsernames(db); // accounts made before usernames existed
 await loadVisitorSalt(db);
 await initPush(db);
@@ -89,6 +94,7 @@ app.setErrorHandler<FastifyError>((err, req, reply) => {
   const status = err.statusCode ?? 500;
   if (status >= 500) {
     req.log.error(err);
+    logError('request', `${req.method} ${req.url.split('?')[0]!.slice(0, 200)}`, err, req.user?.id ?? null);
     return reply.code(500).send({ error: 'server_error' });
   }
   const code = status === 429 ? 'rate_limited' : status === 413 ? 'file_too_large' : 'request_failed';
@@ -106,7 +112,7 @@ await app.register(
         return reply.code(503).header('Retry-After', '3600').send({ error: 'maintenance' });
       }
     });
-    for (const routes of [authRoutes, meRoutes, postRoutes, categoryRoutes, commentRoutes, uploadRoutes, seoRoutes, trackRoutes, statsRoutes, notificationRoutes, pushRoutes, seriesRoutes, settingsRoutes, supportRoutes, peopleRoutes, adminRoutes, adminContentRoutes, followRoutes, inviteRoutes, newsletterRoutes, setupRoutes]) {
+    for (const routes of [authRoutes, meRoutes, postRoutes, bookRoutes, categoryRoutes, commentRoutes, uploadRoutes, seoRoutes, trackRoutes, statsRoutes, notificationRoutes, pushRoutes, settingsRoutes, supportRoutes, peopleRoutes, writingRoutes, adminRoutes, adminContentRoutes, adminHistoryRoutes, followRoutes, inviteRoutes, newsletterRoutes, setupRoutes]) {
       await api.register(routes);
     }
   },
@@ -141,9 +147,14 @@ if (config.serveClient) {
   });
 }
 
-// New posts are announced (push) once they're public; scheduled ones when their time comes.
+// New posts are announced (push) once they're public; scheduled ones when their time comes. The authors are counted
+// again too (following is only for sites with more than one: lib/follows.ts).
+await countAuthors(db);
 void announceNewPosts(db);
-const announcer = setInterval(() => void announceNewPosts(db), 60_000);
+const announcer = setInterval(() => {
+  void announceNewPosts(db);
+  void countAuthors(db);
+}, 60_000);
 // Every minute: the newsletter's next emails (lib/newsletter.ts).
 const newsletter = setInterval(() => void newsletterTick(db), 60_000);
 app.addHook('onClose', async () => clearInterval(newsletter));
@@ -155,5 +166,8 @@ app.addHook('onClose', async () => {
   clearInterval(announcer);
   clearInterval(purger);
 });
+
+// A failed promise nothing waited for: noted (the admin panel's log), and the server goes on.
+process.on('unhandledRejection', (reason) => logError('process', 'unhandled rejection', reason));
 
 await app.listen({ port: config.port, host: config.host });

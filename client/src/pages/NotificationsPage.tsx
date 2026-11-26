@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AtSign, Check, CheckCheck, Clock, Eye, Flag, Heart, LifeBuoy, MessageCircle, Reply, Share2, SlidersHorizontal, SmilePlus, Sparkles, Trophy, UserX } from 'lucide-react';
+import { Archive, AtSign, Check, CheckCheck, Clock, Eye, Flag, Heart, LifeBuoy, MessageCircle, Reply, Share2, SlidersHorizontal, SmilePlus, Sparkles, Trophy, UserX } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
+import { PageBand } from '@/components/PageBand';
 import { KINDS, NO_FILTER, NotificationFilters } from '@/components/NotificationFilters';
 import type { NotificationFilter, NotificationKind } from '@/components/NotificationFilters';
 import { useAuth } from '@/context/auth';
@@ -30,13 +32,15 @@ interface Notification {
     | 'account_due'
     | 'comment_held'
     | 'mention'
-    | 'followed_post';
+    | 'followed_post'
+    | 'cleanup_due'
+    | 'support_reply';
   /** Likes and shares grouped while unread. */
   times: number;
   /** Shares: the app. */
   detail: string | null;
-  /** Views: the count; milestones: the threshold. Details: shares, the app; reactions, the emoji; milestones,
-   *  comments, likes or views. */
+  /** Views: the count; milestones: the threshold; old data: how many rows. Details: shares, the app; reactions, the
+   *  emoji; milestones, comments, likes or views. */
   value: number | null;
   createdAt: string;
   read: boolean;
@@ -55,7 +59,7 @@ interface Page {
   post: { id: number; title: string } | null;
 }
 
-const ICONS = {
+const ICONS: Record<Notification['type'], LucideIcon> = {
   comment: MessageCircle,
   reply: MessageCircle,
   like: Heart,
@@ -69,9 +73,32 @@ const ICONS = {
   support: LifeBuoy,
   report: Flag,
   account_due: UserX,
+  cleanup_due: Archive,
+  support_reply: LifeBuoy,
   comment_held: Clock,
   mention: AtSign,
   followed_post: Sparkles,
+};
+/** Each kind's name under its text: one per kind (a new kind without a name doesn't compile). */
+const KIND_NAMES: Record<Notification['type'], MessageKey> = {
+  comment: 'notif.kindOne.comment',
+  reply: 'notif.kindOne.reply',
+  like: 'notif.kindOne.like',
+  share: 'notif.kindOne.share',
+  views: 'notif.kindOne.views',
+  new_post: 'notif.kindOne.new_post',
+  comment_reply: 'notif.kindOne.comment_reply',
+  comment_reaction: 'notif.kindOne.comment_reaction',
+  post_reaction: 'notif.kindOne.post_reaction',
+  milestone: 'notif.kindOne.milestone',
+  support: 'notif.kindOne.support',
+  report: 'notif.kindOne.report',
+  account_due: 'notif.kindOne.account_due',
+  cleanup_due: 'notif.kindOne.cleanup_due',
+  support_reply: 'notif.kindOne.support_reply',
+  comment_held: 'notif.kindOne.comment_held',
+  mention: 'notif.kindOne.mention',
+  followed_post: 'notif.kindOne.followed_post',
 };
 const APPS: Record<string, string> = {
   whatsapp: 'WhatsApp',
@@ -131,7 +158,7 @@ function listQuery(filter: NotificationFilter, before: string | null) {
  * the page: that's the buttons, or opening a notification.
  */
 export function NotificationsPage() {
-  const { t, plural, formatDate, timeAgo } = useI18n();
+  const { t, plural, formatDate, formatNumber, timeAgo } = useI18n();
   const { user } = useAuth();
   const role = user?.role ?? 'member';
   const [params, setParams] = useSearchParams();
@@ -254,11 +281,15 @@ export function NotificationsPage() {
         return say('notif.milestone.reached', { count });
       }
       case 'support':
-        return t('notif.support', { email: n.ticket?.email ?? '', title: n.ticket?.title ?? '' });
+        return t(n.detail === 'reply' ? 'notif.supportAnswer' : 'notif.support', { email: n.ticket?.email ?? '', title: n.ticket?.title ?? '' });
+      case 'support_reply':
+        return t('notif.supportReply', { title: n.ticket?.title ?? '' });
       case 'report':
         return n.times === 1 ? say('notif.report') : say('notif.reportMany', { n: n.times });
       case 'account_due':
         return t('notif.accountDue', { name: n.account?.name ?? '' });
+      case 'cleanup_due':
+        return t('notif.cleanupDue', { n: formatNumber(n.value ?? 0) });
       case 'comment_held':
         return n.times === 1 ? say('notif.held') : say('notif.heldMany', { n: n.times });
       case 'mention':
@@ -274,6 +305,8 @@ export function NotificationsPage() {
     if (n.type === 'report') return '/admin/comentarii?filter=reported';
     if (n.type === 'comment_held') return '/admin/comentarii?filter=held';
     if (n.type === 'account_due') return n.account ? `/admin/utilizatori?status=due&id=${n.account.id}` : '/admin/utilizatori?status=due';
+    if (n.type === 'cleanup_due') return '/admin/jurnal?tab=cleanup';
+    if (n.type === 'support_reply') return n.ticket ? `/suport/tichete/${n.ticket.id}` : '/suport/tichete';
     if (!n.post) return '/';
     const discussion = ['comment', 'reply', 'comment_reply', 'comment_reaction', 'post_reaction', 'mention'].includes(n.type);
     return `/posts/${n.post.slug}${discussion ? '#discussion-title' : ''}`;
@@ -300,26 +333,32 @@ export function NotificationsPage() {
   return (
     <div className="container notif-page">
       <HeaderBackLink />
-      <div className="notif-head">
-        <div>
-          <h1 className="notif-title">{t('notif.title')}</h1>
-          <p className="muted notif-subtitle">{t(role === 'owner' ? 'notif.subtitleAdmin' : role === 'author' ? 'notif.subtitle' : 'notif.subtitleMember')}</p>
-        </div>
-        <div className="notif-head-actions">
-          {/* What to be notified of, and push on this device: the Settings page. */}
-          <Link to="/setari" className="btn btn-secondary btn-sm notif-settings-link">
-            <SlidersHorizontal size={16} aria-hidden="true" /> {t('notif.settingsLink')}
-          </Link>
-          {unread > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => markRead()}>
-              <CheckCheck size={16} /> {t('notif.markAllRead')}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* All or unread as its tabs; the type, the post and the period on the band under them. */}
+      <PageBand
+        title={t('notif.title')}
+        line={t(role === 'owner' ? 'notif.subtitleAdmin' : role === 'author' ? 'notif.subtitle' : 'notif.subtitleMember')}
+        actions={
+          <>
+            {/* What to be notified of, and push on this device: the Settings page. */}
+            <Link to="/setari" className="btn btn-soft btn-sm notif-settings-link">
+              <SlidersHorizontal size={16} aria-hidden="true" /> {t('notif.settingsLink')}
+            </Link>
+            {unread > 0 && (
+              <button type="button" className="btn btn-soft btn-sm" onClick={() => markRead()}>
+                <CheckCheck size={16} /> {t('notif.markAllRead')}
+              </button>
+            )}
+          </>
+        }
+        tabsLabel={t('notif.filters')}
+        tabs={[
+          { key: 'all', label: t('notif.kind.all'), active: !filter.unread, onClick: () => changeFilter({ ...filter, unread: false }) },
+          { key: 'unread', label: t('notif.unreadOnly'), count: unread > 0 ? Math.min(unread, 99) : undefined, active: filter.unread, onClick: () => changeFilter({ ...filter, unread: true }) },
+        ]}
+        tools={<NotificationFilters filter={filter} unread={unread} role={role} onChange={changeFilter} tabs={false} />}
+      />
 
       <section className="notif-main" aria-busy={status === 'loading'}>
-        <NotificationFilters filter={filter} unread={unread} role={role} onChange={changeFilter} />
 
         {status === 'loading' ? (
           <ul className="notif-list card" aria-hidden="true">
@@ -360,7 +399,10 @@ export function NotificationsPage() {
                       <li key={n.id} className={`notif-item${n.read ? '' : ' is-unread'}`}>
                         <Link to={to} className="notif-link" onClick={() => !n.read && markRead([n.id])}>
                           <span className="notif-avatar">
-                            {n.actor ? (
+                            {/* Support answers come from the site: its logo (as in the header), not the administrator's face. */}
+                            {n.type === 'support_reply' ? (
+                              <img className="notif-site-logo" src="/icons/logo-480.webp" alt="" width={44} height={44} />
+                            ) : n.actor ? (
                               <Avatar name={n.actor.name} picture={n.actor.picture} size={44} />
                             ) : (
                               <span className={`notif-glyph notif-glyph-${n.type}`}>
@@ -375,7 +417,7 @@ export function NotificationsPage() {
                             <span className="notif-text">{describe(n)}</span>
                             {n.comment && <span className="notif-excerpt">{n.comment.body ?? t('notif.commentDeleted')}</span>}
                             <span className="notif-meta">
-                              <span className={`notif-kind notif-kind-${n.type}`}>{t(`notif.kindOne.${n.type}` as MessageKey)}</span>
+                              <span className={`notif-kind notif-kind-${n.type}`}>{t(KIND_NAMES[n.type])}</span>
                               <span aria-hidden="true">·</span>
                               <time dateTime={n.createdAt}>{timeAgo(n.createdAt)}</time>
                               {!n.read && <span className="visually-hidden">{t('notif.unreadLabel')}</span>}

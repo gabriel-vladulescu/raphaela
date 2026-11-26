@@ -1,6 +1,11 @@
-# The MySQL server for both local/ (database google_login) and production/ (jurnal_production). Credentials must
+# The MySQL server for both local/ (database raphaela_local) and production/ (raphaela_production). Credentials must
 # match server/.env. The project name is fixed, so `docker compose` from either folder manages the same container
-# and data (volume newfolder3_mysql-data) instead of starting an empty one.
+# and data instead of starting an empty one.
+#
+# The data lives in ../mysql-data (the folder holding local/ and production/), outside Docker, so removing the
+# container, its volumes or Docker itself doesn't lose it. That folder must be case-sensitive (on Windows:
+# `fsutil.exe file setCaseSensitiveInfo <folder> enable` while it is still empty); otherwise MySQL switches to
+# lower_case_table_names=2 and refuses the existing data, which was made with 0.
 name: newfolder3
 
 services:
@@ -9,13 +14,10 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: google_login
+      MYSQL_DATABASE: raphaela_local
       MYSQL_USER: app
       MYSQL_PASSWORD: app_password
     ports:
       - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
-
-volumes:
-  mysql-data:
+      - ../mysql-data:/var/lib/mysql

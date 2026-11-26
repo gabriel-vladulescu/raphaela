@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
+import { AUTHOR, countAuthors } from '@/lib/follows';
 import { parseId, requireUser } from '@/lib/guards';
 
 /**
  * Following authors: their new posts reach their followers as such (lib/notifications.ts, followed_post). An author
- * sees how many follow them; nobody sees who.
+ * sees how many follow them; nobody sees who. Only where the site has more than one author (lib/follows.ts).
  */
 const followRoutes: FastifyPluginAsync = async (app) => {
   const { db } = app;
@@ -13,7 +14,7 @@ const followRoutes: FastifyPluginAsync = async (app) => {
   const author = async (id: number | null) => {
     const [rows] = await db.execute<RowDataPacket[]>(
       `SELECT u.id, (SELECT COUNT(*) FROM author_follows f WHERE f.author_id = u.id) AS followers
-         FROM users u WHERE u.id = ? AND u.deleted_at IS NULL AND (u.role = 'author' OR EXISTS (SELECT 1 FROM posts p WHERE p.author_id = u.id))`,
+         FROM users u WHERE u.id = ? AND ${AUTHOR}`,
       [id ?? 0],
     );
     return rows[0] ? { id: rows[0].id as number, followers: Number(rows[0].followers) } : null;
@@ -29,6 +30,8 @@ const followRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put<{ Params: { id: string } }>('/authors/:id/follow', { preHandler: requireUser, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
+    // A single author on the site: nobody to choose between, so no following (counted again now, to be sure).
+    if (!(await countAuthors(db))) return reply.code(403).send({ error: 'follow_unavailable' });
     const found = await author(parseId(req.params.id));
     if (!found) return reply.code(404).send({ error: 'not_found' });
     if (found.id === req.user!.id) return reply.code(400).send({ error: 'follow_self' });

@@ -3,6 +3,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { config } from '@/config';
 import { ACTIVE_ACCOUNT } from '@/lib/accounts';
+import { deviceOf } from '@/lib/device';
+import { endSessionById, endSessions } from '@/lib/sessionEnd';
+import type { SessionEnd } from '@/lib/sessionEnd';
 
 export type Role = 'member' | 'author' | 'owner';
 
@@ -24,8 +27,10 @@ export interface SessionUser {
   occupation: string | null;
   /** Shown under their name at the end of their posts. */
   quote: string | null;
-  /** Anyone may see their articles (/{username}/articole), and their saved ones (/{username}/articole-salvate). */
+  /** Anyone may see their journal (/{username}/jurnal), their books (/{username}/carti), their saved posts
+   *  (/{username}/salvate). */
   publicArticles: boolean;
+  publicBooks: boolean;
   publicSaved: boolean;
   /** Signs in with Google too. Its address is always the account's (connecting it sets it; changing it disconnects). */
   google: boolean;
@@ -45,8 +50,9 @@ const hashToken = (token: string) => crypto.createHash('sha256').update(token).d
 
 const USER_COLUMNS =
   'u.id, u.email, u.name, u.username, u.picture, u.avatar_url, u.role, u.name_confirmed, u.terms_accepted_at, u.occupation, u.quote, ' +
-  'u.public_articles, u.public_saved, u.google_id IS NOT NULL AS google_linked, u.password_hash IS NOT NULL AS has_password, ' +
+  'u.public_articles, u.public_books, u.public_saved, u.google_id IS NOT NULL AS google_linked, u.password_hash IS NOT NULL AS has_password, ' +
   "u.email_verified_at, (SELECT t.email FROM email_tokens t WHERE t.user_id = u.id AND t.purpose = 'change' AND t.expires_at > UTC_TIMESTAMP() " +
+  'AND t.used_at IS NULL AND t.revoked_at IS NULL ' +
   'ORDER BY t.created_at DESC LIMIT 1) AS pending_email';
 
 function toSessionUser(row: RowDataPacket): SessionUser {
@@ -63,6 +69,7 @@ function toSessionUser(row: RowDataPacket): SessionUser {
     occupation: row.occupation,
     quote: row.quote,
     publicArticles: Boolean(row.public_articles),
+    publicBooks: Boolean(row.public_books),
     publicSaved: Boolean(row.public_saved),
     google: Boolean(row.google_linked),
     hasPassword: Boolean(row.has_password),
@@ -77,7 +84,7 @@ export async function getSessionUser(db: Pool, req: FastifyRequest): Promise<Ses
   const [rows] = await db.execute<RowDataPacket[]>(
     `SELECT ${USER_COLUMNS}
        FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > UTC_TIMESTAMP() AND ${ACTIVE_ACCOUNT}`,
+      WHERE s.id = ? AND s.expires_at > UTC_TIMESTAMP() AND s.ended_at IS NULL AND ${ACTIVE_ACCOUNT}`,
     [hashToken(token)],
   );
   return rows[0] ? toSessionUser(rows[0]) : null;
@@ -91,10 +98,9 @@ export async function loadUser(db: Pool, id: number): Promise<SessionUser | null
 
 export async function startSession(db: Pool, reply: FastifyReply, userId: number) {
   const token = crypto.randomBytes(32).toString('base64url');
-  await db.execute('DELETE FROM sessions WHERE expires_at < UTC_TIMESTAMP()');
   await db.execute(
-    'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL ? SECOND)',
-    [hashToken(token), userId, SESSION_TTL_SECONDS],
+    'INSERT INTO sessions (id, user_id, device, expires_at) VALUES (?, ?, ?, UTC_TIMESTAMP() + INTERVAL ? SECOND)',
+    [hashToken(token), userId, deviceOf(reply.request.headers['user-agent']), SESSION_TTL_SECONDS],
   );
   reply.setCookie(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -105,15 +111,18 @@ export async function startSession(db: Pool, reply: FastifyReply, userId: number
   });
 }
 
-/** Signed out everywhere (a new password set through an emailed link, Google taking over an unconfirmed account). */
-export async function endAllSessions(db: Pool, userId: number) {
-  await db.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+/**
+ * Signed out everywhere (a new password set through an emailed link, Google taking over an unconfirmed account). The
+ * sign-ins are kept as ended, with why (lib/sessionEnd.ts).
+ */
+export async function endAllSessions(db: Pool, userId: number, reason: SessionEnd) {
+  await endSessions(db, userId, reason);
 }
 
 /** After a new password: signed out everywhere else (this browser stays signed in). */
 export async function endOtherSessions(db: Pool, req: FastifyRequest, userId: number) {
   const token = req.cookies[SESSION_COOKIE];
-  await db.execute('DELETE FROM sessions WHERE user_id = ? AND id <> ?', [userId, token ? hashToken(token) : '']);
+  await endSessions(db, userId, 'password_changed', token ? hashToken(token) : null);
 }
 
 /** A Google account picked to connect, waiting for its person to confirm (it changes their email). */
@@ -145,7 +154,7 @@ export async function getGoogleLink(db: Pool, req: FastifyRequest): Promise<Goog
 
 export async function endSession(db: Pool, req: FastifyRequest, reply: FastifyReply) {
   const token = req.cookies[SESSION_COOKIE];
-  if (token) await db.execute('DELETE FROM sessions WHERE id = ?', [hashToken(token)]);
+  if (token) await endSessionById(db, hashToken(token), 'signed_out');
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 

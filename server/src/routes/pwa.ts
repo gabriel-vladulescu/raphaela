@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import type { FastifyPluginAsync } from 'fastify';
 import { site } from '@/lib/siteIdentity';
-import { BRAND_VERSION, NIGHT } from '@/seo/brand';
+import { BRAND_VERSION, DAWN } from '@/seo/brand';
 import { appIcon, faviconIco, splashLogo } from '@/seo/og';
 
 /** The images made from the logo, by file name: the home-screen icons the manifest and index.html point to, the
@@ -36,9 +36,9 @@ const pwaRoutes: FastifyPluginAsync = async (app) => {
       start_url: '/',
       scope: '/',
       display: 'standalone',
-      // The midnight theme (the default): the app's launch screen and status bar.
-      background_color: NIGHT,
-      theme_color: NIGHT,
+      // The light theme (the default): the app's launch screen and status bar.
+      background_color: DAWN,
+      theme_color: DAWN,
       categories: ['lifestyle', 'education', 'news'],
       icons: [
         { src: icon('icon-192.png'), sizes: '192x192', type: 'image/png', purpose: 'any' },

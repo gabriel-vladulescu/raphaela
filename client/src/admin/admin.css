@@ -1100,6 +1100,8 @@ html.adm-locked {
 
 .adm-chart {
   display: grid;
+  /* Its column follows the card, never what's drawn in it (else a wider drawing holds it open). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -1144,10 +1146,15 @@ html.adm-locked {
 
 .adm-chart-plot {
   position: relative;
+  min-width: 0;
   touch-action: pan-y;
 }
 
+/* Laid over the plot instead of in its flow: the plot's width comes from the card alone, so when the content gets
+   narrower (the full-width toggle, a smaller window) the chart is measured and drawn again at the new width. */
 .adm-chart-plot svg {
+  position: absolute;
+  inset: 0;
   display: block;
   overflow: visible;
 }
@@ -3019,8 +3026,27 @@ p.adm-callout {
 }
 
 .adm-tag-name {
+  min-width: 0;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* Renaming a tag: how it looks, its colour and sign (the site's own pickers, components/editor/TagPicker.tsx). */
+.adm-tag-look {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.adm-tag-look .tag-style-field {
+  width: 100%;
+}
+
+.adm-tag-look .field-label {
+  color: var(--adm-muted, var(--muted));
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .adm-media {
@@ -3271,5 +3297,267 @@ p.adm-callout {
 
   .adm-logo-row {
     align-items: flex-start;
+  }
+}
+
+/* ---------- Old data (Settings → Old data): what's past its keeping period, deleted by hand ---------- */
+.adm-cleanup-intro {
+  margin: 0;
+  padding-bottom: 6px;
+}
+
+.adm-cleanup-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--adm-good-soft);
+  color: var(--adm-good-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.adm-cleanup-table tr.is-quiet .adm-cell-title {
+  color: var(--adm-ink-2);
+  font-weight: 500;
+}
+
+.adm-cleanup-confirm {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+/* ---------- Logs: the tabs with the period beside them, expandable rows, comment edits, clean-up ---------- */
+.adm-logs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.adm-logs-head .adm-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.adm-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.adm-period label {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--adm-muted);
+}
+
+.adm-period .adm-input {
+  width: auto;
+  min-width: 140px;
+  height: 34px;
+  padding: 0 10px;
+}
+
+.adm-email-detail {
+  padding: 0 20px 12px;
+}
+
+.adm-email-detail > p {
+  margin: 0 0 8px;
+  color: var(--adm-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.adm-email-detail .adm-email-error {
+  margin: 0;
+}
+
+.adm-stack {
+  max-height: 260px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.adm-auth-table tr.is-failed > th:first-child {
+  box-shadow: inset 3px 0 0 var(--adm-bad);
+}
+
+.adm-edits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.adm-edits li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--adm-border);
+}
+
+.adm-edits li:last-child {
+  border-bottom: 0;
+}
+
+.adm-edit-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.adm-edit-main > p {
+  margin: 0;
+}
+
+.adm-edit-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.adm-edit-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--adm-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adm-edit-text {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--adm-surface-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.adm-edit-text.is-before {
+  background: var(--adm-bad-soft);
+  color: var(--adm-ink);
+}
+
+.adm-versions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm .adm-chip.is-small {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.adm .adm-bad {
+  color: var(--adm-bad);
+}
+
+/* ---------- Books ---------- */
+.adm-book-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.adm-book-cell .cover.is-mini {
+  flex: none;
+  width: 34px;
+}
+
+.adm-book-cell > div {
+  display: grid;
+  min-width: 0;
+}
+
+.adm-numbers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--adm-ink-2);
+}
+
+.adm-numbers > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+/* ---------- Support: the conversation and the answer box ---------- */
+.adm-thread {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--adm-border);
+  list-style: none;
+}
+
+.adm-thread li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.adm-thread li > div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--adm-surface-2);
+}
+
+.adm-thread li.is-staff > div {
+  background: var(--adm-accent-soft);
+}
+
+.adm-thread p {
+  margin: 0 0 4px;
+}
+
+.adm-answer {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--adm-border);
+}
+
+@media (max-width: 760px) {
+  .adm-logs-head {
+    align-items: stretch;
+  }
+
+  .adm-period .adm-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .adm-period label {
+    flex: 1 1 130px;
+  }
+
+  .adm-edit-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-edits li {
+    padding: 12px 14px;
   }
 }

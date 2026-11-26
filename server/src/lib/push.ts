@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import webpush from 'web-push';
 import { config } from '@/config';
+import { logError } from '@/lib/errorLog';
 
 /** What a push shows: the phone's notification, and where tapping it leads. */
 export interface PushMessage {
@@ -45,25 +46,51 @@ export const endpointHash = (endpoint: string) => crypto.createHash('sha256').up
 
 /**
  * Sends a push to the devices matching `where` (an SQL condition on push_subscriptions, with its params). Devices
- * that unsubscribed (the push service answers 404 or 410) are forgotten. Never throws: a push is a nice-to-have.
+ * that unsubscribed (the push service answers 404 or 410) are forgotten; any other refusal is an error (the error
+ * log). Each push that had devices to go to is kept in the history (push_log): to how many, how many got it.
+ * Never throws: a push is a nice-to-have.
  */
-export async function pushTo(db: Pool, where: string, params: unknown[], message: PushMessage) {
+export async function pushTo(db: Pool, where: string, params: unknown[], message: PushMessage, log: PushLog) {
   try {
     const [subscriptions] = await db.query<RowDataPacket[]>(`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE ${where}`, params);
+    if (subscriptions.length === 0) return;
     const payload = JSON.stringify(message);
+    let sent = 0;
+    let gone = 0;
+    let firstError: string | null = null;
     await Promise.all(
       subscriptions.map(async (row) => {
         try {
           await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload, { TTL: 24 * 60 * 60 });
           await db.execute('UPDATE push_subscriptions SET last_sent_at = UTC_TIMESTAMP() WHERE id = ?', [row.id]);
+          sent += 1;
         } catch (err) {
           const status = (err as { statusCode?: number }).statusCode;
-          if (status === 404 || status === 410) await db.execute('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
-          else console.warn(`Push to subscription ${row.id} failed (${status ?? (err as Error).message})`);
+          if (status === 404 || status === 410) {
+            gone += 1;
+            await db.execute('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
+          } else {
+            const reason = status ? `the push service answered ${status}` : (err as Error).message;
+            firstError ??= reason;
+            logError('push', `push (${log.kind})`, new Error(`A push wasn't delivered: ${reason}`));
+          }
         }
       }),
     );
+    const failed = subscriptions.length - sent - gone;
+    await db.execute(
+      `INSERT INTO push_log (created_at, kind, title, url, user_id, devices, sent, failed, gone, error)
+       VALUES (UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [log.kind.slice(0, 30), message.title.slice(0, 255), message.url.slice(0, 500), log.userId ?? null, subscriptions.length, sent, failed, gone, firstError],
+    );
   } catch (err) {
-    console.warn('Push failed:', (err as Error).message);
+    logError('push', `push (${log.kind})`, err);
   }
+}
+
+/** What a push is, for the history (push_log): its kind (a notification's type, new_post, chapter, test), and the
+ *  one account it was for, when it was for one. */
+export interface PushLog {
+  kind: string;
+  userId?: number | null;
 }

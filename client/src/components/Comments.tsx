@@ -8,6 +8,7 @@ import { CommentReactions } from '@/components/CommentReactions';
 import { GoogleButton } from '@/components/GoogleButton';
 import { ConfirmModal, Modal } from '@/components/Modal';
 import { ReportCommentModal } from '@/components/ReportCommentModal';
+import { EmailOffModal, isEmailOff } from '@/components/EmailOffModal';
 import { useAuth } from '@/context/auth';
 import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
@@ -18,8 +19,10 @@ import type { Comment } from '@/lib/types';
 const MAX_LENGTH = 2000;
 /** Threads loaded at a time, as you scroll. */
 const PAGE_SIZE = 10;
-/** Replies shown at first, and how many more each "view more" adds. */
-const REPLIES_STEP = 5;
+/** Replies each "view more" brings (a page of threads brings each thread's first three: the server's REPLY_PREVIEW). */
+const REPLIES_STEP = 10;
+/** A whole comment's replies at once (answering under it, so the new reply lands after them): this many a request. */
+const REPLIES_ALL = 50;
 
 type Sort = 'top' | 'new';
 
@@ -31,7 +34,7 @@ interface CommentPage {
   total: number;
   /** This page's threads (their first comment's id), in display order. */
   order: number[];
-  /** Everything in those threads, oldest first. */
+  /** Those threads' first comments and the first replies to each, oldest first (the rest come when asked). */
   comments: Comment[];
   hasMore: boolean;
 }
@@ -40,16 +43,25 @@ interface CommentNode extends Comment {
   replies: CommentNode[];
 }
 
-/** Comments arrive oldest first, so replies stay in the order they were written. */
+/** A page of a comment's replies (GET /comments/:id/replies). */
+interface ReplyPage {
+  replies: Comment[];
+  /** All its replies now (one may have come meanwhile). */
+  total: number;
+  hasMore: boolean;
+}
+
+const byTime = (a: Comment, b: Comment) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
+
+/** Replies in the order they were written, however they arrived (a page, "view more", one just written). */
 function buildTree(list: Comment[]): Map<number, CommentNode> {
   const nodes = new Map(list.map((c) => [c.id, { ...c, replies: [] as CommentNode[] }]));
   for (const node of nodes.values()) {
     if (node.parentId !== null) nodes.get(node.parentId)?.replies.push(node);
   }
+  for (const node of nodes.values()) node.replies.sort(byTime);
   return nodes;
 }
-
-const countAll = (list: CommentNode[]): number => list.reduce((n, c) => n + 1 + countAll(c.replies), 0);
 
 /** @username, as the server finds mentions (mentionedUsernames, server/src/lib/notifications.ts). */
 const MENTION = /(^|[^\w.@])@([a-z0-9]+(?:\.[a-z0-9]+)*)/gi;
@@ -258,16 +270,22 @@ export function Comments(props: {
   /** The one open form (a reply or an edit); opening another closes it. */
   const [active, setActive] = useState<{ kind: 'reply' | 'edit'; id: number } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  /** How many replies each comment shows (REPLIES_STEP unless "view more" was used). */
-  const [shown, setShown] = useState<Map<number, number>>(new Map());
+  /** Comments whose next replies are on their way ("view more"). */
+  const [loadingReplies, setLoadingReplies] = useState<Set<number>>(new Set());
+  /** The discussion came near: it loads then, not with the page (many readers never reach it). */
+  const [near, setNear] = useState(false);
   /** The comment whose options sheet is open (phones), and the one waiting for a delete confirmation. */
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [reporting, setReporting] = useState<number | null>(null);
   const [error, setError] = useState('');
 
+  const sectionRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  /** The comments as they are now (for what arrives later: which ones are new). */
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
   /** Comments to animate in when they first appear (new ones, and replies revealed by "view more"). */
   const entering = useRef(new Set<number>());
   /** Threads the server has sent so far: where the next page starts. */
@@ -305,10 +323,19 @@ export function Comments(props: {
     [postId, sort],
   );
 
+  // Nothing until the discussion comes near (a screen or so away), then the first page.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (near || !section) return;
+    const observer = new IntersectionObserver((entries) => entries[0]?.isIntersecting && setNear(true), { rootMargin: '800px 0px' });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [near]);
+
   // The first page; again when the sort changes, or the viewer does ("your" reactions; owners also get deleted ones).
   useEffect(() => {
-    void loadPage(true);
-  }, [loadPage, user?.id, user?.role]);
+    if (near) void loadPage(true);
+  }, [near, loadPage, user?.id, user?.role]);
 
   // The next page when the end of the list comes near. Observing again after each page also catches a sentinel
   // that's still in view (short pages).
@@ -339,27 +366,59 @@ export function Comments(props: {
   const nameOf = (c: Comment) => (c.author.deleted ? t('comments.deletedAccount') : c.author.name);
 
   const updateComment = (id: number, fn: (c: Comment) => Comment) => setComments((list) => list.map((c) => (c.id === id ? fn(c) : c)));
+
+  /**
+   * A comment's next replies (`all`: every one left, answering under it), after the `loaded` ones; they grow into
+   * place, and its count follows the server's.
+   */
+  async function loadReplies(parentId: number, loaded: number, all = false) {
+    setLoadingReplies((current) => new Set(current).add(parentId));
+    setError('');
+    try {
+      let offset = loaded;
+      for (;;) {
+        const page = await api<ReplyPage>(`/comments/${parentId}/replies?offset=${offset}&limit=${all ? REPLIES_ALL : REPLIES_STEP}`);
+        const known = new Set(commentsRef.current.map((c) => c.id));
+        for (const reply of page.replies) if (!known.has(reply.id)) entering.current.add(reply.id);
+        setComments((list) => {
+          const have = new Set(list.map((c) => c.id));
+          return [...list, ...page.replies.filter((c) => !have.has(c.id))].map((c) => (c.id === parentId ? { ...c, replyCount: page.total } : c));
+        });
+        offset += page.replies.length;
+        if (!all || !page.hasMore) break;
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoadingReplies((current) => {
+        const next = new Set(current);
+        next.delete(parentId);
+        return next;
+      });
+    }
+  }
   const toggleForm = (kind: 'reply' | 'edit', id: number) => setActive((current) => (current?.kind === kind && current.id === id ? null : { kind, id }));
 
   async function addComment(body: string, parentId: number | null) {
     const { comment } = await api<{ comment: Comment }>(`/posts/${postId}/comments`, { method: 'POST', body: { body, parentId } });
     entering.current.add(comment.id);
-    setComments((list) => [...list, comment]);
+    setComments((list) => [...list, comment].map((c) => (c.id === comment.parentId ? { ...c, replyCount: c.replyCount + 1 } : c)));
     track(comment.parentId === null ? 'comment' : 'reply', postId);
     if (comment.held) showToast({ message: t('comments.heldNotice') });
     setTotal((n) => n + 1);
     if (comment.parentId === null) {
       setOrder((list) => [comment.id, ...list]); // your new comment shows first
     } else {
-      // Open the thread it went into, with all its replies, so the new one is in view.
+      // Open the thread it went into; its replies not loaded yet come too, so the new one lands after them.
       const parentId = comment.parentId;
       setCollapsed((current) => {
         const next = new Set(current);
         next.delete(parentId);
         return next;
       });
-      setShown((map) => new Map(map).set(parentId, Number.MAX_SAFE_INTEGER));
       setActive(null);
+      const parent = nodes.get(parentId);
+      if (parent && parent.replies.length < parent.replyCount) void loadReplies(parentId, parent.replies.length, true);
     }
   }
 
@@ -402,7 +461,9 @@ export function Comments(props: {
         return;
       }
       const drop = () => {
-        setComments((list) => list.filter((c) => !gone.has(c.id)));
+        setComments((list) =>
+          list.filter((c) => !gone.has(c.id)).map((c) => (c.id === node.parentId ? { ...c, replyCount: Math.max(0, c.replyCount - 1) } : c)),
+        );
         if (node.parentId === null) {
           setOrder((list) => list.filter((id) => id !== node.id));
           loadedFromServer.current = Math.max(0, loadedFromServer.current - 1); // the server's pages moved up by one
@@ -423,11 +484,6 @@ export function Comments(props: {
       return next;
     });
 
-  function showMoreReplies(node: CommentNode) {
-    const current = shown.get(node.id) ?? REPLIES_STEP;
-    for (const reply of node.replies.slice(current, current + REPLIES_STEP)) entering.current.add(reply.id);
-    setShown((map) => new Map(map).set(node.id, current + REPLIES_STEP));
-  }
 
   // New comments (and revealed replies) grow into place the first time they're attached.
   const enterRef = (id: number) => (el: HTMLLIElement | null) => {
@@ -442,12 +498,13 @@ export function Comments(props: {
     const reportable = canReport(node);
     const editing = active?.kind === 'edit' && active.id === node.id;
     const replying = active?.kind === 'reply' && active.id === node.id;
-    const limit = shown.get(node.id) ?? REPLIES_STEP;
-    const visibleReplies = node.replies.slice(0, limit);
-    const hiddenReplies = node.replies.length - visibleReplies.length;
+    // Its replies: those loaded, and how many are still on the server ("view more" brings them).
+    const hiddenReplies = Math.max(0, node.replyCount - node.replies.length);
+    const hasReplies = node.replies.length > 0 || hiddenReplies > 0;
+    const loadingMore = loadingReplies.has(node.id);
     const threadToggle = node.replies.length > 0 && (
       <button type="button" className="text-btn t-thread-toggle" aria-expanded={!isCollapsed} onClick={() => toggleThread(node.id)}>
-        {isCollapsed ? t('comments.showReplies', { replies: plural('comments.replies', countAll(node.replies)) }) : t('comments.hideReplies')}
+        {isCollapsed ? t('comments.showReplies', { replies: plural('comments.replies', Math.max(node.replyCount, node.replies.length)) }) : t('comments.hideReplies')}
       </button>
     );
     const edited = node.editedAt && !deleted && <span title={formatDateTime(node.editedAt)}>{t('comments.edited')}</span>;
@@ -458,7 +515,7 @@ export function Comments(props: {
           <div className="t-gutter">
             {/* Sized by the tree's --av (smaller on phones). */}
             <Avatar name={nameOf(node)} picture={node.author.picture} size={null} />
-            {node.replies.length > 0 && <span className={`t-rail${isCollapsed ? ' is-hidden' : ''}`} aria-hidden="true" />}
+            {hasReplies && <span className={`t-rail${isCollapsed ? ' is-hidden' : ''}`} aria-hidden="true" />}
           </div>
           <div className={`t-main${deleted ? ' is-deleted' : ''}`}>
             {/* A card on wider screens; on phones, the grey bubble around the name and text. */}
@@ -565,10 +622,10 @@ export function Comments(props: {
             </Collapse>
           </div>
         </div>
-        {node.replies.length > 0 && (
+        {hasReplies && (
           <Collapse open={!isCollapsed}>
             <ol className="t-children">
-              {visibleReplies.map((reply) => renderNode(reply))}
+              {node.replies.map((reply) => renderNode(reply))}
               {hiddenReplies > 0 && (
                 <li className="t-item t-more">
                   <div className="t-row">
@@ -578,8 +635,15 @@ export function Comments(props: {
                       </span>
                     </div>
                     <div className="t-more-main">
-                      <button type="button" className="text-btn" onClick={() => showMoreReplies(node)}>
-                        {t('comments.moreReplies', { n: hiddenReplies })}
+                      <button
+                        type="button"
+                        className="text-btn"
+                        disabled={loadingMore}
+                        aria-busy={loadingMore}
+                        onClick={() => void loadReplies(node.id, node.replies.length)}
+                      >
+                        {loadingMore && <LoaderCircle size={14} className="spin" aria-hidden="true" />}{' '}
+                        {t(node.replies.length > 0 ? 'comments.moreReplies' : 'comments.viewReplies', { replies: plural('comments.replies', hiddenReplies) })}
                       </button>
                     </div>
                   </div>
@@ -599,7 +663,7 @@ export function Comments(props: {
   // The author turned comments off: existing ones are hidden too.
   if (!enabled) {
     return (
-      <section className="discussion" aria-labelledby="discussion-title">
+      <section ref={sectionRef} className="discussion" aria-labelledby="discussion-title">
         <div className="discussion-head">
           <h2 id="discussion-title">{t('comments.title')}</h2>
         </div>
@@ -614,7 +678,7 @@ export function Comments(props: {
   const firstLoad = status === 'loading' && threads.length === 0;
 
   return (
-    <section className="discussion" aria-labelledby="discussion-title">
+    <section ref={sectionRef} className="discussion" aria-labelledby="discussion-title">
       <div className="discussion-head">
         <h2 id="discussion-title">
           <span className="discussion-title-text">{t('comments.title')}</span> {!firstLoad && <span className="count-pill">{total}</span>}
@@ -746,6 +810,7 @@ function VerifyToComment({ email }: { email: string }) {
   const { t, lang, errorMessage } = useI18n();
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState('');
+  const [mailOff, setMailOff] = useState(false);
   async function resend() {
     setState('sending');
     setError('');
@@ -753,7 +818,8 @@ function VerifyToComment({ email }: { email: string }) {
       await api('/me/verify-email', { method: 'POST', body: { lang } });
       setState('sent');
     } catch (err) {
-      setError(errorMessage(err));
+      if (isEmailOff(err)) setMailOff(true);
+      else setError(errorMessage(err));
       setState('idle');
     }
   }
@@ -773,6 +839,7 @@ function VerifyToComment({ email }: { email: string }) {
           </div>
         )}
       </div>
+      {mailOff && <EmailOffModal detail={t('mail.offVerify')} onClose={() => setMailOff(false)} />}
     </div>
   );
 }

@@ -10,7 +10,7 @@ export async function exportAccount(db: Pool, userId: number) {
     db,
     `SELECT id, email, email_verified_at, name, username, picture, avatar_url, role, occupation, quote, created_at, last_login_at,
             terms_accepted_at, google_id IS NOT NULL AS google_connected, password_hash IS NOT NULL AS has_password,
-            public_articles, public_saved, notify_settings
+            public_articles, public_books, public_saved, notify_settings
        FROM users WHERE id = ?`,
     [userId],
   );
@@ -22,6 +22,7 @@ export async function exportAccount(db: Pool, userId: number) {
           google_connected: Boolean(account.google_connected),
           has_password: Boolean(account.has_password),
           public_articles: Boolean(account.public_articles),
+          public_books: Boolean(account.public_books),
           public_saved: Boolean(account.public_saved),
           notify_settings: typeof account.notify_settings === 'string' ? JSON.parse(account.notify_settings) : account.notify_settings,
         }
@@ -53,6 +54,17 @@ export async function exportAccount(db: Pool, userId: number) {
       'SELECT id, title, slug, status, published_at, created_at, updated_at, deleted_at FROM posts WHERE author_id = ? ORDER BY created_at',
       [userId],
     ),
+    books: await rows(
+      db,
+      'SELECT id, title, slug, description, planned_chapters, completed_at, created_at, updated_at, deleted_at FROM books WHERE author_id = ? ORDER BY created_at',
+      [userId],
+    ),
+    readingProgress: await rows(
+      db,
+      'SELECT p.title AS post, p.slug AS post_slug, r.progress, r.updated_at, r.finished_at FROM reading_progress r JOIN posts p ON p.id = r.post_id WHERE r.user_id = ? ORDER BY r.updated_at',
+      [userId],
+    ),
+    readingDays: await rows(db, 'SELECT day FROM reading_days WHERE user_id = ? ORDER BY day', [userId]),
     reportsSent: await rows(
       db,
       'SELECT comment_id, reason, details, created_at, resolved_at, resolution FROM comment_reports WHERE reporter_id = ? ORDER BY created_at',
@@ -60,14 +72,26 @@ export async function exportAccount(db: Pool, userId: number) {
     ),
     supportTickets: await rows(
       db,
-      `SELECT t.id, t.email, t.name, t.category, t.title, t.body, t.created_at,
-              (SELECT JSON_ARRAYAGG(a.file_name) FROM support_attachments a WHERE a.ticket_id = t.id) AS attachments
+      `SELECT t.id, t.email, t.name, t.category, t.title, t.body, t.status, t.created_at,
+              (SELECT JSON_ARRAYAGG(a.file_name) FROM support_attachments a WHERE a.ticket_id = t.id) AS attachments,
+              (SELECT JSON_ARRAYAGG(JSON_OBJECT('from', IF(r.staff, 'support', 'you'), 'body', r.body, 'created_at', r.created_at))
+                 FROM support_replies r WHERE r.ticket_id = t.id) AS replies
          FROM support_tickets t WHERE t.user_id = ? ORDER BY t.created_at`,
       [userId],
     ),
     notifications: await rows(db, 'SELECT type, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY created_at', [userId]),
-    pushDevices: await rows(db, 'SELECT created_at, last_sent_at, new_posts, activity FROM push_subscriptions WHERE user_id = ?', [userId]),
-    sessions: await rows(db, 'SELECT created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at', [userId]),
+    pushDevices: await rows(db, 'SELECT device, created_at, last_sent_at, new_posts, activity FROM push_subscriptions WHERE user_id = ?', [userId]),
+    sessions: await rows(db, 'SELECT created_at, device, expires_at, ended_at, end_reason FROM sessions WHERE user_id = ? ORDER BY created_at', [userId]),
+    // Each sign-in attempt on the account: how, how it went, the browser.
+    signInAttempts: await rows(db, 'SELECT created_at, email, method, outcome, device FROM auth_log WHERE user_id = ? ORDER BY created_at', [userId]),
+    // Earlier addresses, names and usernames.
+    accountChanges: await rows(db, 'SELECT field, old_value, new_value, via, changed_at FROM account_changes WHERE user_id = ? ORDER BY changed_at', [userId]),
+    // Links sent by email (to confirm the address, a new password, a new address) and what became of them.
+    emailLinks: await rows(
+      db,
+      'SELECT purpose, email, created_at, expires_at, used_at, revoked_at, revoked_reason FROM email_tokens WHERE user_id = ? ORDER BY created_at',
+      [userId],
+    ),
     following: await rows(
       db,
       'SELECT u.name AS author, u.username, f.created_at FROM author_follows f JOIN users u ON u.id = f.author_id WHERE f.user_id = ? ORDER BY f.created_at',
@@ -75,7 +99,7 @@ export async function exportAccount(db: Pool, userId: number) {
     ),
     newsletter: await rows(
       db,
-      `SELECT s.email, s.frequency, s.lang, s.created_at, s.confirmed_at, s.unsubscribed_at,
+      `SELECT s.email, s.all_posts, (SELECT GROUP_CONCAT(bk.title ORDER BY nb.created_at SEPARATOR ' · ') FROM newsletter_books nb JOIN books bk ON bk.id = nb.book_id WHERE nb.subscriber_id = s.id) AS books, s.lang, s.created_at, s.confirmed_at, s.unsubscribed_at,
               (SELECT COUNT(*) FROM newsletter_deliveries d WHERE d.subscriber_id = s.id) AS emails_received
          FROM newsletter_subscribers s WHERE s.user_id = ? OR s.email = (SELECT email FROM users WHERE id = ?)`,
       [userId, userId],

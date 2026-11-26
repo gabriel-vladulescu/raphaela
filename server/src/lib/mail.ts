@@ -1,12 +1,12 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { config } from '@/config';
+import { logError } from '@/lib/errorLog';
 import { site } from '@/lib/siteIdentity';
 
-// Email goes out through an SMTP server that administrators set in the admin panel (Setări → Email); the settings
-// are kept in app_settings ('smtp', JSON). In development, with none set, emails are written to the server's log
-// instead, so the links in them can still be followed.
+// Email goes out through an SMTP server that administrators set in the admin panel (Settings → Email); the settings
+// are kept in app_settings ('smtp', JSON). Without one nothing goes out, in development too: what needs an email
+// refuses, and the email history notes what couldn't go.
 
 /** How the connection is secured: TLS from the start (usually port 465), STARTTLS (587), or none (25, local relays). */
 export type SmtpSecurity = 'tls' | 'starttls' | 'none';
@@ -43,7 +43,7 @@ let transport: Transporter | null = null;
 let pool: Pool | null = null;
 
 /** Keeps a line in the history (email_log): never throws, an email isn't held up by it. */
-async function record(mail: Mail, status: 'sent' | 'failed' | 'logged', error: string | null = null) {
+async function record(mail: Mail, status: 'sent' | 'failed', error: string | null = null) {
   try {
     await pool?.execute('INSERT INTO email_log (created_at, to_email, kind, subject, status, error) VALUES (UTC_TIMESTAMP(), ?, ?, ?, ?, ?)', [
       mail.to.slice(0, 255),
@@ -53,7 +53,7 @@ async function record(mail: Mail, status: 'sent' | 'failed' | 'logged', error: s
       error ? error.slice(0, 1000) : null,
     ]);
   } catch (err) {
-    console.warn('Email history failed:', (err as Error).message);
+    logError('mail', 'email history', err);
   }
 }
 
@@ -70,11 +70,11 @@ export async function loadMailSettings(db: Pool) {
 
 export const mailSettings = () => settings;
 
-/** An SMTP server is set. */
+/**
+ * An SMTP server is set: the only way an email goes out, in every environment. Whatever needs an email (a link to
+ * confirm, a new password, an invitation, an answer…) asks this first and refuses (`email_unavailable`) without one.
+ */
 export const mailConfigured = () => Boolean(settings.host && settings.fromEmail);
-
-/** Emails can go out: through SMTP, or (development only) into the log. */
-export const canSendMail = () => mailConfigured() || !config.production;
 
 export async function saveMailSettings(db: Pool, next: SmtpSettings) {
   await db.query("INSERT INTO app_settings (name, value) VALUES ('smtp', ?) AS new ON DUPLICATE KEY UPDATE value = new.value", [JSON.stringify(next)]);
@@ -99,18 +99,13 @@ function createTransport(s: SmtpSettings) {
 const fromOf = (s: SmtpSettings) => ({ name: s.fromName || site.name, address: s.fromEmail });
 
 /**
- * Sends an email. False when it can't go out (no SMTP server in production) or the server refused it (logged).
- * Never throws: the action that sends it (signing up, a new password…) still happens.
+ * Sends an email. False when it can't go out (no SMTP server set) or the server refused it; either is in the email
+ * history. Never throws.
  */
 export async function sendMail(mail: Mail): Promise<boolean> {
   if (!mailConfigured()) {
-    if (config.production) {
-      await record(mail, 'failed', 'Niciun server SMTP setat');
-      return false;
-    }
-    console.log(`\n✉  Email (no SMTP server set, so it's only shown here)\n   To: ${mail.to}\n   Subject: ${mail.subject}\n\n${mail.text.replace(/^/gm, '   ')}\n`);
-    await record(mail, 'logged');
-    return true;
+    await record(mail, 'failed', 'Niciun server SMTP setat');
+    return false;
   }
   try {
     transport ??= createTransport(settings);
@@ -118,7 +113,7 @@ export async function sendMail(mail: Mail): Promise<boolean> {
     await record(mail, 'sent');
     return true;
   } catch (err) {
-    console.error('Sending an email failed:', err);
+    logError('mail', mail.kind, err);
     await record(mail, 'failed', err instanceof Error ? err.message : String(err));
     return false;
   }

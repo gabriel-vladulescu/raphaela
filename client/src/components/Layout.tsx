@@ -7,6 +7,7 @@ import { Header } from '@/components/Header';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { MidnightSky } from '@/components/MidnightSky';
 import { NameConfirmModal } from '@/components/NameConfirmModal';
+import { NewsletterSheet } from '@/components/NewsletterSheet';
 import { Toaster } from '@/components/Toaster';
 import { site, siteSettings, SOCIAL, TERMS_PATH } from '@/config';
 import { useAuth } from '@/context/auth';
@@ -14,6 +15,7 @@ import { trackPage } from '@/lib/analytics';
 import { openConsent, useConsent } from '@/lib/consent';
 import { HeaderSlotContext } from '@/lib/headerSlot';
 import { useI18n } from '@/lib/i18n';
+import { ReadingSync } from '@/lib/reading';
 import { hideSplash } from '@/lib/splash';
 import { useTheme } from '@/lib/theme';
 import { SetupPage } from '@/pages/SetupPage';
@@ -30,7 +32,7 @@ const storedDismissal = () => {
   }
 };
 
-/** The administrators' announcement (admin panel → Setări), above the header. Closing it hides this text only. */
+/** The administrators' announcement (admin panel → Settings), above the header. Closing it hides this text only. */
 function AnnouncementBar() {
   const { t } = useI18n();
   const announcement = siteSettings.announcement;
@@ -73,7 +75,7 @@ function AnnouncementBar() {
   );
 }
 
-/** The site is closed for maintenance (admin panel → Setări): what visitors see instead of it. */
+/** The site is closed for maintenance (admin panel → Settings): what visitors see instead of it. */
 function MaintenancePage({ message }: { message: string }) {
   const { t } = useI18n();
   useEffect(hideSplash, []); // no posts to wait for
@@ -109,7 +111,7 @@ export function Layout() {
   // A page view for the statistics. Posts report their own (with the post's id, once loaded); the work pages
   // (editor, admin, statistics, notifications, settings) aren't counted. Searches count as the home page.
   useEffect(() => {
-    if (untracked || /^\/(posts|editor)\/|^\/(admin|statistici|notificari|setari)(\/|$)|^\/[^/]+\/articole\/./.test(pathname)) return;
+    if (untracked || /^\/(posts|editor)\/|^\/(admin|statistici|notificari|setari|salvate|jurnalul-meu|cartile-mele)(\/|$)/.test(pathname)) return;
     void trackPage(pathname + (category ? `?category=${encodeURIComponent(category)}` : ''));
     // Again once the visitor agrees on the banner: the page they're on counts too.
   }, [pathname, category, consent]);
@@ -180,9 +182,11 @@ export function Layout() {
         </div>
       </footer>
       {user && !user.nameConfirmed && <NameConfirmModal user={user} />}
+      <ReadingSync />
       <Toaster />
       <ConsentBanner />
       <InstallPrompt />
+      <NewsletterSheet />
       <ScrollRestoration />
     </>
   );

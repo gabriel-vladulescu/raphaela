@@ -333,8 +333,9 @@ export function faviconIco() {
   );
 }
 
-/** Which of a person's lists a share image is for (/{username}/articole, /{username}/articole-salvate). */
-export type ProfileList = 'articole' | 'articole-salvate';
+/** Which of a person's lists a share image is for (/{username}/jurnal, /carti, /salvate). */
+export type ProfileList = 'jurnal' | 'carti' | 'salvate';
+const PROFILE_LABELS: Record<ProfileList, string> = { jurnal: 'Jurnal', carti: 'Cărți', salvate: 'Articole salvate' };
 
 export interface ProfileImageInput {
   id: number;
@@ -401,7 +402,7 @@ export function profileShareImage(person: ProfileImageInput, list: ProfileList) 
       const left = MARGIN + 16;
       const textLeft = left + avatar + 56;
       const textWidth = OG_WIDTH - textLeft - MARGIN;
-      const label = textBlock(list === 'articole' ? 'Articole' : 'Articole salvate', INTER_BOLD, 30, { color: '#f2c46d' });
+      const label = textBlock(PROFILE_LABELS[list], INTER_BOLD, 30, { color: '#f2c46d' });
       let name = textBlock(person.name, FRAUNCES, 72, { width: textWidth, lineHeight: 1.08 });
       if (name.lines > 2) name = textBlock(person.name, FRAUNCES, 56, { width: textWidth, lineHeight: 1.08 });
       const occupation = person.occupation ? textBlock(person.occupation, INTER_SEMIBOLD, 30, { color: '#c5cbf0', width: textWidth }) : null;

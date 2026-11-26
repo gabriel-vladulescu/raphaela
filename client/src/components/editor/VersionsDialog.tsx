@@ -175,7 +175,7 @@ export function VersionsDialog(props: {
             </div>
             {open.title !== props.current.title && (
               <p className="versions-title-change small">
-                <span className="diff-removed">{open.title}</span> → <span className="diff-added">{props.current.title}</span>
+                <span className="diff-removed">{open.title || t('post.untitled')}</span> → <span className="diff-added">{props.current.title || t('post.untitled')}</span>
               </p>
             )}
             {view === 'changes' ? (

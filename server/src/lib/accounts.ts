@@ -3,7 +3,10 @@ import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { deletedEmail, restoredEmail, siteLink, suspendedEmail, verifyEmail } from '@/lib/emails';
 import type { Lang } from '@/lib/emails';
 import { sendMail } from '@/lib/mail';
-import { notifyAccountDue } from '@/lib/notifications';
+import { logError } from '@/lib/errorLog';
+import { notifyAccountDue, notifyCleanupDue } from '@/lib/notifications';
+import { retentionTotal } from '@/lib/retention';
+import { endSessions } from '@/lib/sessionEnd';
 import { removeUpload } from '@/lib/uploads';
 
 // Accounts' lifecycle beyond signing in: links sent by email (confirming the address, a new password, a new
@@ -12,14 +15,6 @@ import { removeUpload } from '@/lib/uploads';
 
 /** How long a deleted account is kept at least, so it can be restored (through support) if it was a mistake. */
 export const RETENTION_MONTHS = 3;
-/** Support tickets are kept this long (the Terms say so). */
-const TICKET_YEARS = 2;
-/** Statistics rows (page views, actions) are kept this long (the Terms say so). */
-const STATS_MONTHS = 25;
-/** The history of emails sent is kept this long (the Terms say so). */
-const EMAIL_LOG_DAYS = 90;
-/** The administrators' log is kept this long (the Terms say so). */
-const ADMIN_LOG_YEARS = 2;
 
 /** SQL (alias `u`): suspended right now (a suspension without an end lasts until it's lifted). */
 export const SUSPENDED_NOW = `(u.suspended_at IS NOT NULL AND (u.suspended_until IS NULL OR u.suspended_until > UTC_TIMESTAMP()))`;
@@ -51,16 +46,43 @@ export function blockQuery(block: AccountBlock) {
   return params.toString();
 }
 
-// ---- Links sent by email. Only a hash of the token is stored; using one deletes it.
+// ---- Links sent by email. Only a hash of the token is stored. A link works once, until it expires: using it marks it
+// used, and one that stops working before (see LinkEnd) says why. The records stay (an administrator deletes them
+// with the old data, lib/retention.ts), so the account's panel in the admin shows what was sent and what happened.
 
 export type TokenPurpose = 'verify' | 'reset' | 'change';
+/** Why a link stopped working before it was used. */
+export type LinkEnd = 'replaced' | 'password_changed' | 'address_changed' | 'verified' | 'cancelled' | 'google' | 'account_deleted';
 const TOKEN_HOURS: Record<TokenPurpose, number> = { verify: 48, reset: 1, change: 24 };
 const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+/** SQL: a link that still works. */
+const OPEN = 'used_at IS NULL AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()';
+/** At most this many new-password emails an hour for one account (anyone can ask: it mustn't flood an inbox). */
+const RESETS_PER_HOUR = 3;
 
-/** A new link for this purpose (an older one of the same purpose stops working). */
+/** Stops a person's links of these kinds that still work, saying why. */
+export async function revokeEmailTokens(db: Pool, userId: number, purposes: TokenPurpose[], reason: LinkEnd) {
+  await db.query(`UPDATE email_tokens SET revoked_at = UTC_TIMESTAMP(), revoked_reason = ? WHERE user_id = ? AND purpose IN (?) AND ${OPEN}`, [
+    reason,
+    userId,
+    purposes,
+  ]);
+}
+
+/**
+ * A new link. One for a new address replaces a link for another address still waiting (opening that one would
+ * switch to the other address). Links confirming the address or setting a password stay valid beside a new one:
+ * whichever email is opened works (using one stops the others), and nobody asking for a new password for someone
+ * else's address can break the link the owner already has.
+ */
 export async function createEmailToken(db: Pool, userId: number, purpose: TokenPurpose, email: string) {
   const token = crypto.randomBytes(32).toString('base64url');
-  await db.execute('DELETE FROM email_tokens WHERE (user_id = ? AND purpose = ?) OR expires_at < UTC_TIMESTAMP()', [userId, purpose]);
+  if (purpose === 'change') {
+    await db.execute(
+      `UPDATE email_tokens SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'replaced' WHERE user_id = ? AND purpose = 'change' AND email <> ? AND ${OPEN}`,
+      [userId, email],
+    );
+  }
   await db.execute(
     'INSERT INTO email_tokens (id, user_id, purpose, email, expires_at, created_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP() + INTERVAL ? HOUR, UTC_TIMESTAMP())',
     [hashToken(token), userId, purpose, email, TOKEN_HOURS[purpose]],
@@ -68,27 +90,51 @@ export async function createEmailToken(db: Pool, userId: number, purpose: TokenP
   return token;
 }
 
-/** Uses a link: its account and address, once (a second use, or an expired link, gets null). */
-export async function takeEmailToken(db: Pool, token: string, purposes: TokenPurpose[]) {
-  const id = hashToken(token);
+/** Whether an account may get another new-password email now (RESETS_PER_HOUR). */
+export async function canSendReset(db: Pool, userId: number) {
+  const [[row]] = await db.execute<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM email_tokens WHERE user_id = ? AND purpose = 'reset' AND created_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR",
+    [userId],
+  );
+  return Number(row!.n) < RESETS_PER_HOUR;
+}
+
+/** Why a link doesn't work: unknown, already used, stopped (and why), or too old. */
+export type LinkError = 'link_invalid' | 'link_used' | 'link_revoked' | 'link_too_old';
+
+export type LinkResult =
+  | { ok: true; userId: number; purpose: TokenPurpose; email: string }
+  | { ok: false; error: LinkError; reason?: LinkEnd; userId?: number; purpose?: TokenPurpose; email?: string };
+
+async function linkState(db: Pool, id: string, purposes: TokenPurpose[], took: boolean): Promise<LinkResult> {
   const [rows] = await db.query<RowDataPacket[]>(
-    'SELECT user_id, purpose, email FROM email_tokens WHERE id = ? AND purpose IN (?) AND expires_at > UTC_TIMESTAMP()',
+    'SELECT user_id, purpose, email, used_at, revoked_at, revoked_reason FROM email_tokens WHERE id = ? AND purpose IN (?)',
     [id, purposes],
   );
   const row = rows[0];
-  if (!row) return null;
-  const [deleted] = await db.execute<ResultSetHeader>('DELETE FROM email_tokens WHERE id = ?', [id]);
-  if (deleted.affectedRows === 0) return null; // used at the same moment elsewhere
-  return { userId: row.user_id as number, purpose: row.purpose as TokenPurpose, email: row.email as string };
+  if (!row) return { ok: false, error: 'link_invalid' };
+  const link = { userId: row.user_id as number, purpose: row.purpose as TokenPurpose, email: row.email as string };
+  if (took) return { ok: true, ...link };
+  if (row.used_at) return { ok: false, error: 'link_used', ...link };
+  if (row.revoked_at) return { ok: false, error: 'link_revoked', reason: row.revoked_reason as LinkEnd, ...link };
+  return { ok: false, error: 'link_too_old', ...link };
 }
 
-/** Whether a link would still work (the new-password page checks before showing its form). */
-export async function emailTokenValid(db: Pool, token: string, purpose: TokenPurpose) {
-  const [rows] = await db.execute<RowDataPacket[]>('SELECT 1 FROM email_tokens WHERE id = ? AND purpose = ? AND expires_at > UTC_TIMESTAMP()', [
-    hashToken(token),
-    purpose,
+/** Uses a link, once: marked used (two at the same moment: one wins), or why it doesn't work. */
+export async function takeEmailToken(db: Pool, token: string, purposes: TokenPurpose[]): Promise<LinkResult> {
+  const id = hashToken(token);
+  const [taken] = await db.query<ResultSetHeader>(`UPDATE email_tokens SET used_at = UTC_TIMESTAMP() WHERE id = ? AND purpose IN (?) AND ${OPEN}`, [
+    id,
+    purposes,
   ]);
-  return rows.length > 0;
+  return linkState(db, id, purposes, taken.affectedRows === 1);
+}
+
+/** Whether a link would still work, without using it (the new-password page asks before showing its form). */
+export async function checkEmailToken(db: Pool, token: string, purpose: TokenPurpose): Promise<LinkResult> {
+  const id = hashToken(token);
+  const [open] = await db.query<RowDataPacket[]>(`SELECT 1 FROM email_tokens WHERE id = ? AND purpose = ? AND ${OPEN}`, [id, purpose]);
+  return linkState(db, id, [purpose], open.length > 0);
 }
 
 /** Sends the link that confirms the account's address. */
@@ -159,9 +205,9 @@ export async function deleteAccount(db: Pool, userId: number, lang: Lang, choice
       await db.execute('UPDATE posts SET deleted_at = ?, deleted_with_account = ? WHERE author_id = ? AND deleted_at IS NULL', [at, userId, userId]);
     }
   }
-  for (const table of ['sessions', 'push_subscriptions', 'email_tokens']) {
-    await db.execute(`DELETE FROM ${table} WHERE user_id = ?`, [userId]);
-  }
+  await db.execute('DELETE FROM push_subscriptions WHERE user_id = ?', [userId]);
+  await endSessions(db, userId, 'account_deleted');
+  await revokeEmailTokens(db, userId, ['verify', 'reset', 'change'], 'account_deleted');
   // No more newsletter emails either (restoring the account doesn't subscribe them again).
   await db.execute(
     'UPDATE newsletter_subscribers SET unsubscribed_at = COALESCE(unsubscribed_at, UTC_TIMESTAMP()) WHERE user_id = ? OR email = (SELECT email FROM users WHERE id = ?)',
@@ -249,19 +295,21 @@ export async function finalizeAccountDeletion(db: Pool, userId: number, transfer
     if (deletePosts) {
       const images = await unusedUploads(db, postIds);
       await db.query('DELETE FROM posts WHERE id IN (?)', [postIds]);
-      await db.execute('DELETE FROM series WHERE author_id = ?', [userId]);
       for (const url of images) await removeUpload(url, '');
     } else {
       await db.execute('UPDATE posts SET author_id = ?, deleted_with_account = NULL WHERE author_id = ?', [transferTo, userId]);
-      await db.execute('UPDATE series SET author_id = ? WHERE author_id = ?', [transferTo, userId]);
     }
   }
+  // Their books go with their posts, or to the same author; empty ones (no chapters) simply go.
+  if (deletePosts || postIds.length === 0) await db.execute('DELETE FROM books WHERE author_id = ?', [userId]);
+  else await db.execute('UPDATE books SET author_id = ? WHERE author_id = ?', [transferTo, userId]);
+  await db.execute('UPDATE cover_templates SET created_by = NULL WHERE created_by = ?', [userId]);
   if (row.deletion_comments === 'delete') {
     // Their comments, and every reply under them, deleted with the account (the replies go with a deleted parent).
     await db.execute('DELETE FROM comments WHERE user_id = ? OR deleted_with_account = ?', [userId, userId]);
   }
 
-  for (const table of ['post_bookmarks', 'post_likes', 'comment_reactions', 'notifications', 'push_subscriptions', 'sessions', 'email_tokens']) {
+  for (const table of ['post_bookmarks', 'post_likes', 'comment_reactions', 'notifications', 'push_subscriptions', 'sessions', 'email_tokens', 'account_changes', 'reading_progress', 'reading_days']) {
     await db.execute(`DELETE FROM ${table} WHERE user_id = ?`, [userId]);
   }
   await db.execute('UPDATE notifications SET actor_id = NULL WHERE actor_id = ?', [userId]);
@@ -277,7 +325,7 @@ export async function finalizeAccountDeletion(db: Pool, userId: number, transfer
   await db.execute(
     `UPDATE users SET email = CONCAT('deleted-', id, '@deleted.invalid'), email_verified_at = NULL, name = '—', username = NULL,
             picture = NULL, avatar_url = NULL, google_id = NULL, password_hash = NULL, occupation = NULL, quote = NULL,
-            notify_settings = NULL, public_articles = 0, public_saved = 0, suspension_reason = NULL, purged_at = UTC_TIMESTAMP()
+            notify_settings = NULL, public_articles = 0, public_books = 0, public_saved = 0, suspension_reason = NULL, purged_at = UTC_TIMESTAMP()
       WHERE id = ?`,
     [userId],
   );
@@ -287,7 +335,8 @@ export async function finalizeAccountDeletion(db: Pool, userId: number, transfer
 
 /**
  * Hourly: tells administrators about deleted accounts whose RETENTION_MONTHS are up (once each; they delete them for
- * good from the admin panel), and drops support tickets and statistics older than what the Terms promise.
+ * good from the admin panel), and about data older than what the Terms promise (lib/retention.ts; at most once a
+ * week; they delete it from the admin panel too). It deletes nothing itself.
  */
 export async function accountHousekeeping(db: Pool) {
   try {
@@ -300,21 +349,10 @@ export async function accountHousekeeping(db: Pool) {
       await db.execute('UPDATE users SET deletion_due_notified_at = UTC_TIMESTAMP() WHERE id = ?', [row.id]);
       await notifyAccountDue(db, { accountId: row.id as number, name: row.name as string });
     }
-    await db.execute(`DELETE FROM support_tickets WHERE created_at < UTC_TIMESTAMP() - INTERVAL ${TICKET_YEARS} YEAR`);
-    await db.execute(`DELETE FROM page_views WHERE day < UTC_DATE() - INTERVAL ${STATS_MONTHS} MONTH`);
-    await db.execute(`DELETE FROM events WHERE day < UTC_DATE() - INTERVAL ${STATS_MONTHS} MONTH`);
-    await db.execute('DELETE FROM email_tokens WHERE expires_at < UTC_TIMESTAMP()');
-    await db.execute(`DELETE FROM email_log WHERE created_at < UTC_TIMESTAMP() - INTERVAL ${EMAIL_LOG_DAYS} DAY`);
-    await db.execute(`DELETE FROM admin_log WHERE created_at < UTC_TIMESTAMP() - INTERVAL ${ADMIN_LOG_YEARS} YEAR`);
-    // What readers searched for (counts per day, nothing about who): as long as the statistics.
-    await db.execute(`DELETE FROM search_log WHERE day < UTC_DATE() - INTERVAL ${STATS_MONTHS} MONTH`);
-    // Newsletter subscriptions never confirmed, after 30 days; which posts went to whom, after a year.
-    await db.execute('DELETE FROM newsletter_subscribers WHERE confirmed_at IS NULL AND created_at < UTC_TIMESTAMP() - INTERVAL 30 DAY');
-    await db.execute('DELETE FROM newsletter_deliveries WHERE sent_at < UTC_TIMESTAMP() - INTERVAL 1 YEAR');
-    // Invitations, a year after they were sent.
-    await db.execute('DELETE FROM invites WHERE created_at < UTC_TIMESTAMP() - INTERVAL 1 YEAR');
+    const old = await retentionTotal(db);
+    if (old > 0) await notifyCleanupDue(db, old);
   } catch (err) {
-    console.error('Account housekeeping failed:', err);
+    logError('job', 'housekeeping', err);
   }
 }
 
@@ -327,7 +365,7 @@ export async function suspendAccount(db: Pool, userId: number, byId: number, day
       WHERE id = ?`,
     [days, days ?? 0, reason, byId, userId],
   );
-  await db.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  await endSessions(db, userId, 'suspended');
   // They hear about it by email too (else only when they try to sign in).
   const [[row]] = await db.execute<RowDataPacket[]>('SELECT email, name, suspended_until FROM users WHERE id = ?', [userId]);
   if (row) void sendMail(suspendedEmail(row.email as string, 'ro', row.name as string, row.suspended_until as Date | null, reason));

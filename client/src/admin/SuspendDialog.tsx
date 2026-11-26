@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAdmin } from '@/admin/context';
 import { useAdminI18n } from '@/admin/i18n';
 import { Dialog, Field } from '@/admin/ui';
 import { api } from '@/lib/api';
@@ -7,10 +8,13 @@ const DURATIONS = [1, 3, 7, 30, 90, null] as const;
 
 /**
  * Suspends an account: for a while or until lifted, with a reason the person sees when they try to sign in. They're
- * signed out everywhere at once (server/src/lib/accounts.ts).
+ * signed out everywhere at once (server/src/lib/accounts.ts), and emailed, only with an email server (else the dialog
+ * says the email won't go).
  */
 export function SuspendDialog({ user, onClose, onDone }: { user: { id: number; name: string }; onClose: () => void; onDone: () => void }) {
   const { t, errorMessage } = useAdminI18n();
+  const { overview } = useAdmin();
+  const canMail = overview ? overview.mail.configured : true;
   const [days, setDays] = useState<number | null>(7);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,7 +47,9 @@ export function SuspendDialog({ user, onClose, onDone }: { user: { id: number; n
         </>
       }
     >
-      <p className="adm-muted">{t('suspend.body')}</p>
+      <p className="adm-muted">
+        {t('suspend.body')} {t(canMail ? 'suspend.mail' : 'users.noticeNoMail')}
+      </p>
       <div className="adm-field">
         <span className="adm-field-label">{t('suspend.duration')}</span>
         <div className="adm-chips" role="radiogroup" aria-label={t('suspend.duration')}>

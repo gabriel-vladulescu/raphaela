@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
 import { siteDay, siteDayStart } from '@/lib/analytics';
 import { requireWriter } from '@/lib/guards';
+import { postPath } from '@/lib/posts';
 
 const DAY_MS = 86_400_000;
 const num = (value: unknown) => Number(value ?? 0);
@@ -9,27 +10,31 @@ const avgOrNull = (value: unknown) => (value === null || value === undefined ? n
 
 /**
  * The statistics: the whole site for owners (the admin dashboard), who can also narrow it to one author's posts
- * (`author`), and for authors the same numbers for their own posts only. Narrowed to an author, there are no other
- * pages and no community. Views, reading time and how far people read come from page_views; shares, saves and the
+ * (`author`), and for authors the same numbers for their own posts only; each also to the journal's articles or the
+ * books' chapters only (`kind`). Narrowed (to an author or a kind), there are no other pages and no community. Views, reading time and how far people read come from page_views; shares, saves and the
  * reading time before a like or a comment from events (both recorded by the browser, one row per visitor, page and
  * day); likes and comments from their own tables.
  */
 const statsRoutes: FastifyPluginAsync = async (app) => {
   const { db } = app;
 
-  app.get<{ Querystring: { days: 7 | 30 | 90; author?: number } }>(
+  app.get<{ Querystring: { days: 7 | 30 | 90; author?: number; kind: 'all' | 'posts' | 'chapters' } }>(
     '/stats',
     {
       preHandler: requireWriter,
       schema: {
         querystring: {
           type: 'object',
-          properties: { days: { type: 'integer', enum: [7, 30, 90], default: 30 }, author: { type: 'integer', minimum: 1 } },
+          properties: {
+            days: { type: 'integer', enum: [7, 30, 90], default: 30 },
+            author: { type: 'integer', minimum: 1 },
+            kind: { type: 'string', enum: ['all', 'posts', 'chapters'], default: 'all' },
+          },
         },
       },
     },
     async (req) => {
-      const { days } = req.query;
+      const { days, kind } = req.query;
       const to = siteDay();
       const from = siteDay(new Date(Date.now() - (days - 1) * DAY_MS));
       const fromUtc = siteDayStart(from);
@@ -46,10 +51,12 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
       const authors = authorRows.map((row) => ({ id: row.id as number, name: row.name as string, posts: num(row.posts) }));
 
       // One author's posts (an author's own, or the one an owner picked; someone without posts means the whole
-      // site): every table narrowed to them (each has a post_id).
+      // site), the journal's articles or the books' chapters: every table narrowed to them (each has a post_id).
       const author = mine ? { id: req.user!.id, name: req.user!.name } : (authors.find((a) => a.id === req.query.author) ?? null);
       const authorId = author?.id ?? null;
-      const scope = authorId ? ' AND post_id IN (SELECT id FROM posts WHERE author_id = ?)' : '';
+      const ofKind = kind === 'posts' ? ' AND book_id IS NULL' : kind === 'chapters' ? ' AND book_id IS NOT NULL' : '';
+      const narrowed = authorId !== null || kind !== 'all';
+      const scope = narrowed ? ` AND post_id IN (SELECT id FROM posts WHERE 1 = 1${authorId ? ' AND author_id = ?' : ''}${ofKind})` : '';
       const scoped = (params: unknown[]) => (authorId ? [...params, authorId] : params);
       const range = scoped([from, to]);
 
@@ -113,11 +120,11 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
 
       // Posts: the most viewed in the period, with what readers did there.
       const [postRows] = await db.query<RowDataPacket[]>(
-        `SELECT p.id, p.title, p.slug, COUNT(*) AS views, COUNT(DISTINCT v.visitor_id) AS visitors,
+        `SELECT p.id, p.title, p.slug, bk.slug AS book_slug, COUNT(*) AS views, COUNT(DISTINCT v.visitor_id) AS visitors,
                 AVG(v.active_seconds) AS avg_seconds, AVG(v.max_scroll >= 90) AS read_through
-           FROM page_views v JOIN posts p ON p.id = v.post_id
+           FROM page_views v JOIN posts p ON p.id = v.post_id LEFT JOIN books bk ON bk.id = p.book_id
           WHERE v.day BETWEEN ? AND ?${scope}
-          GROUP BY p.id, p.title, p.slug
+          GROUP BY p.id, p.title, p.slug, bk.slug
           ORDER BY views DESC, p.id DESC
           LIMIT 50`,
         range,
@@ -150,6 +157,8 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
           id,
           title: row.title as string,
           slug: row.slug as string,
+          /** Where it's read (a chapter: under its book). */
+          path: postPath(row.slug as string, (row.book_slug as string | null) ?? null),
           views: num(row.views),
           visitors: num(row.visitors),
           avgSeconds: Math.round(num(row.avg_seconds)),
@@ -179,7 +188,7 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
         range,
       );
       // The site's other pages, and its community: the whole site's statistics only.
-      const [pageRows] = authorId
+      const [pageRows] = narrowed
         ? [[] as RowDataPacket[]]
         : await db.query<RowDataPacket[]>(
             `SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
@@ -190,7 +199,7 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
       // The community: accounts, devices with notifications on, and what the history tables hold (likes taken back,
       // comments deleted or edited, reactions given).
       const between = [fromUtc, toUtc];
-      const [communityRows] = authorId
+      const [communityRows] = narrowed
         ? [[] as RowDataPacket[]]
         : await db.query<RowDataPacket[]>(
             `SELECT (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS accounts,
@@ -208,6 +217,7 @@ const statsRoutes: FastifyPluginAsync = async (app) => {
 
       return {
         days,
+        kind,
         from,
         to,
         mine,

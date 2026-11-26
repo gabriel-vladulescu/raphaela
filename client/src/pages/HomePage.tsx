@@ -1,10 +1,14 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { BarChart3, Bookmark, FileText, Hash, Plus, Search, X } from 'lucide-react';
+import { Bookmark, Feather, PenLine, Search, SearchX, X } from 'lucide-react';
+import { BackToTop } from '@/components/BackToTop';
 import { CategoryTree } from '@/components/CategoryTree';
+import { Dock } from '@/components/Dock';
+import { EmptyState } from '@/components/EmptyState';
 import { NewsletterSignup } from '@/components/NewsletterSignup';
 import { FeedPost, FeedPostSkeleton, PostCard, PostCardSkeleton } from '@/components/PostCard';
+import { TagLabel } from '@/components/TagChip';
 import { site } from '@/config';
 import { useAuth } from '@/context/auth';
 import { useCategories } from '@/context/categories';
@@ -12,12 +16,13 @@ import { useReactions } from '@/context/reactions';
 import { trackSearch } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { categoryPath } from '@/lib/categories';
-import { articlesPath, newArticlePath, savedPath } from '@/lib/paths';
+import { newArticlePath, savedPath } from '@/lib/paths';
+import { useReadingSummary } from '@/lib/reading';
 import { useHeaderSlot } from '@/lib/headerSlot';
 import { hideSplash } from '@/lib/splash';
 import { useI18n } from '@/lib/i18n';
+import { tagStyle } from '@/lib/tags';
 import type { PostSummary, Tag } from '@/lib/types';
-import { useHideOnScroll } from '@/lib/useHideOnScroll';
 import { NARROW, useMediaQuery } from '@/lib/useMediaQuery';
 
 const PAGE_SIZE = 12;
@@ -30,47 +35,15 @@ interface PostPage {
 }
 
 /**
- * Narrow screens, for authors and owners: the post page's bottom bar, with their tools. New post in the round button, their
- * posts on the left, statistics on the right (the dashboard for owners, their own for authors). Out of the way
- * while scrolling down, like the post page's.
- */
-function WriterBar() {
-  const { user, isOwner } = useAuth();
-  const { t } = useI18n();
-  const hidden = useHideOnScroll();
-  return (
-    <nav className={`post-bar home-bar${hidden ? ' is-hidden' : ''}`} aria-label={t('home.writerBar')}>
-      <div className="post-bar-bg" aria-hidden="true" />
-      <div className="post-bar-inner">
-        <div className="post-bar-group post-bar-left">
-          <Link to={isOwner ? '/admin/articole' : articlesPath(user!.username)} className="reaction-btn reaction-btn-lg">
-            <FileText size={20} />
-            <span>{t('nav.manage')}</span>
-          </Link>
-        </div>
-        <Link to={newArticlePath(user!.username)} className="post-bar-home" aria-label={t('nav.write')} title={t('nav.write')}>
-          <Plus size={28} />
-        </Link>
-        <div className="post-bar-group post-bar-right">
-          <Link to={isOwner ? '/admin/statistici' : '/statistici'} className="reaction-btn reaction-btn-lg">
-            <BarChart3 size={20} />
-            <span>{t('nav.stats')}</span>
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-/**
- * The posts, newest first (those an administrator pinned before them), with search, categories and tags
+ * The journal (/jurnal): the articles (a book's chapters are in the book), newest first (those an administrator pinned before them), with search, categories and tags
  * (/eticheta/:tag). Wide screens: a grid of cards beside the category tree.
  * Narrow screens (phones and tablets, like the post page's bottom bar): a feed (one post after another, more loading
  * on the way down), the search in the top bar, no categories.
  */
 export function HomePage() {
   const { t, errorMessage } = useI18n();
-  const { user, isOwner, canWrite } = useAuth();
+  const { isOwner, canWrite } = useAuth();
+  const reading = useReadingSummary();
   const { categories } = useCategories();
   const { bookmarks } = useReactions();
   const narrow = useMediaQuery(NARROW);
@@ -200,8 +173,8 @@ export function HomePage() {
   const [featured, ...rest] = filtered ? [undefined, ...posts] : posts;
   const withoutCategory = new URLSearchParams(params);
   withoutCategory.delete('category');
-  const clearCategoryHref = `${tagSlug ? `/eticheta/${tagSlug}` : '/'}${withoutCategory.toString() ? `?${withoutCategory}` : ''}`;
-  const clearTagHref = params.toString() ? `/?${params}` : '/';
+  const clearCategoryHref = `${tagSlug ? `/eticheta/${tagSlug}` : '/jurnal'}${withoutCategory.toString() ? `?${withoutCategory}` : ''}`;
+  const clearTagHref = params.toString() ? `/jurnal?${params}` : '/jurnal';
 
   const searchBox = (
     <label className="search-box home-search">
@@ -228,7 +201,7 @@ export function HomePage() {
 
       {/* Administrators don't save posts. */}
       {!isOwner && (
-        <Link to={savedPath(user?.username)} className="saved-pill">
+        <Link to={savedPath()} className="saved-pill">
           <Bookmark size={18} />
           <span>{t('nav.saved')}</span>
           {bookmarks.length > 0 && <span className="saved-pill-count">{bookmarks.length}</span>}
@@ -249,9 +222,8 @@ export function HomePage() {
           <div className="feed-context">
             {tagSlug && (
               <span className="filter-chip">
-                <span className="filter-chip-current">
-                  <Hash size={14} aria-hidden="true" />
-                  {tag?.name ?? tagSlug}
+                <span className="filter-chip-current filter-chip-tag" style={tagStyle(tag?.color)}>
+                  <TagLabel tag={tag ?? { name: tagSlug }} />
                 </span>
                 <Link to={clearTagHref} className="filter-chip-clear" aria-label={t('home.clearFilters')} title={t('home.clearFilters')}>
                   <X size={14} />
@@ -296,25 +268,30 @@ export function HomePage() {
               ))}
             </div>
           )
+        ) : posts.length === 0 && filtered ? (
+          <EmptyState icon={SearchX} title={t('empty.search.title')} text={t('empty.search.text')}>
+            <Link to="/jurnal" className="btn btn-soft">
+              {t('home.clearFilters')}
+            </Link>
+          </EmptyState>
         ) : posts.length === 0 ? (
-          <div className="empty-state card">
-            <span className="empty-glyph" aria-hidden="true">✧</span>
-            <p>{filtered ? t('home.emptySearch') : t('home.empty')}</p>
-            {filtered && (
-              <Link to="/" className="btn btn-secondary">
-                {t('home.clearFilters')}
+          <EmptyState icon={Feather} title={t('empty.journal.title')} text={t('empty.journal.text')}>
+            {canWrite ? (
+              <Link to={newArticlePath()} className="btn btn-warm">
+                <PenLine size={16} /> {t('empty.journal.write')}
+              </Link>
+            ) : (
+              <Link to="/carti" className="btn btn-soft">
+                {t('empty.journal.toBooks')}
               </Link>
             )}
-          </div>
+          </EmptyState>
         ) : narrow ? (
           <>
             <div className="feed-list">
-              {posts.map((post, index) => (
-                <Fragment key={post.id}>
-                  <FeedPost post={post} featured={post === featured} />
-                  {/* The newsletter, a few posts in (wide screens have it in the sidebar). */}
-                  {index === Math.min(3, posts.length - 1) && !filtered && <NewsletterSignup variant="wide" />}
-                </Fragment>
+              {/* (no newsletter box here: narrow screens have it in the account menu, and offered after reading) */}
+              {posts.map((post) => (
+                <FeedPost key={post.id} post={post} featured={post === featured} />
               ))}
               {loadingMore && <FeedPostSkeleton />}
             </div>
@@ -342,7 +319,8 @@ export function HomePage() {
         )}
       </section>
 
-      {narrow && canWrite && <WriterBar />}
+      {narrow && <Dock reading={reading} />}
+      <BackToTop />
     </div>
   );
 }

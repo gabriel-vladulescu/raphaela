@@ -1,19 +1,18 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { createEmailToken, deleteAccount, hasPosts, sendVerification } from '@/lib/accounts';
+import { createEmailToken, deleteAccount, hasPosts, revokeEmailTokens, sendVerification } from '@/lib/accounts';
+import { recordAccountChange } from '@/lib/accountChanges';
 import { exportAccount } from '@/lib/dataExport';
 import { changeEmail, langOf, siteLink } from '@/lib/emails';
 import { requireUser } from '@/lib/guards';
-import { canSendMail, sendMail } from '@/lib/mail';
+import { mailConfigured, sendMail } from '@/lib/mail';
 import { importLikes, likedPostIds } from '@/lib/likes';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { VISIBLE_POST } from '@/lib/posts';
 import { canClaimEmail, endOtherSessions, endSession, getGoogleLink, loadUser, roleOverrideFor, setGoogleLink } from '@/lib/session';
 import { usernameProblemFor } from '@/lib/usernames';
 import { keepVisitor } from '@/lib/visitor';
-import { removeUpload, saveImage } from '@/lib/uploads';
-
-const AVATAR_PREFIX = 'avatar-';
+import { AVATAR_PREFIX, removeUpload, saveImage } from '@/lib/uploads';
 
 /** The viewer's liked posts (account, or this browser for guests) and, with an account, saved posts. */
 async function getReactions(db: Pool, req: FastifyRequest) {
@@ -84,8 +83,10 @@ const meRoutes: FastifyPluginAsync = async (app) => {
           if ((err as { code?: string }).code === 'ER_DUP_ENTRY') return reply.code(409).send({ error: 'username_taken' });
           throw err;
         }
+        await recordAccountChange(db, userId, 'username', req.user!.username, username, 'profile');
       }
       await db.execute('UPDATE users SET name = ?, name_confirmed = 1 WHERE id = ?', [name, userId]);
+      await recordAccountChange(db, userId, 'name', req.user!.name, name, 'profile');
       if (req.body.acceptTerms === true) {
         await db.execute('UPDATE users SET terms_accepted_at = COALESCE(terms_accepted_at, UTC_TIMESTAMP()) WHERE id = ?', [userId]);
       }
@@ -111,8 +112,8 @@ const meRoutes: FastifyPluginAsync = async (app) => {
 
   // A new email. It stops signing in with Google (whose address is always the account's), so an account without a
   // password sets one here; one with a password confirms with it. The new address gets a link, and becomes the
-  // account's once it's followed (routes/auth.ts, /auth/verify-email); until then `pending` is it. Without a way to
-  // send email (production without SMTP), it changes at once, unconfirmed. An address another account has (even a
+  // account's once it's followed (routes/auth.ts, /auth/verify-email); until then `pending` is it. Not without an SMTP
+  // server (email_unavailable): an address never changes unconfirmed. An address another account has (even a
   // deleted one, kept for a while) can't be taken; administrator addresses only through Google (canClaimEmail).
   app.put<{ Body: { email: string; currentPassword?: string; newPassword?: string; lang?: string } }>(
     '/me/email',
@@ -137,6 +138,8 @@ const meRoutes: FastifyPluginAsync = async (app) => {
       const user = req.user!;
       const email = req.body.email.trim().toLowerCase();
       if (email === user.email) return { user, pending: null };
+      // The new address is confirmed by an emailed link: not without a way to send it.
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
       const [[row]] = await db.execute<RowDataPacket[]>('SELECT password_hash FROM users WHERE id = ?', [user.id]);
       let newHash: string | null = null;
       if (row!.password_hash) {
@@ -151,28 +154,16 @@ const meRoutes: FastifyPluginAsync = async (app) => {
       const [used] = await db.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ? AND id <> ?', [email, user.id]);
       if (used[0]) return reply.code(409).send({ error: 'email_in_use' });
 
-      if (canSendMail()) {
-        if (newHash) await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
-        const token = await createEmailToken(db, user.id, 'change', email);
-        void sendMail(changeEmail(email, langOf(req.body.lang), user.name, siteLink(`/confirmare-email?token=${token}`)));
-        return { user: await loadUser(db, user.id), pending: email };
-      }
-      try {
-        await db.execute(
-          'UPDATE users SET email = ?, email_verified_at = NULL, google_id = NULL, password_hash = COALESCE(?, password_hash) WHERE id = ?',
-          [email, newHash, user.id],
-        );
-      } catch (err) {
-        if (duplicateOf(err)) return reply.code(409).send({ error: 'email_in_use' });
-        throw err;
-      }
-      return { user: await loadUser(db, user.id), pending: null };
+      if (newHash) await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
+      const token = await createEmailToken(db, user.id, 'change', email);
+      void sendMail(changeEmail(email, langOf(req.body.lang), user.name, siteLink(`/confirmare-email?token=${token}`)));
+      return { user: await loadUser(db, user.id), pending: email };
     },
   );
 
   // Gives up a new address waiting for confirmation (its link stops working).
   app.delete('/me/email/pending', { preHandler: requireUser }, async (req) => {
-    await db.execute("DELETE FROM email_tokens WHERE user_id = ? AND purpose = 'change'", [req.user!.id]);
+    await revokeEmailTokens(db, req.user!.id, ['change'], 'cancelled');
     return { user: await loadUser(db, req.user!.id) };
   });
 
@@ -187,13 +178,13 @@ const meRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const user = req.user!;
       if (user.emailVerified) return { ok: true };
-      if (!canSendMail()) return reply.code(503).send({ error: 'email_unavailable' });
+      if (!mailConfigured()) return reply.code(503).send({ error: 'email_unavailable' });
       if (!(await sendVerification(db, user, langOf(req.body?.lang)))) return reply.code(502).send({ error: 'email_failed' });
       return { ok: true };
     },
   );
 
-  // Everything kept about the account, as a JSON file to download (Profile, "Descarcă datele mele").
+  // Everything kept about the account, as a JSON file to download (Profile, "Download my data").
   app.get('/me/export', { preHandler: requireUser, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (req, reply) => {
     const data = await exportAccount(db, req.user!.id);
     const day = new Date().toISOString().slice(0, 10);
@@ -272,6 +263,8 @@ const meRoutes: FastifyPluginAsync = async (app) => {
       }
       await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(req.body.newPassword), user.id]);
       await endOtherSessions(db, req, user.id);
+      // A new-password link asked for earlier would undo this: it stops working.
+      await revokeEmailTokens(db, user.id, ['reset'], 'password_changed');
       return { user: await loadUser(db, user.id) };
     },
   );
@@ -294,7 +287,7 @@ const meRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // The Google account picked on the profile page ("Conectează Google", routes/auth.ts), when its address isn't
+  // The Google account picked on the profile page ("Connect Google", routes/auth.ts), when its address isn't
   // the account's: shown to be confirmed, since connecting it changes the email.
   app.get('/me/google/pending', { preHandler: requireUser }, async (req) => {
     const link = await getGoogleLink(db, req);
@@ -314,8 +307,11 @@ const meRoutes: FastifyPluginAsync = async (app) => {
           WHERE id = ?`,
         [link.sub, link.email, link.picture, roleOverrideFor(link.email), user.id],
       );
-      // A new address waiting for its link is dropped: this one, proven by Google, replaced it.
-      await db.execute("DELETE FROM email_tokens WHERE user_id = ? AND purpose IN ('change', 'verify')", [user.id]);
+      // A new address waiting for its link is dropped: this one, proven by Google, replaced it. Links sent to the old
+      // address (a new password) stop too, when the address changed.
+      await revokeEmailTokens(db, user.id, ['change', 'verify'], 'google');
+      if (link.email !== user.email) await revokeEmailTokens(db, user.id, ['reset'], 'address_changed');
+      await recordAccountChange(db, user.id, 'email', user.email, link.email, 'google');
     } catch (err) {
       const duplicate = duplicateOf(err);
       if (duplicate) return reply.code(409).send({ error: duplicate });
@@ -329,8 +325,9 @@ const meRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true };
   });
 
-  // Whether anyone may see their articles (/{username}/articole) and their saved ones (/{username}/articole-salvate).
-  app.put<{ Body: { publicArticles?: boolean; publicSaved?: boolean } }>(
+  // Whether anyone may see their journal (/{username}/jurnal), their books (/{username}/carti) and their saved posts
+  // (/{username}/salvate).
+  app.put<{ Body: { publicArticles?: boolean; publicBooks?: boolean; publicSaved?: boolean } }>(
     '/me/privacy',
     {
       preHandler: requireUser,
@@ -338,15 +335,16 @@ const meRoutes: FastifyPluginAsync = async (app) => {
         body: {
           type: 'object',
           additionalProperties: false,
-          properties: { publicArticles: { type: 'boolean' }, publicSaved: { type: 'boolean' } },
+          properties: { publicArticles: { type: 'boolean' }, publicBooks: { type: 'boolean' }, publicSaved: { type: 'boolean' } },
         },
       },
     },
     async (req, reply) => {
-      const { publicArticles, publicSaved } = req.body;
+      const { publicArticles, publicBooks, publicSaved } = req.body;
       // Administrators have no saved list (and their articles list is every post).
       if (req.user!.role === 'owner') return reply.code(403).send({ error: 'forbidden' });
       if (publicArticles !== undefined) await db.execute('UPDATE users SET public_articles = ? WHERE id = ?', [publicArticles ? 1 : 0, req.user!.id]);
+      if (publicBooks !== undefined) await db.execute('UPDATE users SET public_books = ? WHERE id = ?', [publicBooks ? 1 : 0, req.user!.id]);
       if (publicSaved !== undefined) await db.execute('UPDATE users SET public_saved = ? WHERE id = ?', [publicSaved ? 1 : 0, req.user!.id]);
       return { user: await loadUser(db, req.user!.id) };
     },

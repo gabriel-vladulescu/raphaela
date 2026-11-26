@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Ban, CalendarClock, ChevronRight, MailCheck, MessageSquare, RotateCcw, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Ban, BellRing, CalendarClock, ChevronRight, History, KeyRound, LogIn, LogOut, Mail, MailCheck, MessageSquare, RotateCcw, ShieldCheck, ShieldX, Trash2, UserPen, Users } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { FinalizeDialog } from '@/admin/FinalizeDialog';
 import { InviteDialog, InviteIcon, InvitesCard } from '@/admin/Invites';
@@ -8,12 +8,12 @@ import { useDescribe } from '@/admin/pages/Log';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
 import { SuspendDialog } from '@/admin/SuspendDialog';
-import type { AdminUser, AdminUserDetail, LogEntry, LogPage, UserList, UserStatus } from '@/admin/types';
-import { Badge, Card, ConfirmDialog, Dialog, Empty, ErrorNote, LoadMore, Loading, PageHead, roleKey, SearchBox, Select, Tabs } from '@/admin/ui';
+import type { AccountChange, AdminUser, AdminUserDetail, EmailLink, Login, LogEntry, LogPage, PushDevice, SignInAttempt, UserList, UserStatus } from '@/admin/types';
+import { Badge, Card, ConfirmDialog, Dialog, Empty, ErrorNote, Field, LoadMore, Loading, PageHead, roleKey, SearchBox, Select, Tabs } from '@/admin/ui';
 import { Avatar } from '@/components/Avatar';
 import { useAuth } from '@/context/auth';
-import { api } from '@/lib/api';
-import { articlesPath } from '@/lib/paths';
+import { api, ApiError } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 const PAGE = 25;
 const STATUSES: UserStatus[] = ['all', 'active', 'suspended', 'deleted', 'due', 'unverified'];
@@ -213,16 +213,39 @@ export function UsersPage() {
   );
 }
 
+/** The account's confirmations: their titles (the button too) and texts. */
+const CONFIRM = {
+  lift: { title: 'users.lift', body: 'users.liftBody' },
+  restore: { title: 'users.restore', body: 'users.restoreBody' },
+  sessions: { title: 'users.endSessions', body: 'users.endSessionsBody' },
+  reset: { title: 'users.sendReset', body: 'users.sendResetBody' },
+} as const satisfies Record<string, { title: AdminKey; body: AdminKey }>;
+
 /** One account: who, its numbers, its state, and what an administrator can do about it. */
 function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const { t, formatDate, formatDateTime, timeAgo, formatNumber, errorMessage } = useAdminI18n();
   const { user: me } = useAuth();
-  const [data, setData] = useState<{ user: AdminUserDetail; comments: { id: number; body: string; createdAt: string; deleted: boolean; post: { title: string; slug: string }; openReports: number }[] } | null>(null);
+  const [data, setData] = useState<{
+    user: AdminUserDetail;
+    comments: { id: number; body: string; createdAt: string; deleted: boolean; post: { title: string; slug: string }; openReports: number }[];
+    links: EmailLink[];
+    logins: Login[];
+    attempts: SignInAttempt[];
+    devices: PushDevice[];
+    changes: AccountChange[];
+  } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [suspending, setSuspending] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
-  const [confirm, setConfirm] = useState<'lift' | 'restore' | null>(null);
+  const [confirm, setConfirm] = useState<'lift' | 'restore' | 'sessions' | 'reset' | null>(null);
+  const [editing, setEditing] = useState(false);
+  /** What the last action did, said under the buttons ("Signed out of 2 browsers"). */
+  const [done, setDone] = useState('');
+  const { overview } = useAdmin();
+  const { lang } = useI18n();
+  /** Without an email server nothing is emailed: no link, and the notices (restored, suspended) don't go. */
+  const canMail = overview ? overview.mail.configured : true;
   const [history, setHistory] = useState<LogEntry[]>([]);
   const describe = useDescribe();
 
@@ -237,11 +260,13 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
   }, [id]);
   useEffect(load, [load]);
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, said?: (result: never) => string) {
     setBusy(true);
     setError('');
+    setDone('');
     try {
-      await action();
+      const result = await action();
+      if (said) setDone(said(result as never));
       setConfirm(null);
       load();
       onChanged();
@@ -359,6 +384,18 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
               <dd>{formatNumber(u!.sessions)}</dd>
             </div>
             <div>
+              <dt>{t('users.followers')}</dt>
+              <dd>{formatNumber(u!.followers)}</dd>
+            </div>
+            <div>
+              <dt>{t('users.following')}</dt>
+              <dd>{formatNumber(u!.following)}</dd>
+            </div>
+            <div>
+              <dt>{t('users.failedSignIns')}</dt>
+              <dd>{u!.failedSignIns > 0 ? <Badge tone="bad">{formatNumber(u!.failedSignIns)}</Badge> : '0'}</dd>
+            </div>
+            <div>
               <dt>{t('users.signIn')}</dt>
               <dd>{[u!.hasPassword && t('users.password'), u!.google && 'Google'].filter(Boolean).join(' + ') || '—'}</dd>
             </div>
@@ -389,12 +426,32 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
                     <MailCheck size={14} /> {t('users.markVerified')}
                   </button>
                 )}
+                <button type="button" className="adm-btn is-small" onClick={() => setEditing(true)}>
+                  <UserPen size={14} /> {t('profile.edit')}
+                </button>
+                <button type="button" className="adm-btn is-small" disabled={busy || u!.sessions === 0} onClick={() => setConfirm('sessions')}>
+                  <LogOut size={14} /> {t('users.endSessions')}
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn is-small"
+                  disabled={busy || !canMail}
+                  title={canMail ? undefined : t('users.resetNoMail')}
+                  onClick={() => setConfirm('reset')}
+                >
+                  <KeyRound size={14} /> {t('users.sendReset')}
+                </button>
                 {!u!.suspension && (
                   <button type="button" className="adm-btn is-small is-danger-ghost" onClick={() => setSuspending(true)}>
                     <Ban size={14} /> {t('users.suspend')}
                   </button>
                 )}
               </div>
+              {done && (
+                <p className="adm-saved" role="status">
+                  {done}
+                </p>
+              )}
             </section>
           )}
           {u!.role === 'owner' && <p className="adm-muted adm-small">{t('users.ownerLocked')}</p>}
@@ -430,6 +487,149 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
             )}
           </section>
 
+          {data.changes.length > 0 && (
+            <section className="adm-user-section">
+              <h3>{t('users.changes')}</h3>
+              <ul className="adm-feed is-compact">
+                {data.changes.map((change, i) => (
+                  <li key={`${change.field}-${change.at}-${i}`}>
+                    <History size={15} className="adm-muted" aria-hidden="true" />
+                    <div>
+                      <p className="adm-break">
+                        {t(`users.change.${change.field}` as AdminKey)}: <span className="adm-muted">{change.from ?? '—'}</span> → <strong>{change.to ?? '—'}</strong>
+                      </p>
+                      <span className="adm-muted adm-small">
+                        {formatDateTime(change.at)} · {t(`users.change.via.${change.via}` as AdminKey)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {data.logins.length > 0 && (
+            <section className="adm-user-section">
+              <h3>{t('users.logins')}</h3>
+              <ul className="adm-feed is-compact">
+                {data.logins.map((login) => {
+                  const status = login.endedAt
+                    ? {
+                        tone: 'neutral' as const,
+                        label: t('users.login.ended', { reason: t(`users.login.reason.${login.endReason ?? 'signed_out'}` as AdminKey), date: formatDateTime(login.endedAt) }),
+                      }
+                    : new Date(login.expiresAt) <= new Date()
+                      ? { tone: 'neutral' as const, label: t('users.login.expired', { date: formatDateTime(login.expiresAt) }) }
+                      : { tone: 'good' as const, label: t('users.login.active', { date: formatDateTime(login.expiresAt) }) };
+                  return (
+                    <li key={login.startedAt}>
+                      <LogIn size={15} className="adm-muted" aria-hidden="true" />
+                      <div>
+                        <p>
+                          {t('users.login.started', { date: formatDateTime(login.startedAt) })} <Badge tone={status.tone}>{status.label}</Badge>
+                        </p>
+                        {login.device && <span className="adm-muted adm-small">{login.device}</span>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          {data.attempts.length > 0 && (
+            <section className="adm-user-section">
+              <h3>
+                {t('users.attempts')}
+                <Link to={`/admin/jurnal?tab=auth&user=${u!.id}`} className="adm-link">
+                  {t('common.all')} <ChevronRight size={14} />
+                </Link>
+              </h3>
+              <ul className="adm-feed is-compact">
+                {data.attempts.map((attempt, i) => (
+                  <li key={`${attempt.at}-${i}`}>
+                    {attempt.outcome === 'ok' ? (
+                      <KeyRound size={15} className="adm-muted" aria-hidden="true" />
+                    ) : (
+                      <ShieldX size={15} className="adm-bad" aria-hidden="true" />
+                    )}
+                    <div>
+                      <p>
+                        {t(`auth.method.${attempt.method}` as AdminKey)}{' '}
+                        <Badge tone={attempt.outcome === 'ok' ? 'good' : 'bad'}>{t(`auth.outcome.${attempt.outcome}` as AdminKey)}</Badge>
+                      </p>
+                      <span className="adm-muted adm-small">
+                        {formatDateTime(attempt.at)}
+                        {attempt.device && <> · {attempt.device}</>}
+                        {attempt.email && attempt.email !== u!.email && <> · {attempt.email}</>}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {data.devices.length > 0 && (
+            <section className="adm-user-section">
+              <h3>
+                {t('users.devices')}
+                <Link to={`/admin/jurnal?tab=push&user=${u!.id}`} className="adm-link">
+                  {t('logs.tab.push')} <ChevronRight size={14} />
+                </Link>
+              </h3>
+              <ul className="adm-feed is-compact">
+                {data.devices.map((device) => (
+                  <li key={device.id}>
+                    <BellRing size={15} className="adm-muted" aria-hidden="true" />
+                    <div>
+                      <p>
+                        {device.device ?? t('users.device.unknown')}{' '}
+                        {device.activity ? <Badge tone="good">{t('users.device.on')}</Badge> : <Badge>{t('users.device.off')}</Badge>}
+                        {device.books > 0 && <Badge tone="info">{t('users.device.books', { n: device.books })}</Badge>}
+                      </p>
+                      <span className="adm-muted adm-small">
+                        {t('users.device.since', { date: formatDate(device.since) })}
+                        {device.lastSentAt && <> · {t('users.device.last', { date: formatDateTime(device.lastSentAt) })}</>}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {data.links.length > 0 && (
+            <section className="adm-user-section">
+              <h3>{t('users.links')}</h3>
+              <ul className="adm-feed is-compact">
+                {data.links.map((link) => {
+                  const status = link.usedAt
+                    ? { tone: 'good' as const, label: t('users.link.used', { date: formatDateTime(link.usedAt) }) }
+                    : link.revokedAt
+                      ? { tone: 'neutral' as const, label: t(`users.link.revoked.${link.revokedReason ?? 'other'}` as AdminKey) }
+                      : new Date(link.expiresAt) <= new Date()
+                        ? { tone: 'neutral' as const, label: t('users.link.expired') }
+                        : { tone: 'info' as const, label: t('users.link.open', { date: formatDateTime(link.expiresAt) }) };
+                  return (
+                    <li key={`${link.purpose}-${link.sentAt}`}>
+                      <Mail size={15} className="adm-muted" aria-hidden="true" />
+                      <div>
+                        <p>
+                          {t(`users.link.${link.purpose}` as AdminKey)} <Badge tone={status.tone}>{status.label}</Badge>
+                        </p>
+                        <span className="adm-muted adm-small">
+                          {t('users.link.sent', { date: formatDateTime(link.sentAt) })}
+                          {link.email !== u!.email && <> · {t('users.link.to', { email: link.email })}</>}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
           {history.length > 0 && (
             <section className="adm-user-section">
               <h3>
@@ -455,7 +655,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           )}
 
           {u!.username && !u!.deletedAt && u!.postCount > 0 && (
-            <Link to={articlesPath(u!.username)} className="adm-link">
+            <Link to={`/admin/articole?author=${u!.id}`} className="adm-link">
               <CalendarClock size={14} /> {t('users.theirPosts')}
             </Link>
           )}
@@ -486,17 +686,112 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
       )}
       {confirm && u && (
         <ConfirmDialog
-          title={t(confirm === 'lift' ? 'users.lift' : 'users.restore')}
-          body={t(confirm === 'lift' ? 'users.liftBody' : 'users.restoreBody', { name: u.name, email: u.email })}
-          confirmLabel={t(confirm === 'lift' ? 'users.lift' : 'users.restore')}
+          title={t(CONFIRM[confirm].title)}
+          body={
+            confirm === 'restore'
+              ? `${t('users.restoreBody', { name: u.name })} ${canMail ? t('users.restoreMail', { email: u.email }) : t('users.noticeNoMail')}`
+              : t(CONFIRM[confirm].body, { name: u.name, email: u.email })
+          }
+          confirmLabel={t(CONFIRM[confirm].title)}
           busy={busy}
           error={error}
           onCancel={() => setConfirm(null)}
           onConfirm={() =>
-            void run(() => api(confirm === 'lift' ? `/admin/users/${u.id}/suspend` : `/admin/users/${u.id}/restore`, { method: confirm === 'lift' ? 'DELETE' : 'POST' }))
+            void (confirm === 'sessions'
+              ? run(
+                  () => api<{ ended: number }>(`/admin/users/${u.id}/sessions/end`, { method: 'POST' }),
+                  (result: { ended: number }) => t('users.sessionsEnded', { n: result.ended }),
+                )
+              : confirm === 'reset'
+                ? run(
+                    () => api(`/admin/users/${u.id}/password-reset`, { method: 'POST', body: { lang } }),
+                    () => t('users.resetSent', { email: u.email }),
+                  )
+                : run(() => api(confirm === 'lift' ? `/admin/users/${u.id}/suspend` : `/admin/users/${u.id}/restore`, { method: confirm === 'lift' ? 'DELETE' : 'POST' })))
           }
         />
       )}
+      {editing && u && (
+        <ProfileDialog
+          user={u}
+          onClose={() => setEditing(false)}
+          onSaved={(changed) => {
+            setEditing(false);
+            setDone(changed.length ? t('profile.saved') : t('profile.unchanged'));
+            load();
+            onChanged();
+          }}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+/**
+ * Corrects what a person shows the others: name, username, occupation, quote, and their picture (taken off). What
+ * changes is in the account's history and the administrators' log.
+ */
+function ProfileDialog({ user, onClose, onSaved }: { user: AdminUserDetail; onClose: () => void; onSaved: (changed: string[]) => void }) {
+  const { t, errorMessage } = useAdminI18n();
+  const [form, setForm] = useState({ name: user.name, username: user.username ?? '', occupation: user.occupation ?? '', quote: user.quote ?? '', removePicture: false });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (patch: Partial<typeof form>) => setForm((current) => ({ ...current, ...patch }));
+
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api<{ changed: string[] }>(`/admin/users/${user.id}/profile`, {
+        method: 'PATCH',
+        body: { name: form.name, ...(form.username ? { username: form.username } : {}), occupation: form.occupation, quote: form.quote, removePicture: form.removePicture },
+      });
+      onSaved(result.changed);
+    } catch (err) {
+      setError(err instanceof ApiError && err.code === 'name_invalid' ? t('profile.nameInvalid') : errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      title={t('profile.title', { name: user.name })}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="adm-btn is-ghost" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </button>
+          <button type="button" className="adm-btn is-primary" onClick={() => void save()} disabled={busy}>
+            {busy ? t('common.loading') : t('common.save')}
+          </button>
+        </>
+      }
+    >
+      <div className="adm-form">
+        <p className="adm-muted adm-small">{t('profile.intro')}</p>
+        <Field label={t('profile.field.name')}>
+          <input className="adm-input" value={form.name} maxLength={80} onChange={(event) => set({ name: event.target.value })} />
+        </Field>
+        <Field label={t('profile.field.username')} hint={t('profile.usernameHint')}>
+          <input className="adm-input" value={form.username} maxLength={40} onChange={(event) => set({ username: event.target.value })} />
+        </Field>
+        <Field label={t('profile.field.occupation')}>
+          <input className="adm-input" value={form.occupation} maxLength={80} onChange={(event) => set({ occupation: event.target.value })} />
+        </Field>
+        <Field label={t('profile.field.quote')}>
+          <textarea className="adm-input adm-textarea" rows={3} value={form.quote} maxLength={300} onChange={(event) => set({ quote: event.target.value })} />
+        </Field>
+        {user.picture && (
+          <label className="adm-check">
+            <input type="checkbox" checked={form.removePicture} onChange={(event) => set({ removePicture: event.target.checked })} />
+            <Avatar name={user.name} picture={user.picture} size={28} />
+            <span>{t('profile.removePicture')}</span>
+          </label>
+        )}
+        {error && <p className="adm-form-error">{error}</p>}
+      </div>
     </Dialog>
   );
 }

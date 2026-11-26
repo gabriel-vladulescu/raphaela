@@ -6,11 +6,11 @@ import { slugify } from '@/lib/slug';
 
 /** Words the site uses at the start of its own addresses (and a few it may): never a username. */
 export const RESERVED = new Set([
-  'admin', 'api', 'articole', 'articles', 'assets', 'auth', 'autor', 'autori', 'ajutor', 'cautare', 'categorii',
-  'contact', 'despre', 'edit', 'editor', 'eticheta', 'etichete', 'help', 'home', 'icons', 'invitatie', 'login', 'logout',
+  'admin', 'api', 'articole', 'articles', 'assets', 'auth', 'autor', 'autori', 'ajutor', 'books', 'carte', 'carti', 'cautare', 'categorii',
+  'contact', 'despre', 'drumuri', 'edit', 'editor', 'eticheta', 'etichete', 'help', 'home', 'icons', 'invitatie', 'jurnal', 'login', 'logout',
   'manifest', 'new', 'newsletter', 'notificari', 'notifications', 'nou', 'posts', 'preview', 'previzualizare', 'profil',
-  'profile', 'raphaela', 'register', 'rss', 'saved', 'search', 'settings', 'setari', 'setup', 'sitemap', 'src',
-  'statistici', 'stats', 'support', 'suport', 'tags', 'u', 'uploads', 'user', 'users', 'www',
+  'profile', 'raphaela', 'register', 'rss', 'salvate', 'saved', 'search', 'settings', 'setari', 'setup', 'sitemap', 'src',
+  'statistici', 'stats', 'subiecte', 'support', 'suport', 'tags', 'u', 'uploads', 'user', 'users', 'www',
 ]);
 
 /** 3 to 30 lowercase letters and digits; words joined by single dots, never at the start or the end. */

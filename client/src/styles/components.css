@@ -34,7 +34,7 @@
   min-width: 0;
   margin: 0;
   padding: 0 4px;
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   white-space: nowrap;
 }
 
@@ -58,7 +58,7 @@
 
 .footer-link {
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .footer-link:hover {
@@ -117,7 +117,7 @@
 
 .popover-heading {
   margin: 4px 4px 8px;
-  font-size: 0.75rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -148,7 +148,7 @@
   background: none;
   cursor: pointer;
   text-align: left;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .theme-option:hover {
@@ -244,7 +244,7 @@
   background: none;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   color: var(--muted);
   transition: background 0.18s, color 0.18s, box-shadow 0.18s;
 }
@@ -276,7 +276,7 @@
 }
 
 .user-card-text .muted {
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -299,8 +299,8 @@
   border-radius: 10px;
   background: none;
   color: var(--text-2);
-  font-size: 0.93rem;
-  font-weight: 500;
+  font-size: var(--fs-strong);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -408,8 +408,8 @@
   background: var(--text);
   color: var(--bg);
   box-shadow: var(--shadow-lg);
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: var(--fs-small);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -468,13 +468,13 @@
   flex-direction: column;
   gap: 2px;
   color: var(--text-2);
-  font-size: 0.86rem;
+  font-size: var(--fs-small);
   line-height: 1.4;
 }
 
 .install-text strong {
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
 }
 
 .install-share {
@@ -554,7 +554,34 @@ html:has(dialog.modal[open]) body {
 }
 
 .modal-body h2 {
-  font-size: 1.45rem;
+  font-size: var(--fs-section);
+}
+
+/* A dialog's head (ModalHead), as every picker's and sheet's: the title (Fraunces, a card title's size) and the close
+   button, a line under it. */
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-card);
+  font-weight: 600;
+}
+
+.modal-head + .modal-body {
+  padding-top: 18px;
+}
+
+@media (max-width: 640px) {
+  .modal-head {
+    padding-inline: 16px;
+  }
 }
 
 .modal-actions {
@@ -592,7 +619,7 @@ html:has(dialog.modal[open]) body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px 22px 22px;
+  padding: 14px 22px 22px;
 }
 
 .share-head {
@@ -600,10 +627,11 @@ html:has(dialog.modal[open]) body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 20px 22px 0;
 }
 
 .share-head h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-card);
 }
 
 .share-preview {
@@ -631,7 +659,7 @@ html:has(dialog.modal[open]) body {
   display: -webkit-box;
   overflow: hidden;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.3;
   -webkit-box-orient: vertical;
@@ -640,7 +668,7 @@ html:has(dialog.modal[open]) body {
 
 .share-preview-text span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 
 .share-apps {
@@ -658,7 +686,7 @@ html:has(dialog.modal[open]) body {
   border: 0;
   background: none;
   color: var(--text-2);
-  font-size: 0.76rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -734,7 +762,7 @@ html:has(dialog.modal[open]) body {
   min-width: 0;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -748,13 +776,43 @@ html:has(dialog.modal[open]) body {
   border-radius: var(--radius-sm);
   background: var(--success-soft);
   color: var(--success);
-  font-size: 0.86rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
-/* Sheets (share, comment options): dialogs on wide screens, rising from the bottom on phones. */
+/* Sheets (share, comment options): dialogs on wide screens, rising from the bottom on phones. What a sheet holds:
+   maybe a head first (its title, its close button), which stays, and its content last, which scrolls by itself, under
+   the head: the scrollbar is inside the sheet, not along its whole edge. */
+.modal.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal.sheet > * {
+  flex: none;
+}
+
+/* (a head: a line under it, which what scrolls goes under) */
+.modal.sheet > :not(:last-child) {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal.sheet > :last-child {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* 100vw: across the whole window, also over the room a desktop scrollbar keeps while the page is locked. */
 @media (max-width: 640px) {
+  /* Its scrollbar's room is kept whether it's there or not: the content's width never changes. */
+  .modal.sheet > :last-child {
+    scrollbar-gutter: stable;
+  }
+
   .modal.sheet {
     width: 100vw;
     max-width: 100vw;
@@ -776,11 +834,15 @@ html:has(dialog.modal[open]) body {
   /* Compact, so it fits without scrolling: a small preview beside the title, the apps in rows of four. */
   .share-body {
     gap: 14px;
-    padding: 18px 16px 16px;
+    padding: 12px 16px 16px;
+  }
+
+  .share-head {
+    padding-inline: 16px;
   }
 
   .share-head h2 {
-    font-size: 1.15rem;
+    font-size: var(--fs-card);
   }
 
   .share-preview {
@@ -802,7 +864,7 @@ html:has(dialog.modal[open]) body {
   }
 
   .share-preview-text strong {
-    font-size: 0.95rem;
+    font-size: var(--fs-strong);
   }
 
   .share-apps {
@@ -815,15 +877,20 @@ html:has(dialog.modal[open]) body {
     height: 48px;
   }
 
-  /* The grab handle. */
-  .modal.sheet:not(.sheet-top) > :first-child::before {
+  /* The grab handle: on the sheet itself, so it's the same on every sheet whatever it holds: 10px from the top, then
+     14px to the content. (Top sheets have it at the bottom, the same way round: see below.) */
+  .modal.sheet:not(.sheet-top)::before {
     content: '';
-    align-self: center;
+    display: block;
     width: 40px;
     height: 4px;
-    margin: -8px 0 -6px;
+    margin: 10px auto 0;
     border-radius: 2px;
     background: var(--border-strong);
+  }
+
+  .modal.sheet:not(.sheet-top) > :first-child {
+    padding-top: 14px;
   }
 }
 
@@ -855,14 +922,23 @@ html:has(dialog.modal[open]) body {
     opacity: calc(1 - var(--sheet-drag));
   }
 
-  .modal.sheet-top > :last-child::after {
+  .modal.sheet.sheet-top > :last-child {
+    scrollbar-gutter: stable;
+  }
+
+  /* The grab handle, as on the bottom sheets: 14px under the content, 10px from the bottom. */
+  .modal.sheet-top::after {
     content: '';
-    align-self: center;
+    display: block;
     width: 40px;
     height: 4px;
-    margin: -4px 0 -4px;
+    margin: 0 auto 10px;
     border-radius: 2px;
     background: var(--border-strong);
+  }
+
+  .modal.sheet-top > :last-child {
+    padding-bottom: 14px;
   }
 }
 
@@ -968,7 +1044,7 @@ html:has(dialog.modal[open]) body {
 .account-row-value {
   margin: 0 4px;
   color: var(--text-2);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -981,7 +1057,7 @@ html:has(dialog.modal[open]) body {
 }
 
 .account-push .switch-text strong {
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 /* No notifications on this device: why, under the name. */
@@ -1004,7 +1080,7 @@ html:has(dialog.modal[open]) body {
   justify-content: center;
   gap: 2px 8px;
   padding: 4px 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
   text-align: center;
 }
 
@@ -1118,7 +1194,7 @@ html:has(dialog.modal[open]) body {
 
 .crop-previews-title {
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 
@@ -1138,7 +1214,7 @@ html:has(dialog.modal[open]) body {
 
 .crop-preview figcaption {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
 }
 
 .crop-preview-image {
@@ -1192,7 +1268,7 @@ html:has(dialog.modal[open]) body {
 
 .google-btn-medium {
   padding: 11px 22px;
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
 }
 
 /* ---------- Post card ---------- */
@@ -1276,7 +1352,7 @@ html:has(dialog.modal[open]) body {
 }
 
 .post-card-title {
-  font-size: 1.22rem;
+  font-size: var(--fs-card);
 }
 
 .post-card-title a {
@@ -1296,7 +1372,7 @@ html:has(dialog.modal[open]) body {
 
 .post-card-excerpt {
   color: var(--text-2);
-  font-size: 0.94rem;
+  font-size: var(--fs-strong);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1327,7 +1403,7 @@ html:has(dialog.modal[open]) body {
 }
 
 .author-name {
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1358,11 +1434,11 @@ html:has(dialog.modal[open]) body {
 }
 
 .post-card-featured .post-card-title {
-  font-size: 1.8rem;
+  font-size: var(--fs-num);
 }
 
 .post-card-featured .post-card-excerpt {
-  font-size: 1rem;
+  font-size: var(--fs-body);
   -webkit-line-clamp: 4;
 }
 
@@ -1377,7 +1453,7 @@ html:has(dialog.modal[open]) body {
   }
 
   .post-card-featured .post-card-title {
-    font-size: 1.4rem;
+    font-size: var(--fs-page);
   }
 }
 
@@ -1396,7 +1472,7 @@ html:has(dialog.modal[open]) body {
   border-radius: var(--radius-pill);
   background: none;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1440,7 +1516,7 @@ html:has(dialog.modal[open]) body {
 
 .reaction-btn-lg {
   padding: 11px 18px;
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   border: 1px solid var(--border);
   background: var(--surface);
 }
@@ -1453,7 +1529,7 @@ a.reaction-static:hover {
 .sidebar-title {
   margin: 0 0 10px 8px;
   font-family: var(--font-body);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1531,7 +1607,7 @@ a.reaction-static:hover {
   min-width: 0;
   padding: 7px 10px 7px 2px;
   color: var(--text-2);
-  font-size: 0.93rem;
+  font-size: var(--fs-strong);
 }
 
 .tree-link:hover {
@@ -1554,7 +1630,7 @@ a.reaction-static:hover {
 }
 
 .tree-count {
-  font-size: 0.75rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   color: var(--muted);
 }
@@ -1583,7 +1659,7 @@ a.reaction-static:hover {
   background: var(--heart);
   color: #fff;
   font-size: 0.66rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -1596,7 +1672,7 @@ a.reaction-static:hover {
 }
 
 .settings-popover .push-toggles .switch-text strong {
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
 }
 
 .push-test {
@@ -1638,7 +1714,7 @@ a.reaction-static:hover {
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-text);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   font-weight: 700;
 }
 
@@ -1708,7 +1784,7 @@ a.reaction-static:hover {
 
 .filter-field-value {
   overflow: hidden;
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1740,8 +1816,8 @@ a.reaction-static:hover {
   border-radius: 10px;
   background: none;
   color: var(--text-2);
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: var(--fs-strong);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -1767,7 +1843,7 @@ a.reaction-static:hover {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 16px 16px;
+  padding: 12px 16px 16px;
 }
 
 .filter-sheet-head {
@@ -1775,10 +1851,11 @@ a.reaction-static:hover {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 18px 16px 0;
 }
 
 .filter-sheet-head h2 {
-  font-size: 1.15rem;
+  font-size: var(--fs-card);
 }
 
 /* Tablets: a filter's menu in a dialog in the middle of the screen. */
@@ -1786,8 +1863,12 @@ a.reaction-static:hover {
   width: min(460px, calc(100vw - 32px));
 }
 
+.filter-dialog .filter-sheet-head {
+  padding: 22px 20px 0;
+}
+
 .filter-dialog .filter-sheet-body {
-  padding: 22px 20px 20px;
+  padding: 14px 20px 20px;
 }
 
 /* Narrow: two by two (all/unread with the type, the post with the period); the unread count as a badge. */
@@ -1827,7 +1908,7 @@ a.reaction-static:hover {
   }
 
   .filter-field-value {
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
   }
 }
 
@@ -1886,7 +1967,7 @@ a.reaction-static:hover {
   align-items: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1919,34 +2000,133 @@ a.reaction-static:hover {
   }
 }
 
-/* ---------- Date range picker: quick choices, a calendar, and the times ---------- */
-.date-range {
+/* ---------- Date range picker: quick choices, a calendar, and the times ----------
+   Narrow screens (a dialog, a sheet on phones): the quick choices above the calendar, three by two (one scrolling
+   row on phones). Wide screens (a panel): a column of them beside the calendar, the chosen one marked. */
+.date-range,
+.date-main {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .date-presets {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
+.date-presets-title {
+  display: none;
+}
+
 .date-preset {
-  padding: 6px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: none;
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.date-preset:hover {
+.date-preset:hover,
+.date-preset.is-selected {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.date-preset.is-selected {
+  background: var(--accent-soft);
+}
+
+/* (not a moment: what's scheduled already, in a dialog) */
+.date-preset.is-link {
+  justify-content: flex-start;
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.date-preset.is-link svg {
+  flex-shrink: 0;
+}
+
+/* Wide screens: in the column, on two lines if it needs them, set apart from the moments above it. */
+@media (min-width: 1001px) {
+  .date-preset.is-link {
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 6px;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  .date-preset.is-link svg {
+    margin-top: 2px;
+  }
+}
+
+@media (min-width: 1001px) {
+  .popover.filter-popover:has(.date-range) {
+    width: 580px;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .date-range {
+    display: grid;
+    grid-template-columns: 176px minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .date-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 10px;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+
+  .date-presets-title {
+    display: block;
+    margin: 2px 10px 8px;
+    color: var(--muted);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .date-preset {
+    justify-content: space-between;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 10px;
+    font-size: var(--fs-small);
+    text-align: left;
+  }
+
+  .date-preset:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  .date-preset.is-selected,
+  .date-preset.is-selected:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .date-main {
+    padding: 14px 16px 16px;
+  }
 }
 
 .date-month {
@@ -1957,7 +2137,7 @@ a.reaction-static:hover {
 }
 
 .date-month strong {
-  font-size: 0.95rem;
+  font-size: var(--fs-strong);
   text-transform: capitalize;
 }
 
@@ -1972,7 +2152,7 @@ a.reaction-static:hover {
   place-items: center;
   height: 26px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -1984,7 +2164,7 @@ a.reaction-static:hover {
   border-radius: 10px;
   background: none;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -2041,6 +2221,15 @@ a.reaction-static:hover {
   gap: 8px;
 }
 
+.date-times.is-single {
+  grid-template-columns: 1fr;
+}
+
+.date-hint.is-warning {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 .date-time {
   display: flex;
   flex-direction: column;
@@ -2062,7 +2251,7 @@ a.reaction-static:hover {
 
 .date-time-label {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -2072,7 +2261,7 @@ a.reaction-static:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 1rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -2081,53 +2270,122 @@ a.reaction-static:hover {
   color: var(--muted);
 }
 
+/* The time: hours and minutes, each on a wheel (DateRangePicker's TimeWheel). Three values in view, the chosen one
+   in the band in the middle, its neighbours faded; arrows above and below. */
 .time-columns {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 6px;
+  gap: 12px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-2);
 }
 
-.time-column {
-  position: relative;
+.time-wheel {
+  --row: 40px; /* ROW in DateRangePicker.tsx */
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
-  width: 76px;
-  height: 160px;
+  width: 96px;
+}
+
+.time-wheel-arrow {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.time-wheel-arrow:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.time-wheel-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* The band stays put; the values turn through it. */
+.time-wheel-window {
+  position: relative;
+  width: 100%;
+}
+
+.time-wheel-window::before {
+  content: '';
+  position: absolute;
+  top: var(--row);
+  right: 0;
+  left: 0;
+  height: var(--row);
+  border-radius: 12px;
+  background: var(--accent);
+  box-shadow: 0 6px 16px -8px var(--accent-ring);
+  pointer-events: none;
+}
+
+.time-wheel-track {
+  position: relative;
+  height: calc(var(--row) * 3);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  border-radius: 12px;
+  outline: none;
+  touch-action: pan-y;
+  -webkit-mask-image: linear-gradient(rgb(0 0 0 / 0.35), #000 34%, #000 66%, rgb(0 0 0 / 0.35));
+  mask-image: linear-gradient(rgb(0 0 0 / 0.35), #000 34%, #000 66%, rgb(0 0 0 / 0.35));
 }
 
-.time-column button {
-  flex-shrink: 0;
-  height: 36px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
+.time-wheel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.time-wheel-track:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-ring);
+}
+
+.time-wheel-room {
+  display: block;
+  height: var(--row);
+}
+
+.time-wheel-value {
+  display: grid;
+  place-items: center;
+  height: var(--row);
   color: var(--text-2);
-  font-size: 1rem;
+  font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
+  scroll-snap-align: center;
   cursor: pointer;
+  user-select: none;
+  transition:
+    color 0.15s,
+    font-size 0.15s;
 }
 
-.time-column button:hover {
-  background: var(--surface-3);
-}
-
-.time-column button.is-selected {
-  background: var(--accent);
+.time-wheel-value.is-selected {
   color: var(--accent-text);
+  font-size: var(--fs-card);
   font-weight: 700;
 }
 
 .time-colon {
   color: var(--muted);
+  font-size: var(--fs-card);
   font-weight: 700;
 }
 
@@ -2140,6 +2398,7 @@ a.reaction-static:hover {
 /* Phones (in a sheet): the quick choices in one row that scrolls, bigger days, wide buttons. */
 @media (max-width: 640px) {
   .date-presets {
+    display: flex;
     flex-wrap: nowrap;
     margin: 0 -16px;
     padding: 0 16px 2px;
@@ -2153,7 +2412,7 @@ a.reaction-static:hover {
 
   .date-day {
     height: 42px;
-    font-size: 0.95rem;
+    font-size: var(--fs-strong);
   }
 
   .date-actions .btn {
@@ -2243,7 +2502,7 @@ a.reaction-static:hover {
   flex: 1;
   margin: 0;
   color: var(--text);
-  font-size: 1.02rem;
+  font-size: var(--fs-body);
 }
 
 .consent-close {
@@ -2252,7 +2511,7 @@ a.reaction-static:hover {
 
 .consent-text {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -2281,7 +2540,7 @@ a.reaction-static:hover {
 .consent-option > span {
   display: grid;
   gap: 2px;
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 .consent-option.is-locked {
@@ -2392,4 +2651,161 @@ button.footer-link,
   padding: 0;
   border: 0;
   min-width: 0;
+}
+
+/* The account sheet's cards: "Stay in the loop" (its bell, opening its sheet), and "Add to the home screen" (the
+   site's icon, what it does, and the steps where needed). */
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.account-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-card-btn img {
+  flex-shrink: 0;
+  border-radius: 10px;
+}
+
+/* "Stay in the loop": its bell where the install row has the app's icon. */
+.account-updates-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.account-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-card-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+
+.account-card-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.account-install-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  font-size: var(--fs-strong);
+  line-height: 1.45;
+}
+
+.account-install-steps .install-share {
+  margin: 0 2px;
+  color: var(--accent);
+  vertical-align: -3px;
+}
+
+/* ---------- Back to the top (BackToTop): bottom left on the home page, the editor and the post page. It rises and
+   grows into view once the page is scrolled past a screen's height, and sinks and fades away near the top. ---------- */
+.back-to-top {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: max(20px, env(safe-area-inset-left));
+  z-index: 45; /* over the phone bars (40), under popovers (60), the cookie banner (66) and toasts (70) */
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(18px) scale(0.8);
+  transition:
+    opacity 0.25s var(--ease),
+    transform 0.3s var(--ease),
+    visibility 0s linear 0.3s,
+    bottom 0.32s var(--ease),
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s;
+}
+
+.back-to-top.is-shown {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.back-to-top:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.back-to-top.is-shown:active {
+  transform: scale(0.92);
+}
+
+/* The cookie banner is in that corner until it's answered. */
+body:has(.consent) .back-to-top {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (max-width: 1000px) {
+  /* Over the phone bar (the post page, a writer's home page); down with it when it slides away. */
+  body:has(.post-bar) .back-to-top {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+
+  body:has(.post-bar.is-hidden) .back-to-top {
+    bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  /* At the end of a post, the "Next" pill sits over the bar (across the screen): above it, then. */
+  body:has(.post-bar-next) .back-to-top {
+    bottom: calc(166px + env(safe-area-inset-bottom));
+  }
+
+  body:has(.post-bar.is-hidden .post-bar-next) .back-to-top {
+    bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top {
+    transition: none;
+  }
 }

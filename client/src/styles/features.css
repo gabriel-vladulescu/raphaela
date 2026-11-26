@@ -5,7 +5,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--accent-soft);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--fs-strong);
 }
 
 .announcement.is-success {
@@ -75,7 +75,7 @@
 }
 
 .maintenance-card h1 {
-  font-size: 1.8rem;
+  font-size: var(--fs-num);
 }
 
 .maintenance-card p {
@@ -153,7 +153,7 @@
 
 .newsletter-head h2 {
   margin: 0 0 4px;
-  font-size: 1.1rem;
+  font-size: var(--fs-card);
 }
 
 .newsletter-head p {
@@ -177,18 +177,10 @@
   gap: 10px;
 }
 
-.newsletter-frequency {
-  width: 100%;
-}
-
-.newsletter-frequency button {
-  flex: 1;
-}
-
-/* Wider spots (under a post, in the feed): the address, frequency and button in a row when there's room. */
+/* Wider spots (under a post, in the feed): the address and the button in a row when there's room. */
 .post-main > .newsletter .newsletter-form,
 .newsletter-wide .newsletter-form {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
 }
 
@@ -197,20 +189,10 @@
   grid-column: 1 / -1;
 }
 
-.post-main > .newsletter .newsletter-frequency,
-.newsletter-wide .newsletter-frequency {
-  width: auto;
-}
-
 @media (max-width: 640px) {
   .post-main > .newsletter .newsletter-form,
   .newsletter-wide .newsletter-form {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .post-main > .newsletter .newsletter-frequency,
-  .newsletter-wide .newsletter-frequency {
-    width: 100%;
   }
 }
 
@@ -219,9 +201,116 @@
   margin-top: 16px;
 }
 
-/* In the phone feed, between posts: a card with some air around it. */
-.feed-list > .newsletter-wide {
-  margin: 8px 0;
+/* The site's email unavailable (the dialog over a newsletter form): its first words, in red. */
+.email-off-lead {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* The sheet for hearing of what's new (NewsletterSheet: "Stay in the loop" in the account menu, the offer at the end
+   of a post, a book's "Notify me"), a dialog on wide screens. */
+.newsletter-sheet-body {
+  padding: 16px 20px 22px;
+}
+
+.newsletter-sheet .newsletter-head {
+  align-items: center;
+}
+
+/* What an address gets by email (Settings, the manage page): every new post, then the books it follows. */
+.newsletter-choices {
+  display: grid;
+  gap: 14px;
+}
+
+.newsletter-books {
+  display: grid;
+  gap: 6px;
+}
+
+.newsletter-books .field-label {
+  margin: 0;
+}
+
+.newsletter-books ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.newsletter-books li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: var(--text-2);
+}
+
+.newsletter-books li a {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A line, then its two ways, each a card (on this device, by email), either or both. */
+.notify-ways {
+  display: grid;
+  gap: 12px;
+}
+
+.notify-ways-lead {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.notify-ways .newsletter,
+.notify-way {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.notify-ways .newsletter-head h2 {
+  margin: 0 0 2px;
+  font-family: var(--font-body);
+  font-size: var(--fs-strong);
+  font-weight: 600;
+}
+
+.notify-ways .newsletter-head p {
+  line-height: 1.4;
+}
+
+.notify-way-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.notify-way-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notify-way-text strong {
+  font-size: var(--fs-strong);
+  font-weight: 600;
+}
+
+.notify-way-status {
+  margin: 10px 0 0;
 }
 
 /* ---------- Post: tags; preview page ---------- */
@@ -232,15 +321,6 @@
   margin-top: 28px;
 }
 
-.post-tags .chip {
-  background: var(--surface-2);
-  color: var(--text-2);
-}
-
-.post-tags .chip-link:hover {
-  background: var(--accent);
-  color: var(--accent-text);
-}
 
 .preview-notice {
   justify-content: space-between;
@@ -280,7 +360,7 @@
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   background: var(--warning-soft);
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
 }
 
 .setup-page {
@@ -295,7 +375,7 @@
   margin: 10px 0 -4px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 .setup-code {
@@ -376,7 +456,7 @@
 
 .image-alt-label {
   flex-shrink: 0;
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -403,50 +483,69 @@
   color: var(--warning);
 }
 
-.tags-input-wrap {
-  position: relative;
-  display: grid;
-  gap: 6px;
-}
-
-.tags-input {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 6px 8px;
-  cursor: text;
-}
-
-.tags-input input {
-  flex: 1;
-  min-width: 90px;
-  padding: 4px;
-  border: 0;
-  outline: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-}
-
-.tag-chip {
+/* ---------- Tags: a pill in the tag's colour (--tag; none: the accent), its sign and name ---------- */
+.tag-pill {
+  --tag: var(--accent);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px 3px 10px;
+  gap: 6px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 5px 13px 5px 11px;
+  border: 0;
   border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.82rem;
+  background: color-mix(in srgb, var(--tag) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag) 26%, transparent);
+  color: color-mix(in srgb, var(--tag) 72%, var(--text));
+  font: inherit;
+  font-size: var(--fs-small);
   font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
 }
 
-.tag-chip button {
+.tag-pill > svg:first-child {
+  flex-shrink: 0;
+  color: var(--tag);
+}
+
+.tag-pill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.tag-pill:hover {
+  background: color-mix(in srgb, var(--tag) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag) 45%, transparent);
+}
+
+/* (dark themes: the signs and writing a little lighter, to read on the dark) */
+:root[data-theme='dark'] .tag-pill,
+:root[data-theme='midnight'] .tag-pill {
+  color: color-mix(in srgb, var(--tag) 45%, var(--text));
+}
+
+:root[data-theme='dark'] .tag-pill > svg:first-child,
+:root[data-theme='midnight'] .tag-pill > svg:first-child {
+  color: color-mix(in srgb, var(--tag) 75%, white);
+}
+
+/* With an × to take it away (the editor). */
+.tag-pill.is-removable {
+  padding-right: 5px;
+}
+
+.tag-pill-remove {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -455,43 +554,494 @@
   cursor: pointer;
 }
 
-.tag-chip button:hover {
-  background: var(--accent);
-  color: var(--accent-text);
+.tag-pill-remove:hover {
+  background: color-mix(in srgb, var(--tag) 22%, transparent);
 }
 
-.tags-suggestions {
-  position: absolute;
-  top: 48px;
-  right: 0;
-  left: 0;
-  z-index: 5;
+/* The editor's tags card: the post's tags, the button that opens the picker. */
+.tags-field {
   display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow-md);
-  list-style: none;
+  gap: 10px;
 }
 
-.tags-suggestions button {
-  width: 100%;
-  padding: 7px 10px;
+.tags-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tags-field-none {
+  margin: 0;
+}
+
+.tags-field-open {
+  gap: 8px;
+}
+
+/* The tag picker (and the category picker, CategorySelect): a dialog on wide screens, the whole screen on phones. */
+.modal.tag-picker,
+.modal.category-picker {
+  width: min(640px, calc(100vw - 32px));
+  max-width: none;
+  height: min(84dvh, 820px);
+  max-height: none;
+}
+
+.modal.tag-picker[open],
+.modal.category-picker[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tag-picker-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tag-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tag-picker-head h2 {
+  font-size: var(--fs-card);
+}
+
+.tag-picker-head h2 .muted {
+  font-family: var(--font-body);
+  font-size: var(--fs-strong);
+  font-weight: 400;
+}
+
+.tag-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 20px 6px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--soft-fill);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted);
+}
+
+.tag-picker-search:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent-ring);
+}
+
+.tag-picker-search input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
   border: 0;
-  border-radius: 8px;
+  outline: 0;
   background: none;
   color: var(--text);
+  font: inherit;
+}
+
+.tag-picker-list {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 18px;
+  min-height: 0;
+  padding: 14px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tag-picker-section {
+  display: grid;
+  gap: 10px;
+}
+
+.tag-picker-section .studio-label {
+  margin: 0;
+}
+
+.tag-picker-section .studio-label .muted {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.tag-picker-section p {
+  margin: 0;
+}
+
+.tag-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The categories, in the picker: a tree (a step in per level), or what a search found with its parents. */
+.category-picker-list {
+  gap: 2px;
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text-2);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.tags-suggestions button:hover,
-.tags-suggestions button.is-active {
+.category-option:hover:not(:disabled) {
+  background: var(--soft-fill);
+  color: var(--text);
+}
+
+.category-option.is-top {
+  color: var(--text);
+}
+
+.category-option.is-selected {
   background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.category-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.category-option-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--accent);
+  font-size: var(--fs-body);
+}
+
+.category-option-text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.category-option-text strong {
+  overflow: hidden;
+  font-size: var(--fs-strong);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-option-text .muted {
+  overflow: hidden;
+  font-size: var(--fs-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-option-count {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.category-option-check {
+  flex-shrink: 0;
+}
+
+.category-none {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* The field that opens it: the category chosen (its parents above it, small). */
+.category-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.category-field-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  color: var(--accent);
+}
+
+.category-field-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.category-field-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-field-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-field-name.is-empty {
+  color: var(--muted);
+}
+
+.category-field > svg:last-child {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* Every tag: a tap adds it or takes it away. */
+.tag-option {
+  cursor: pointer;
+}
+
+.tag-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tag) 20%, transparent);
+}
+
+.tag-option.is-on {
+  background: color-mix(in srgb, var(--tag) 24%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--tag) 70%, transparent);
+}
+
+.tag-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tag-option-count {
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 400;
+}
+
+.tag-option-check {
+  flex-shrink: 0;
+}
+
+/* A new one: the offer (with what was searched, else empty), then its form. */
+.tag-new-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.tag-new-offer > svg {
+  color: var(--accent);
+}
+
+.tag-new-offer:hover:not(:disabled),
+.tag-new-offer.is-named {
+  border-style: solid;
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.tag-new-offer:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tag-new {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  animation: advanced-in 0.22s var(--ease);
+}
+
+.tag-new-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tag-new .field {
+  margin: 0;
+}
+
+.tag-new-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tag-style-field {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-color {
+  --tag: var(--accent);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tag);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3px transparent;
+  cursor: pointer;
+  transition: box-shadow 0.15s var(--ease);
+}
+
+.tag-color.is-none {
+  background:
+    linear-gradient(135deg, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px)),
+    var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 2px var(--surface),
+    0 0 0 3px transparent;
+}
+
+.tag-color[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--tag);
+}
+
+.tag-color.is-none[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--text);
+}
+
+.tag-icons {
+  --tag: var(--accent);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 6px;
+}
+
+.tag-icon {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.tag-icon:hover {
+  color: var(--tag);
+}
+
+.tag-icon[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--tag) 14%, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--tag);
+  color: var(--tag);
+}
+
+.tag-picker-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.tag-picker-foot .btn {
+  min-width: 120px;
+}
+
+@media (max-width: 640px) {
+  .modal.tag-picker,
+  .modal.category-picker {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .tag-picker-head {
+    padding: calc(14px + env(safe-area-inset-top)) 16px 8px;
+  }
+
+  .tag-picker-search {
+    margin: 0 16px 4px;
+  }
+
+  .tag-picker-list {
+    padding: 12px 16px 18px;
+  }
+
+  .tag-picker-foot {
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .tag-picker-foot .btn {
+    flex: 1;
+  }
 }
 
 .seo-fields {
@@ -511,19 +1061,19 @@
 
 .seo-preview-site {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
 }
 
 .seo-preview-title {
   color: var(--accent);
-  font-size: 1.02rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.3;
 }
 
 .seo-preview-description {
   color: var(--text-2);
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   line-height: 1.45;
 }
 
@@ -535,7 +1085,7 @@
 
 .seo-counter {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
 }
 
@@ -583,7 +1133,7 @@
 .preview-link .input {
   flex: 1;
   min-width: 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-small);
 }
 
 .preview-link-actions {
@@ -615,7 +1165,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--fs-card);
 }
 
 .versions-list {
@@ -648,7 +1198,7 @@
 
 .versions-when {
   grid-row: span 2;
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -692,7 +1242,7 @@
   padding: 6px 10px;
   border-left: 3px solid transparent;
   border-radius: 0 6px 6px 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-strong);
   line-height: 1.5;
 }
 
@@ -759,4 +1309,586 @@ span.diff-added {
   min-width: 0;
   color: var(--text);
   font-weight: 600;
+}
+
+/* ---------- Where a banner comes from (ImageSourceDialog): a dialog, the whole screen on phones ---------- */
+.modal.image-source {
+  width: min(500px, calc(100vw - 32px));
+}
+
+.isrc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px -10px -4px 0;
+}
+
+.isrc-options {
+  display: grid;
+  gap: 12px;
+}
+
+.isrc-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.isrc-option:hover,
+.isrc-option:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.isrc-option-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.isrc-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.isrc-option-text strong {
+  font-size: var(--fs-body);
+}
+
+/* The search: the whole screen everywhere. The choice too, on phones. */
+.modal.image-source.is-search {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
+@media (max-width: 640px) {
+  .modal.image-source {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .isrc-choose {
+    min-height: 100%;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+.isrc-search {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+.isrc-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.isrc-form {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  max-width: 860px;
+}
+
+.isrc-field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.isrc-field .input {
+  padding-right: 42px;
+  padding-left: 42px;
+}
+
+.isrc-field-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.isrc-clear {
+  position: absolute;
+  right: 6px;
+}
+
+.isrc-go {
+  flex-shrink: 0;
+}
+
+/* Below the search bar: the tabs and the results, with an image looked at over them. */
+.isrc-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.isrc-tabs {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.isrc-tab-short {
+  display: none;
+}
+
+.isrc-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.isrc-note {
+  margin: 0 0 12px;
+}
+
+.isrc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.isrc-tile {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: zoom-in;
+}
+
+.isrc-tile img {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+  transition: transform 0.3s var(--ease);
+}
+
+.isrc-tile:hover img,
+.isrc-tile:focus-visible img {
+  transform: scale(1.04);
+}
+
+.isrc-tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.isrc-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.isrc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 480px;
+  margin: 8vh auto 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.isrc-empty p {
+  margin: 0;
+}
+
+/* Google: opened in its own tab; an image found there is brought back by its address, or dragged in. */
+.isrc-google {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 660px;
+  margin: 0 auto;
+  padding-top: 4px;
+}
+
+.isrc-google > p {
+  margin: 0;
+}
+
+.isrc-google-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.isrc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-strong);
+  cursor: pointer;
+}
+
+.isrc-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.isrc-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--text-2);
+  font-size: var(--fs-strong);
+}
+
+.isrc-address {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.isrc-address .form-error {
+  margin: 0;
+}
+
+.isrc-address-row {
+  display: flex;
+  gap: 8px;
+}
+
+.isrc-address-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.isrc-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 130px;
+  padding: 20px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  text-align: center;
+  transition: border-color 0.18s, background 0.18s, color 0.18s;
+}
+
+.isrc-search.is-dropping .isrc-drop,
+.isrc-drop:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Touch screens can't drag a picture in from another app. */
+@media (pointer: coarse) {
+  .isrc-drop {
+    display: none;
+  }
+}
+
+.isrc-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+
+.isrc-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* An image looked at: as large as fits, the small copy shown while the large one loads. */
+.isrc-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  animation: isrc-in 0.18s var(--ease);
+}
+
+@keyframes isrc-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.isrc-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #0d0b16;
+}
+
+.isrc-stage-thumb,
+.isrc-stage-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.isrc-stage-image {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.isrc-stage-image.is-loaded {
+  opacity: 1;
+}
+
+.isrc-stage:has(.is-loaded) .isrc-stage-thumb {
+  visibility: hidden;
+}
+
+.isrc-stage-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -15px 0 0 -15px;
+  color: #ffffff;
+}
+
+.isrc-step {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.45);
+  color: #ffffff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.18s;
+}
+
+.isrc-step:hover {
+  background: rgb(0 0 0 / 0.7);
+}
+
+.isrc-step.is-prev {
+  left: 14px;
+}
+
+.isrc-step.is-next {
+  right: 14px;
+}
+
+.isrc-info {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+
+.isrc-info-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.isrc-info-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isrc-info-text .form-error {
+  margin: 0;
+}
+
+.isrc-info-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.isrc-info-meta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.isrc-choose-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .isrc-bar {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  /* Just the icon: the room goes to the search box. */
+  .isrc-go {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .isrc-go span {
+    display: none;
+  }
+
+  .isrc-tabs,
+  .isrc-scroll {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  /* The libraries' short names, so the three tabs fit side by side. */
+  .isrc-tabs .tab {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .isrc-tab-full {
+    display: none;
+  }
+
+  .isrc-tab-short {
+    display: inline;
+  }
+
+  .isrc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .isrc-info {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .isrc-step {
+    width: 38px;
+    height: 38px;
+    margin-top: -19px;
+  }
+
+  .isrc-step.is-prev {
+    left: 8px;
+  }
+
+  .isrc-step.is-next {
+    right: 8px;
+  }
+}
+
+/* ---------- A banner's credit: under it in the editor, in a corner of it on the post ---------- */
+.banner-credit-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.banner-credit-field .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-hero-credit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  max-width: min(70%, 440px);
+  padding: 3px 10px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgb(8 6 24 / 0.45);
+  color: rgb(255 255 255 / 0.85);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+
+.post-hero-credit a {
+  color: inherit;
+}
+
+.post-hero-credit a:hover {
+  color: #ffffff;
+  text-decoration: underline;
 }

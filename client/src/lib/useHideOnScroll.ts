@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 
+/** How close to the end of the page counts as there (px): the room pages leave for the bar is about this tall. */
+const NEAR_END = 140;
+
 /** For a bar fixed to the bottom of the screen: true while scrolling down (it steps aside), false again on the way
- *  up and near the top. */
+ *  up, near the top, and at the end of the page (where the room left for it would otherwise stay empty). */
 export function useHideOnScroll() {
   const [hidden, setHidden] = useState(false);
 
@@ -11,7 +14,8 @@ export function useHideOnScroll() {
     const update = () => {
       frame = 0;
       const y = window.scrollY;
-      if (y < 120 || y < lastY - 6) setHidden(false);
+      const atEnd = y + window.innerHeight >= document.documentElement.scrollHeight - NEAR_END;
+      if (y < 120 || y < lastY - 6 || atEnd) setHidden(false);
       else if (y > lastY + 6) setHidden(true);
       lastY = y;
     };

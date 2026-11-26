@@ -46,6 +46,26 @@ export async function uploadImage(file: File): Promise<string> {
   return url;
 }
 
+/**
+ * An image from another site (an image library, or an address pasted from Google), downloaded by the server (writers
+ * only), as a file to frame and upload like one from the device.
+ */
+export async function fetchImage(url: string): Promise<File> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/images/fetch?url=${encodeURIComponent(url)}`);
+  } catch {
+    throw new ApiError('network', 0);
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.error ?? 'request_failed', response.status, data);
+  }
+  const blob = await response.blob();
+  const extension = blob.type.replace(/^image\//, '').replace('jpeg', 'jpg');
+  return new File([blob], `image.${extension}`, { type: blob.type });
+}
+
 /** Sends the support form (its fields and up to 3 files). */
 export function sendSupport(form: FormData) {
   return parse<{ ok: true; id?: number }>(fetch('/api/support', { method: 'POST', body: form }));

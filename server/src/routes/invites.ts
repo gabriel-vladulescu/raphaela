@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { countAuthors } from '@/lib/follows';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { findInvite } from '@/lib/invites';
 import { hashPassword } from '@/lib/password';
+import { logSignIn } from '@/lib/authLog';
 import { startSession } from '@/lib/session';
 import { assignUsername } from '@/lib/usernames';
 
@@ -64,6 +66,7 @@ const inviteRoutes: FastifyPluginAsync = async (app) => {
           req.user.id,
         ]);
         await accept(req.user.id);
+        void countAuthors(db);
         return { ok: true };
       }
 
@@ -82,6 +85,7 @@ const inviteRoutes: FastifyPluginAsync = async (app) => {
       await assignUsername(db, result.insertId, name);
       await accept(result.insertId);
       await startSession(db, reply, result.insertId);
+      await logSignIn(db, req, { userId: result.insertId, email: invite.email as string, method: 'invite', outcome: 'ok' });
       return { ok: true };
     },
   );

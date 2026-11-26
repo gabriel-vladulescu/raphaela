@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n';
  * "Back to posts" in the top bar's free space, left of its buttons (lib/headerSlot.ts). `to` and `label`: back to
  * another page instead (the administration's pages lead back to it).
  */
-export function HeaderBackLink({ to = '/', label }: { to?: string; label?: string }) {
+export function HeaderBackLink({ to = '/jurnal', label }: { to?: string; label?: string }) {
   const slot = useHeaderSlot();
   const { t } = useI18n();
   if (!slot) return null;

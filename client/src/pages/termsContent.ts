@@ -21,7 +21,7 @@ export interface TermsText {
 }
 
 /** When the text last changed (shown at the top). */
-export const TERMS_UPDATED = '2026-11-03';
+export const TERMS_UPDATED = '2026-11-26';
 
 const ro: TermsText = {
   updatedLabel: 'Ultima actualizare',
@@ -83,7 +83,7 @@ const ro: TermsText = {
         rows: [
           [
             'Contul',
-            'Email, nume, nume de utilizator, poza de profil (încărcată de tine sau de la Google), ocupația și citatul (autorii), parola — doar ca amprentă criptografică (hash), niciodată în clar —, dacă ai conectat Google (identificatorul contului Google), rolul, dacă adresa e confirmată, când ai fost de acord cu termenii, când ți-ai făcut contul și când te-ai conectat ultima dată, setările de notificări și de confidențialitate.',
+            'Email, nume, nume de utilizator, poza de profil (încărcată de tine sau de la Google), ocupația și citatul (autorii), parola — doar ca amprentă criptografică (hash), niciodată în clar —, dacă ai conectat Google (identificatorul contului Google), rolul, dacă adresa e confirmată, când ai fost de acord cu termenii, când ți-ai făcut contul și când te-ai conectat ultima dată, setările de notificări și de confidențialitate, adresele, numele și numele de utilizator avute înainte (cu data schimbării).',
             'Ca să ai un cont (contract).',
           ],
           [
@@ -93,7 +93,7 @@ const ro: TermsText = {
           ],
           [
             'Conectarea',
-            'O sesiune pe dispozitiv; în baza de date ținem doar o amprentă a ei, 30 de zile.',
+            'O sesiune pe dispozitiv; în baza de date ținem doar o amprentă a ei, 30 de zile, cu browserul (de exemplu „Chrome · Windows”). Fiecare încercare de autentificare: când, adresa scrisă, cum (parolă, Google, link) și dacă a reușit, cu browserul. Nu păstrăm adresa IP.',
             'Ca să rămâi conectat(ă) (contract).',
           ],
           [
@@ -104,11 +104,11 @@ const ro: TermsText = {
           [
             'Suport',
             'Emailul, numele (opțional), mesajul și fișierele atașate.',
-            'Ca să-ți răspundem (interes legitim).',
+            'Ca să-ți răspundem; dacă ne scrii autentificat, conversația (mesajele tale și răspunsurile noastre) rămâne și în contul tău (interes legitim).',
           ],
           [
             'Newsletter',
-            'Doar dacă te abonezi: adresa de email, cât de des vrei articolele (imediat sau săptămânal), limba, când te-ai abonat și când ai confirmat, ce articole ți-am trimis. Fiecare email are un link de dezabonare.',
+            'Doar dacă te abonezi: adresa de email, dacă vrei toate articolele noi sau doar capitolele noi ale unor cărți (și care), limba, când te-ai abonat și când ai confirmat, ce articole ți-am trimis. Fiecare email are un link de dezabonare.',
             'Ca să-ți trimitem articolele cerute (consimțământ).',
           ],
           [
@@ -162,6 +162,7 @@ const ro: TermsText = {
       items: [
         'Google: dacă te conectezi cu Google, primim de la Google numele, emailul și poza contului. Fonturile site-ului sunt găzduite pe site, nu la Google.',
         'Videoclipurile YouTube din articole folosesc modul „fără cookie-uri”; când pornești unul, YouTube poate stoca date în browserul tău.',
+        'Autorii pot căuta imagini pentru banner în Wikimedia Commons și Openverse: căutarea pleacă din browserul lor direct către acestea. Imaginea aleasă (și una adusă de pe alt site după adresa ei) e descărcată de serverul nostru și păstrată pe site, așa că cititorii nu se conectează la acele site-uri.',
         'Notificările push ajung prin serviciile browserului tău (Google, Apple, Mozilla).',
         'Emailurile (confirmarea adresei, parola nouă, schimbarea adresei, ștergerea și restaurarea contului, invitațiile și newsletterul) pleacă prin furnizorul nostru de email. Newsletterul îl primești doar dacă te abonezi și confirmi; nu trimitem reclame.',
         'Site-ul e găzduit pe servere închiriate de noi; datele nu sunt vândute și nu sunt date altcuiva în afară de acești furnizori, doar cât e nevoie pentru serviciul lor, sau dacă legea ne obligă.',
@@ -178,7 +179,10 @@ const ro: TermsText = {
         'Istoricul emailurilor trimise: 90 de zile. Jurnalul acțiunilor administratorilor: 2 ani.',
         'Abonarea la newsletter: până te dezabonezi (adresa rămâne apoi marcată ca dezabonată, ca să nu-ți mai scriem; o ștergem la cerere). O abonare neconfirmată: 30 de zile. Ce articole ți-am trimis: un an.',
         'Căutările (numărate pe zi): cel mult 25 de luni. Invitațiile: un an.',
-        'Sesiunile: 30 de zile. Linkurile din emailuri: între o oră și 48 de ore.',
+        'Sesiunile: 30 de zile; evidența lor (când te-ai conectat și când s-a încheiat conectarea, de ce): încă 90 de zile. Încercările de autentificare: 90 de zile. Linkurile din emailuri funcționează o singură dată, între o oră și 48 de ore; evidența lor (când au fost trimise, folosite sau oprite): 90 de zile.',
+        'Notificările push trimise (ce și către câte dispozitive) și erorile tehnice ale serverului: 90 de zile.',
+        'Adresele de email, numele și numele de utilizator pe care le-ai avut înainte: cât timp ai cont.',
+        'După aceste perioade, datele sunt șterse de un administrator: site-ul nu șterge nimic singur, dar administratorii sunt anunțați când există ceva de șters.',
       ],
     },
     {
@@ -270,7 +274,7 @@ const en: TermsText = {
         rows: [
           [
             'Your account',
-            'Email, name, username, profile picture (uploaded by you or from Google), occupation and quote (authors), your password — only as a cryptographic hash, never in plain text —, whether you connected Google (the Google account’s identifier), your role, whether your address is confirmed, when you agreed to the terms, when you created your account and last signed in, your notification and privacy settings.',
+            'Email, name, username, profile picture (uploaded by you or from Google), occupation and quote (authors), your password — only as a cryptographic hash, never in plain text —, whether you connected Google (the Google account’s identifier), your role, whether your address is confirmed, when you agreed to the terms, when you created your account and last signed in, your notification and privacy settings, the addresses, names and usernames you had before (with when they changed).',
             'So you can have an account (contract).',
           ],
           [
@@ -278,12 +282,20 @@ const en: TermsText = {
             'Comments (and their versions before editing), reactions, likes (including ones taken back, as history), saved articles, the authors you follow, reports you sent, notifications (including when someone mentions you). For authors: the articles’ earlier versions (at most 50 per article), who saved them and when.',
             'So the site works, and for moderation (contract, legitimate interest).',
           ],
-          ['Signing in', 'A session on your device; the database keeps only a hash of it, for 30 days.', 'So you stay signed in (contract).'],
+          [
+            'Signing in',
+            'A session on your device; the database keeps only a hash of it, for 30 days, with the browser (e.g. “Chrome · Windows”). Each attempt to sign in: when, the address typed, how (password, Google, a link) and whether it worked, with the browser. We don’t keep the IP address.',
+            'So you stay signed in, and to keep accounts safe (contract, legitimate interest).',
+          ],
           ['Push notifications', 'If you turn them on: the delivery address your browser gives and its keys, which notifications you want.', 'To send the notifications you asked for (consent).'],
-          ['Support', 'Your email, name (optional), message and attached files.', 'So we can answer you (legitimate interest).'],
+          [
+            'Support',
+            'Your email, name (optional), message and attached files.',
+            'So we can answer you; if you write signed in, the conversation (your messages and our answers) stays in your account too (legitimate interest).',
+          ],
           [
             'Newsletter',
-            'Only if you subscribe: your email address, how often you want posts (right away or weekly), the language, when you subscribed and confirmed, which posts we sent you. Every email has an unsubscribe link.',
+            'Only if you subscribe: your email address, whether you want every new post or only the new chapters of some books (and which), the language, when you subscribed and confirmed, which posts we sent you. Every email has an unsubscribe link.',
             'To send you the posts you asked for (consent).',
           ],
           [
@@ -337,6 +349,7 @@ const en: TermsText = {
       items: [
         'Google: if you sign in with Google, we receive the account’s name, email and picture from Google. The site’s fonts are hosted on the site, not by Google.',
         'YouTube videos in articles use the “no cookies” mode; when you play one, YouTube may store data in your browser.',
+        'Authors can search Wikimedia Commons and Openverse for banner images: the search goes from their browser straight to them. The image chosen (and one brought from another site by its address) is downloaded by our server and kept on the site, so readers don’t connect to those sites.',
         'Push notifications are delivered by your browser’s services (Google, Apple, Mozilla).',
         'Emails (confirming your address, a new password, changing your address, deleting and restoring your account, invitations and the newsletter) go out through our email provider. You get the newsletter only if you subscribe and confirm; we send no ads.',
         'The site is hosted on servers we rent; data isn’t sold and isn’t given to anyone beyond these providers, only as far as their service needs, or when the law requires it.',
@@ -353,7 +366,10 @@ const en: TermsText = {
         'The history of emails sent: 90 days. The log of administrators’ actions: 2 years.',
         'Your newsletter subscription: until you unsubscribe (the address then stays marked as unsubscribed so we don’t write again; we delete it on request). An unconfirmed subscription: 30 days. Which posts we sent you: a year.',
         'Searches (counted per day): at most 25 months. Invitations: a year.',
-        'Sessions: 30 days. Links in emails: from one hour to 48 hours.',
+        'Sessions: 30 days; the record of them (when you signed in, and when and why the sign-in ended): 90 days more. Sign-in attempts: 90 days. Links in emails work once, from one hour to 48 hours; the record of them (when they were sent, used or stopped): 90 days.',
+        'Push notifications sent (what, and to how many devices) and the server’s technical errors: 90 days.',
+        'The email addresses, names and usernames you had before: as long as you have an account.',
+        'After these periods, an administrator deletes the data: the site deletes nothing by itself, but administrators are told when there is something to delete.',
       ],
     },
     {

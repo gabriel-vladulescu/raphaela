@@ -199,10 +199,12 @@ function ArticlePicker({ value, onPick }: { value: number | null; onPick: (post:
             onClick={() => onPick({ id: post.id, title: post.title })}
           >
             <span className="article-option-title">{post.title}</span>
-            <span className="article-option-count" title={t('notif.countTitle', { total: post.total, unread: post.unread })}>
-              {post.total}
-              {post.unread > 0 && <span className="article-option-unread">{post.unread}</span>}
-            </span>
+            {/* Just the unread ones, as a badge (the total is in its tooltip). */}
+            {post.unread > 0 && (
+              <span className="article-option-count" title={t('notif.countTitle', { total: post.total, unread: post.unread })}>
+                <span className="article-option-unread">{post.unread}</span>
+              </span>
+            )}
             {value === post.id && <Check size={16} className="filter-option-check" />}
           </button>
         ))}
@@ -220,16 +222,18 @@ function ArticlePicker({ value, onPick }: { value: number | null; onPick: (post:
 }
 
 /**
- * The notifications page's filters, in one row (two by two on phones): all or unread (with the unread count), the
- * type (what the role can get), the post (not for administrators: theirs are about support) and the period.
+ * The notifications page's filters, in one row (two by two on phones): all or unread (with the unread count; not with
+ * `tabs` false, when the page shows them as its own tabs), the type (what the role can get), the post (not for
+ * administrators: theirs are about support) and the period.
  */
 export function NotificationFilters(props: {
   filter: NotificationFilter;
   unread: number;
   role: 'member' | 'author' | 'owner';
   onChange: (filter: NotificationFilter) => void;
+  tabs?: boolean;
 }) {
-  const { filter, unread, role, onChange } = props;
+  const { filter, unread, role, onChange, tabs = true } = props;
   const { t, locale } = useI18n();
   const set = (change: Partial<NotificationFilter>) => onChange({ ...filter, ...change });
   const kinds = kindsFor(role);
@@ -254,7 +258,8 @@ export function NotificationFilters(props: {
   );
 
   return (
-    <div className="notif-filters" role="group" aria-label={t('notif.filters')}>
+    <div className={`notif-filters${tabs ? '' : ' no-tabs'}`} role="group" aria-label={t('notif.filters')}>
+      {tabs && (
       <div className="segmented notif-tabs">
         <button type="button" className={filter.unread ? '' : 'is-selected'} aria-pressed={!filter.unread} onClick={() => set({ unread: false })}>
           {t('notif.kind.all')}
@@ -264,6 +269,7 @@ export function NotificationFilters(props: {
           {unread > 0 && <span className="filter-count">{unread > 99 ? '99+' : unread}</span>}
         </button>
       </div>
+      )}
       {kinds.length > 1 && (
         <FilterMenu title={t('notif.kind')} active={filter.kind !== null} value={filter.kind ? t(`notif.kind.${filter.kind}` as MessageKey) : t('notif.kind.all')}>
           {(close) => (
@@ -290,7 +296,7 @@ export function NotificationFilters(props: {
       )}
 
       <FilterMenu title={t('notif.period')} active={period !== null} value={period ?? t('notif.anytime')}>
-        {(close) => <DateRangePicker value={{ from: filter.from, to: filter.to }} onChange={(range) => set(range)} onDone={close} />}
+        {(close) => <DateRangePicker value={{ from: filter.from, to: filter.to }} onChange={(range) => set(range)} onDone={close} anytime={t('notif.anytime')} />}
       </FilterMenu>
 
       {filtered && (

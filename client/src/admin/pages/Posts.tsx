@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ExternalLink, Eye, FileText, Heart, MessageSquare, PenLine, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
+import { ExternalLink, Eye, FileText, Heart, MessageSquare, PenLine, Pin, PinOff, RotateCcw, Trash2, X } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { useAdminI18n } from '@/admin/i18n';
 import type { AdminKey } from '@/admin/i18n';
@@ -9,29 +9,36 @@ import { UserSelect } from '@/admin/UserSelect';
 import { Badge, Card, ClearFilters, ConfirmDialog, Empty, ErrorNote, LoadMore, Loading, PageHead, SearchBox, Select, Tabs } from '@/admin/ui';
 import type { Tone } from '@/admin/ui';
 import { Avatar } from '@/components/Avatar';
-import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
+import { chapterEditorPath } from '@/lib/books';
 import { articlePath, newArticlePath } from '@/lib/paths';
 
 const PAGE = 25;
 const FILTERS: PostFilter[] = ['all', 'featured', 'published', 'scheduled', 'draft', 'deleted'];
+/** Articles (the journal), or the books' chapters: listed apart. */
+const KINDS = ['post', 'chapter'] as const;
+type Kind = (typeof KINDS)[number];
 const SORTS = ['new', 'updated', 'views', 'likes', 'comments'] as const;
 type Sort = (typeof SORTS)[number];
 const STATUS_TONE: Record<AdminPost['status'], Tone> = { published: 'good', scheduled: 'info', draft: 'neutral', deleted: 'bad' };
 
 /**
- * Every post, with its numbers: filter, search, sort; open it, edit it (the site's editor), pin it to the top of the
- * home page, delete or restore it.
+ * Every article, or every chapter of the books (?tip=capitole), with its numbers: filter, search, sort; open it, edit
+ * it (the site's editor), pin an article to the top of the journal, delete or restore it.
  */
 export function PostsPage() {
   const { t, formatNumber, formatShortDate } = useAdminI18n();
-  const { user } = useAuth();
   const { refreshOverview } = useAdmin();
   const [params, setParams] = useSearchParams();
-  const status = (FILTERS.find((f) => f === params.get('status')) ?? 'all') as PostFilter;
+  const kind: Kind = params.get('tip') === 'capitole' ? 'chapter' : 'post';
+  // Chapters aren't featured (that's the journal's top).
+  const filters = kind === 'chapter' ? FILTERS.filter((f) => f !== 'featured') : FILTERS;
+  const status = (filters.find((f) => f === params.get('status')) ?? 'all') as PostFilter;
   const sort = (SORTS.find((s) => s === params.get('sort')) ?? 'new') as Sort;
   const q = params.get('q') ?? '';
   const author = params.get('author') ?? '';
+  /** One book's chapters (from Books: ?tip=capitole&carte={id}). */
+  const book = kind === 'chapter' ? (params.get('carte') ?? '') : '';
   const [data, setData] = useState<PostList | null>(null);
   const [error, setError] = useState(false);
   const [more, setMore] = useState(false);
@@ -40,8 +47,9 @@ export function PostsPage() {
   const [actionError, setActionError] = useState('');
 
   const query = useCallback(
-    (offset: number) => `/admin/posts?status=${status}&sort=${sort}&offset=${offset}&limit=${PAGE}${q ? `&q=${encodeURIComponent(q)}` : ''}${author ? `&author=${author}` : ''}`,
-    [status, sort, q, author],
+    (offset: number) =>
+      `/admin/posts?kind=${kind}&status=${status}&sort=${sort}&offset=${offset}&limit=${PAGE}${q ? `&q=${encodeURIComponent(q)}` : ''}${author ? `&author=${author}` : ''}${book ? `&book=${book}` : ''}`,
+    [kind, status, sort, q, author, book],
   );
 
   const load = useCallback(() => {
@@ -96,14 +104,15 @@ export function PostsPage() {
     }
   }
 
-  const filtered = Boolean(q || author);
+  const filtered = Boolean(q || author || book);
+  const bookTitle = book ? data?.posts.find((post) => post.book)?.book?.title : null;
   return (
     <>
       <PageHead
         title={t('nav.posts')}
         subtitle={t('posts.subtitle')}
         actions={
-          <Link to={newArticlePath(user!.username)} className="adm-btn is-primary">
+          <Link to={newArticlePath()} className="adm-btn is-primary">
             <PenLine size={16} /> {t('posts.new')}
           </Link>
         }
@@ -114,9 +123,23 @@ export function PostsPage() {
             label={t('posts.filter')}
             value={status}
             onChange={(value) => set('status', value === 'all' ? '' : value)}
-            items={FILTERS.map((value) => ({ value, label: t(`posts.status.${value}` as AdminKey), count: data?.counts[value] }))}
+            items={filters.map((value) => ({ value, label: t(`posts.status.${value}` as AdminKey), count: data?.counts[value] }))}
           />
           <div className="adm-toolbar-row">
+            <Select<Kind>
+              label={t('posts.kind')}
+              value={kind}
+              onChange={(value) =>
+                setParams((current) => {
+                  const next = new URLSearchParams(current);
+                  if (value === 'chapter') next.set('tip', 'capitole');
+                  else next.delete('tip');
+                  if (next.get('status') === 'featured') next.delete('status');
+                  return next;
+                })
+              }
+              options={KINDS.map((value) => ({ value, label: t(`posts.kind.${value}` as AdminKey) }))}
+            />
             <SearchBox value={q} onChange={(value) => set('q', value)} placeholder={t('posts.search')} />
             <UserSelect
               label={t('posts.author')}
@@ -127,6 +150,11 @@ export function PostsPage() {
               onChange={(id) => set('author', id ? String(id) : '')}
             />
             <Select<Sort> label={t('posts.sort')} value={sort} onChange={(value) => set('sort', value === 'new' ? '' : value)} options={SORTS.map((s) => ({ value: s, label: t(`posts.sort.${s}` as AdminKey) }))} />
+            {book && (
+              <button type="button" className="adm-chip is-active" onClick={() => set('carte', '')} title={t('common.clearFilters')}>
+                {t('posts.ofBook', { book: bookTitle ?? `#${book}` })} <X size={13} aria-hidden="true" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -139,7 +167,7 @@ export function PostsPage() {
             <Empty icon={FileText} title={t('posts.none')} />
             {filtered && (
               <div className="adm-center">
-                <ClearFilters onClick={() => setParams(new URLSearchParams(status === 'all' ? '' : `status=${status}`))} />
+                <ClearFilters onClick={() => setParams(new URLSearchParams(kind === 'chapter' ? 'tip=capitole' : ''))} />
               </div>
             )}
           </div>
@@ -175,9 +203,11 @@ export function PostsPage() {
                         <div>
                           <span className="adm-cell-title">
                             {post.featured && <Pin size={13} className="adm-pin" aria-label={t('posts.featured')} />}
-                            {post.title}
+                            {post.title || <span className="adm-muted">{t('posts.untitled')}</span>}
                           </span>
-                          <span className="adm-muted adm-small">{post.category ?? t('posts.noCategory')}</span>
+                          <span className="adm-muted adm-small">
+                            {post.book ? t('posts.chapterOf', { n: post.book.chapter, book: post.book.title }) : (post.category ?? t('posts.noCategory'))}
+                          </span>
                         </div>
                       </div>
                     </th>
@@ -206,11 +236,11 @@ export function PostsPage() {
                     <td className="is-actions">
                       <div className="adm-row-actions">
                         {post.status === 'published' && (
-                          <Link to={`/posts/${post.slug}`} className="adm-icon-btn" title={t('posts.view')} aria-label={t('posts.view')}>
+                          <Link to={post.path} className="adm-icon-btn" title={t('posts.view')} aria-label={t('posts.view')}>
                             <ExternalLink size={16} />
                           </Link>
                         )}
-                        {(post.status === 'published' || post.featured) && (
+                        {!post.book && (post.status === 'published' || post.featured) && (
                           <button
                             type="button"
                             className={`adm-icon-btn${post.featured ? ' is-on' : ''}`}
@@ -224,7 +254,12 @@ export function PostsPage() {
                           </button>
                         )}
                         {post.status !== 'deleted' && post.author.username && (
-                          <Link to={articlePath(post.author.username, post.id)} className="adm-icon-btn" title={t('posts.edit')} aria-label={t('posts.edit')}>
+                          <Link
+                            to={post.book ? chapterEditorPath(post.book.id, post.id) : articlePath(post.id)}
+                            className="adm-icon-btn"
+                            title={t('posts.edit')}
+                            aria-label={t('posts.edit')}
+                          >
                             <PenLine size={16} />
                           </Link>
                         )}

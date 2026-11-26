@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { AlertTriangle, ChevronRight, Clock, Construction, Eye, FileText, Flag, LifeBuoy, MailPlus, MailWarning, MessageSquare, PenLine, Trash2, UserPlus, UserX, Users } from 'lucide-react';
+import { AlertTriangle, Archive, Bug, ChevronRight, Clock, Construction, Eye, FileText, Flag, LifeBuoy, MailPlus, MailWarning, MessageSquare, PenLine, ShieldAlert, Trash2, UserPlus, Users, UserX } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { FinalizeDialog } from '@/admin/FinalizeDialog';
@@ -20,6 +20,9 @@ interface Todo {
   label: string;
   to: string;
 }
+
+/** Failed sign-ins in a day from which the dashboard points at them (a few are typos). */
+const FAILED_SIGN_INS = 5;
 
 /** The overview: this month's numbers, traffic, what needs attention, and what happened lately. */
 export function DashboardPage() {
@@ -57,14 +60,17 @@ export function DashboardPage() {
         ...(overview.users.deletionDue
           ? [{ key: 'due', icon: Trash2, tone: 'bad' as const, label: t('todo.due', { n: overview.users.deletionDue }), to: '/admin/utilizatori?status=due' }]
           : []),
+        ...(overview.cleanup
+          ? [{ key: 'cleanup', icon: Archive, tone: 'warn' as const, label: t('todo.cleanup', { n: formatNumber(overview.cleanup) }), to: '/admin/jurnal?tab=cleanup' }]
+          : []),
         ...(overview.reports.open ? [{ key: 'reports', icon: Flag, tone: 'bad' as const, label: t('todo.reports', { n: overview.reports.open }), to: '/admin/comentarii?filter=reported' }] : []),
         ...(overview.held ? [{ key: 'held', icon: Clock, tone: 'warn' as const, label: t('todo.held', { n: overview.held }), to: '/admin/comentarii?filter=held' }] : []),
-        ...(overview.tickets.unseen ? [{ key: 'tickets', icon: LifeBuoy, tone: 'warn' as const, label: t('todo.tickets', { n: overview.tickets.unseen }), to: '/admin/suport' }] : []),
-        ...(overview.mail.production && !overview.mail.configured
-          ? [{ key: 'mail', icon: MailWarning, tone: 'bad' as const, label: t('todo.mail'), to: '/admin/setari' }]
-          : !overview.mail.configured
-            ? [{ key: 'mail', icon: MailWarning, tone: 'info' as const, label: t('todo.mailDev'), to: '/admin/setari' }]
-            : []),
+        ...(overview.tickets.open ? [{ key: 'tickets', icon: LifeBuoy, tone: 'warn' as const, label: t('todo.ticketsOpen', { n: overview.tickets.open }), to: '/admin/suport?status=open' }] : []),
+        ...(overview.errors.unseen ? [{ key: 'errors', icon: Bug, tone: 'bad' as const, label: t('todo.errors', { n: overview.errors.unseen }), to: '/admin/jurnal?tab=errors' }] : []),
+        ...(overview.signIns.failedDay >= FAILED_SIGN_INS
+          ? [{ key: 'signIns', icon: ShieldAlert, tone: 'warn' as const, label: t('todo.signIns', { n: overview.signIns.failedDay }), to: '/admin/jurnal?tab=auth&outcome=failed' }]
+          : []),
+        ...(!overview.mail.configured ? [{ key: 'mail', icon: MailWarning, tone: 'bad' as const, label: t('todo.mail'), to: '/admin/setari?tab=email' }] : []),
         ...(overview.users.deletedPending - overview.users.deletionDue > 0
           ? [
               {
@@ -80,7 +86,7 @@ export function DashboardPage() {
           ? [{ key: 'suspended', icon: AlertTriangle, tone: 'info' as const, label: t('todo.suspended', { n: overview.users.suspended }), to: '/admin/utilizatori?status=suspended' }]
           : []),
         ...(overview.mail.failed24h
-          ? [{ key: 'mailFailed', icon: MailWarning, tone: 'warn' as const, label: t('todo.mailFailed', { n: overview.mail.failed24h }), to: '/admin/setari?tab=history&status=failed' }]
+          ? [{ key: 'mailFailed', icon: MailWarning, tone: 'warn' as const, label: t('todo.mailFailed', { n: overview.mail.failed24h }), to: '/admin/jurnal?tab=emails&status=failed' }]
           : []),
         ...(overview.mail.dailyLimit > 0 && overview.mail.sentToday >= overview.mail.dailyLimit * 0.8
           ? [
@@ -89,7 +95,7 @@ export function DashboardPage() {
                 icon: MailWarning,
                 tone: (overview.mail.sentToday >= overview.mail.dailyLimit ? 'bad' : 'warn') as 'bad' | 'warn',
                 label: t('todo.mailLimit', { n: overview.mail.sentToday, limit: overview.mail.dailyLimit }),
-                to: '/admin/setari?tab=history',
+                to: '/admin/jurnal?tab=emails',
               },
             ]
           : []),
@@ -109,7 +115,7 @@ export function DashboardPage() {
         title={t('dashboard.title', { name: user!.name.split(' ')[0]! })}
         subtitle={t('dashboard.subtitle')}
         actions={
-          <Link to={newArticlePath(user!.username)} className="adm-btn is-primary">
+          <Link to={newArticlePath()} className="adm-btn is-primary">
             <PenLine size={16} /> {t('posts.new')}
           </Link>
         }

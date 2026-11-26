@@ -5,7 +5,8 @@ import type { MessageKey } from '@/lib/i18n/messages';
 import { getPushChoices, PushDenied, pushSupport, setPushChoices } from '@/lib/push';
 import type { PushChoices } from '@/lib/push';
 
-const SUPPORT_HINT: Record<string, MessageKey> = {
+/** Why a device can't get push notifications, in words. */
+export const SUPPORT_HINT: Record<string, MessageKey> = {
   insecure: 'push.insecure',
   'ios-install': 'push.ios',
   unsupported: 'push.unsupported',

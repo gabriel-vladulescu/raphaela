@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { NARROW, PHONE } from '@/lib/useMediaQuery';
@@ -18,6 +19,25 @@ interface ModalProps {
    *  narrow screens (phones and tablets) and is swiped up. A dialog on wider screens. */
   sheet?: boolean | 'top';
   className?: string;
+  /** Its head, drawn by the modal: the title and (when it can be closed) the close button, as every dialog and sheet
+   *  has it (ModalHead). Without it, the content brings its own. */
+  head?: boolean;
+}
+
+/** A dialog's or a sheet's head: its title, and the button that closes it (when it can be closed). */
+export function ModalHead({ title, onClose, children }: { title: string; onClose?: () => void; children?: ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <div className="modal-head">
+      <h2>{title}</h2>
+      {children}
+      {onClose && (
+        <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={onClose}>
+          <X size={18} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -166,18 +186,27 @@ function onBackdrop(event: MouseEvent<HTMLDialogElement>) {
  * Centered dialog on a blurred backdrop, built on <dialog> for focus trapping and Escape handling. While one is open,
  * the page behind it doesn't scroll (components.css).
  */
-export function Modal({ title, children, onClose, closeOnBackdrop, sheet = false, className = '' }: ModalProps) {
+export function Modal({ title, children, onClose, closeOnBackdrop, sheet = false, className = '', head = false }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const slideAway = useSwipeToClose(ref, sheet ? onClose : undefined, sheet === 'top' ? 'top' : 'bottom');
+  /** Still on the page (its own closing, when it goes, isn't the browser's). */
+  const shown = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
+    shown.current = true;
     if (dialog && !dialog.open) {
-      // The scrollbar's width, measured before it goes (the page is locked while a dialog is open, components.css).
-      document.documentElement.style.setProperty('--scrollbar-gap', `${window.innerWidth - document.documentElement.clientWidth}px`);
+      // The scrollbar's width, measured before it goes (the page is locked while a dialog is open, components.css);
+      // over another dialog, it's gone already.
+      if (!document.querySelector('dialog.modal[open]')) {
+        document.documentElement.style.setProperty('--scrollbar-gap', `${window.innerWidth - document.documentElement.clientWidth}px`);
+      }
       dialog.showModal();
     }
-    return () => dialog?.close();
+    return () => {
+      shown.current = false;
+      dialog?.close();
+    };
   }, []);
 
   return (
@@ -185,12 +214,24 @@ export function Modal({ title, children, onClose, closeOnBackdrop, sheet = false
       ref={ref}
       className={`modal${sheet ? ' sheet' : ''}${sheet === 'top' ? ' sheet-top' : ''} ${className}`}
       aria-label={title}
+      // (A dialog opened from inside this one is its own: its events reach this one through React, and are let be.)
       onCancel={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (!event.cancelable) return; // the browser closes it regardless: see onClose
         event.preventDefault();
+        onClose?.();
+      }}
+      // Browsers let a page keep a dialog open on Escape only once per click or tap: pressed again straight away, the
+      // browser closes it itself. Then it's opened again at once, and closed (or stepped back) the page's way.
+      onClose={(event) => {
+        const dialog = event.currentTarget;
+        if (event.target !== dialog || !shown.current || dialog.open) return;
+        dialog.showModal();
         onClose?.();
       }}
       onClick={closeOnBackdrop ? (event) => onBackdrop(event) && (slideAway ?? onClose)?.() : undefined}
     >
+      {head && <ModalHead title={title} onClose={onClose} />}
       {children}
     </dialog>
   );
@@ -200,9 +241,8 @@ export function Modal({ title, children, onClose, closeOnBackdrop, sheet = false
 export function AlertModal({ title, message, onClose }: { title: string; message: ReactNode; onClose: () => void }) {
   const { t } = useI18n();
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} head>
       <div className="modal-body" role="alertdialog" aria-label={title}>
-        <h2>{title}</h2>
         <p className="muted">{message}</p>
         <div className="modal-actions">
           <button type="button" className="btn btn-primary" onClick={onClose} autoFocus>
@@ -225,9 +265,8 @@ export function ConfirmModal(props: {
 }) {
   const { t } = useI18n();
   return (
-    <Modal title={props.title} onClose={props.onCancel}>
+    <Modal title={props.title} onClose={props.onCancel} head>
       <div className="modal-body">
-        <h2>{props.title}</h2>
         <p className="muted">{props.message}</p>
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={props.onCancel} autoFocus>

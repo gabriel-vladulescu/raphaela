@@ -2,8 +2,8 @@ import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { site as defaults } from '../../../site.config';
 
 // Who the site is: its name, company, description, languages, contact and social links. site.config.ts holds the
-// defaults (a fresh copy of the blog starts from them); administrators change them in the admin panel (Setări →
-// Identitate), kept in app_settings ('identity', JSON). `site` is changed in place, so everything that reads it (search
+// defaults (a fresh copy of the blog starts from them); administrators change them in the admin panel (Settings →
+// Identity), kept in app_settings ('identity', JSON). `site` is changed in place, so everything that reads it (search
 // engine tags, share images, emails, the feed, the web app manifest) follows at once, and the browser gets it with
 // each page (seo/html.ts: window.__SITE__).
 

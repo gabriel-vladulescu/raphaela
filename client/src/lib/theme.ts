@@ -5,14 +5,14 @@ export type Theme = (typeof THEMES)[number];
 
 const listeners = new Set<() => void>();
 
-/** The theme on <html> (index.html applies the saved one before React starts; midnight by default). */
+/** The theme on <html> (index.html applies the saved one before React starts; light, "Ritual", by default). */
 export function currentTheme(): Theme {
   const theme = document.documentElement.dataset.theme;
-  return THEMES.includes(theme as Theme) ? (theme as Theme) : 'midnight';
+  return THEMES.includes(theme as Theme) ? (theme as Theme) : 'light';
 }
 
 /** Each theme's page background, for the phone's status bar (index.html sets it before the app loads). */
-const THEME_COLORS: Record<Theme, string> = { light: '#f5f3fb', dark: '#111017', midnight: '#050918' };
+const THEME_COLORS: Record<Theme, string> = { light: '#f4ece6', dark: '#111017', midnight: '#050918' };
 
 export function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { LoaderCircle } from 'lucide-react';
+import { NewsletterChoices } from '@/components/NewsletterChoices';
+import type { FollowedBook } from '@/components/NewsletterChoices';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { Outcome, Shell } from '@/pages/AccountLinkPages';
@@ -52,7 +54,8 @@ export function NewsletterConfirmPage() {
 
 interface Subscription {
   email: string;
-  frequency: 'instant' | 'weekly';
+  allPosts: boolean;
+  books: FollowedBook[];
   active: boolean;
   confirmed: boolean;
 }
@@ -72,14 +75,15 @@ export function NewsletterManagePage() {
       .catch(() => setSubscription('invalid'));
   }, [token]);
 
-  async function run(action: () => Promise<unknown>, next: Partial<Subscription>) {
+  /** Does it, then shows the subscription as it is now (what the server answered, or `next` over what it was). */
+  async function run(action: () => Promise<{ subscription?: Subscription } | unknown>, next: Partial<Subscription> = {}) {
     if (!subscription || subscription === 'invalid') return;
     setBusy(true);
     setError('');
     setSaved(false);
     try {
-      await action();
-      setSubscription({ ...subscription, ...next });
+      const reply = (await action()) as { subscription?: Subscription } | undefined;
+      setSubscription(reply?.subscription ?? { ...subscription, ...next });
       setSaved(true);
     } catch (err) {
       setError(errorMessage(err));
@@ -109,8 +113,8 @@ export function NewsletterManagePage() {
     );
   }
 
-  const setFrequency = (frequency: Subscription['frequency']) =>
-    run(() => api(`/newsletter/manage/${token}`, { method: 'PUT', body: { frequency } }), { frequency, active: subscription.confirmed });
+  const setAllPosts = (on: boolean) => run(() => api(`/newsletter/manage/${token}`, { method: 'PUT', body: { allPosts: on } }));
+  const dropBook = (bookId: number) => run(() => api(`/newsletter/manage/${token}/books/${bookId}`, { method: 'DELETE' }));
 
   // Not confirmed yet: this link is the confirmation email's own (the same token), so it confirms here too.
   if (!subscription.confirmed) {
@@ -142,24 +146,13 @@ export function NewsletterManagePage() {
         <p className="muted">{t(subscription.active ? 'newsletter.manageActive' : 'newsletter.manageStopped', { email: subscription.email })}</p>
       </div>
       <div className="auth-form">
-        <div className="field">
-          <span className="field-label">{t('newsletter.frequency')}</span>
-          <div className="segmented" role="group" aria-label={t('newsletter.frequency')}>
-            {(['weekly', 'instant'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={subscription.active && subscription.frequency === value ? 'is-selected' : ''}
-                aria-pressed={subscription.active && subscription.frequency === value}
-                disabled={busy}
-                onClick={() => void setFrequency(value)}
-              >
-                {t(`newsletter.${value}`)}
-              </button>
-            ))}
-          </div>
-          <span className="field-hint muted small">{t(`newsletter.${subscription.frequency}Hint`)}</span>
-        </div>
+        <NewsletterChoices
+          allPosts={subscription.active && subscription.allPosts}
+          books={subscription.active ? subscription.books : []}
+          busy={busy}
+          onAllPosts={(on) => void setAllPosts(on)}
+          onDropBook={(bookId) => void dropBook(bookId)}
+        />
         {error && <p className="form-error">{error}</p>}
         {saved && (
           <p className="form-ok small" role="status">
@@ -171,7 +164,7 @@ export function NewsletterManagePage() {
             type="button"
             className="btn btn-secondary btn-block"
             disabled={busy}
-            onClick={() => void run(() => api(`/newsletter/unsubscribe/${token}`, { method: 'POST' }), { active: false })}
+            onClick={() => void run(() => api(`/newsletter/unsubscribe/${token}`, { method: 'POST' }), { active: false, books: [] })}
           >
             {t('newsletter.unsubscribe')}
           </button>

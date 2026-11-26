@@ -1,10 +1,10 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 
-/** "Horoscopul săptămânii" -> "horoscopul-saptamanii" */
+/** "Crème brûlée, à la carte" -> "creme-brulee-a-la-carte" */
 export function slugify(text: string): string {
   const slug = text
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // strip diacritics (ă â î ș ț)
+    .replace(/[̀-ͯ]/g, '') // strip diacritics (é -> e, ü -> u)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -14,7 +14,7 @@ export function slugify(text: string): string {
 }
 
 /** Returns `base`'s slug, or the first free "-2", "-3", ... variant in the table. */
-export async function uniqueSlug(db: Pool, table: 'posts' | 'categories' | 'series', base: string, excludeId = 0) {
+export async function uniqueSlug(db: Pool, table: 'posts' | 'categories' | 'books', base: string, excludeId = 0) {
   const slug = slugify(base);
   const [rows] = await db.execute<RowDataPacket[]>(
     `SELECT slug FROM ${table} WHERE (slug = ? OR slug LIKE ?) AND id <> ?`,

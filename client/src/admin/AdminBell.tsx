@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Bell, CheckCheck, Clock, Flag, LifeBuoy, UserX } from 'lucide-react';
+import { Archive, Bell, CheckCheck, Clock, Flag, LifeBuoy, UserX } from 'lucide-react';
 import { useAdmin } from '@/admin/context';
 import { usePanelPosition, useOutside } from '@/admin/Dropdown';
 import { useAdminI18n } from '@/admin/i18n';
@@ -10,9 +10,11 @@ import { setUnread } from '@/lib/unread';
 
 interface AdminNotification {
   id: number;
-  type: 'support' | 'report' | 'account_due' | 'comment_held' | string;
+  type: 'support' | 'report' | 'account_due' | 'comment_held' | 'cleanup_due' | string;
   times: number;
   detail: string | null;
+  /** Old data: how many rows. */
+  value: number | null;
   createdAt: string;
   read: boolean;
   post: { id: number; title: string; slug: string } | null;
@@ -80,13 +82,15 @@ export function AdminBell() {
   const describe = (n: AdminNotification) => {
     switch (n.type) {
       case 'support':
-        return t('bell.support', { title: n.ticket?.title ?? '', email: n.ticket?.email ?? '' });
+        return t(n.detail === 'reply' ? 'bell.supportReply' : 'bell.support', { title: n.ticket?.title ?? '', email: n.ticket?.email ?? '' });
       case 'report':
         return n.times > 1
           ? t('bell.reportMany', { n: n.times, post: n.post?.title ?? '—' })
           : t('bell.report', { name: n.actor?.name ?? t('bell.someone'), reason: t(`reason.${n.detail ?? 'other'}` as AdminKey), post: n.post?.title ?? '—' });
       case 'account_due':
         return t('bell.accountDue', { name: n.account?.name ?? '' });
+      case 'cleanup_due':
+        return t('bell.cleanupDue', { n: n.value ?? 0 });
       case 'comment_held':
         return n.times > 1 ? t('bell.heldMany', { n: n.times, post: n.post?.title ?? '—' }) : t('bell.held', { name: n.actor?.name ?? t('bell.someone'), post: n.post?.title ?? '—' });
       default:
@@ -104,8 +108,11 @@ export function AdminBell() {
           ? '/admin/comentarii?filter=held'
         : n.type === 'account_due'
           ? `/admin/utilizatori?status=due${n.account ? `&id=${n.account.id}` : ''}`
-          : '/admin';
-  const Icon = (type: string) => (type === 'report' ? Flag : type === 'account_due' ? UserX : type === 'comment_held' ? Clock : LifeBuoy);
+          : n.type === 'cleanup_due'
+            ? '/admin/jurnal?tab=cleanup'
+            : '/admin';
+  const Icon = (type: string) =>
+    type === 'report' ? Flag : type === 'account_due' ? UserX : type === 'comment_held' ? Clock : type === 'cleanup_due' ? Archive : LifeBuoy;
 
   return (
     <div className="adm-bell">

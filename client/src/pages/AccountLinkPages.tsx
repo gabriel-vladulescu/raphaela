@@ -2,13 +2,36 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft, CircleCheck, CircleX, LoaderCircle, MailCheck } from 'lucide-react';
+import { EmailOffModal, isEmailOff } from '@/components/EmailOffModal';
 import { useAuth } from '@/context/auth';
 import { api, ApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/lib/i18n/messages';
 import { showToast } from '@/lib/toast';
 import { BlockedNotice } from '@/pages/AuthPage';
 
 // The pages the site's emails lead to (server/src/lib/emails.ts): a new password, and confirming an address.
+
+/** Why an emailed link doesn't work, as the server says it (lib/accounts.ts): and, if it was stopped, by what. */
+interface LinkProblem {
+  error: string;
+  reason?: string;
+}
+const STOPPED_BY = ['replaced', 'password_changed', 'address_changed', 'verified', 'cancelled', 'google', 'account_deleted'];
+
+/** A link problem in a sentence. */
+function useLinkProblem() {
+  const { t } = useI18n();
+  return (problem: LinkProblem) => {
+    if (problem.error === 'link_used') return t('link.used');
+    if (problem.error === 'link_too_old') return t('link.tooOld');
+    if (problem.error === 'link_revoked') return t(`link.revoked.${STOPPED_BY.includes(problem.reason ?? '') ? problem.reason : 'other'}` as MessageKey);
+    return t('link.invalid');
+  };
+}
+
+const isLinkProblem = (err: unknown): err is ApiError => err instanceof ApiError && err.code.startsWith('link_');
+const problemOf = (err: ApiError): LinkProblem => ({ error: err.code, reason: typeof err.data.reason === 'string' ? err.data.reason : undefined });
 
 export function Shell({ children, back = '/login' }: { children: ReactNode; back?: string }) {
   const { t } = useI18n();
@@ -40,8 +63,10 @@ export function ForgotPasswordPage() {
   const { t, lang, errorMessage } = useI18n();
   const [params] = useSearchParams();
   const [email, setEmail] = useState(params.get('email') ?? '');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'unavailable'>('idle');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState('');
+  /** The site's email isn't working: the link can't go (a dialog says so; the form stays). */
+  const [mailOff, setMailOff] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -51,8 +76,8 @@ export function ForgotPasswordPage() {
       await api('/auth/forgot-password', { method: 'POST', body: { email: email.trim(), lang } });
       setState('sent');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'email_unavailable') return setState('unavailable');
-      setError(errorMessage(err));
+      if (isEmailOff(err)) setMailOff(true);
+      else setError(errorMessage(err));
       setState('idle');
     }
   }
@@ -68,18 +93,6 @@ export function ForgotPasswordPage() {
       </Shell>
     );
   }
-  if (state === 'unavailable') {
-    return (
-      <Shell>
-        <Outcome tone="error" title={t('forgot.unavailableTitle')} body={t('forgot.unavailableBody')}>
-          <Link to="/suport" className="btn btn-primary">
-            {t('auth.blocked.support')}
-          </Link>
-        </Outcome>
-      </Shell>
-    );
-  }
-
   return (
     <Shell>
       <div className="auth-header">
@@ -96,6 +109,16 @@ export function ForgotPasswordPage() {
           {state === 'sending' ? t('common.loading') : t('forgot.submit')}
         </button>
       </form>
+      {mailOff && (
+        <EmailOffModal
+          detail={
+            <>
+              {t('mail.offForgot')} <Link to="/suport">{t('mail.offSupport')}</Link>
+            </>
+          }
+          onClose={() => setMailOff(false)}
+        />
+      )}
     </Shell>
   );
 }
@@ -103,11 +126,13 @@ export function ForgotPasswordPage() {
 /** /resetare-parola?token=…: the new password, from the emailed link. Signs in once it's set. */
 export function ResetPasswordPage() {
   const { t, errorMessage } = useI18n();
+  const describeProblem = useLinkProblem();
   const { refresh } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
-  const [valid, setValid] = useState<boolean | null>(token ? null : false);
+  /** null while it's being checked; then the link works (no problem), or why not. */
+  const [problem, setProblem] = useState<LinkProblem | null | undefined>(token ? undefined : { error: 'link_invalid' });
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [saving, setSaving] = useState(false);
@@ -116,9 +141,9 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     if (!token) return;
-    api<{ valid: boolean }>(`/auth/reset-password?token=${encodeURIComponent(token)}`)
-      .then((result) => setValid(result.valid))
-      .catch(() => setValid(false));
+    api<{ valid: boolean; error?: string; reason?: string }>(`/auth/reset-password?token=${encodeURIComponent(token)}`)
+      .then((result) => setProblem(result.valid ? null : { error: result.error ?? 'link_invalid', reason: result.reason }))
+      .catch(() => setProblem({ error: 'link_invalid' }));
   }, [token]);
 
   async function submit(event: FormEvent) {
@@ -134,7 +159,7 @@ export function ResetPasswordPage() {
     } catch (err) {
       setSaving(false);
       if (err instanceof ApiError && (err.code === 'account_deleted' || err.code === 'account_suspended')) return setBlocked(err);
-      if (err instanceof ApiError && err.code === 'link_invalid') return setValid(false);
+      if (isLinkProblem(err)) return setProblem(problemOf(err));
       setError(errorMessage(err));
     }
   }
@@ -153,7 +178,7 @@ export function ResetPasswordPage() {
       </Shell>
     );
   }
-  if (valid === null) {
+  if (problem === undefined) {
     return (
       <Shell>
         <p className="auth-wait muted">
@@ -162,10 +187,10 @@ export function ResetPasswordPage() {
       </Shell>
     );
   }
-  if (!valid) {
+  if (problem) {
     return (
       <Shell>
-        <Outcome tone="error" title={t('reset.invalidTitle')} body={t('reset.invalidBody')}>
+        <Outcome tone="error" title={t('reset.invalidTitle')} body={`${describeProblem(problem)} ${t('reset.invalidBody')}`}>
           <Link to="/parola-uitata" className="btn btn-primary">
             {t('reset.again')}
           </Link>
@@ -222,22 +247,26 @@ export function ResetPasswordPage() {
 /** /confirmare-email?token=…: confirms the account's address, or a new one (which then becomes the account's). */
 export function ConfirmEmailPage() {
   const { t, errorMessage } = useI18n();
+  const describeProblem = useLinkProblem();
   const { user, refresh } = useAuth();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
-  const [result, setResult] = useState<{ purpose: 'verify' | 'change'; email: string } | { error: string } | null>(token ? null : { error: 'link_invalid' });
+  // `already`: the link was opened before (by the person, or by their mail's link checker) and it's done.
+  const [result, setResult] = useState<{ purpose: 'verify' | 'change'; email: string; already?: boolean } | { error: string; reason?: string } | null>(
+    token ? null : { error: 'link_invalid' },
+  );
   const started = useRef(false);
 
   useEffect(() => {
     // Once (a link works once; StrictMode runs effects twice in development).
     if (!token || started.current) return;
     started.current = true;
-    api<{ purpose: 'verify' | 'change'; email: string }>('/auth/verify-email', { method: 'POST', body: { token } })
+    api<{ purpose: 'verify' | 'change'; email: string; already?: boolean }>('/auth/verify-email', { method: 'POST', body: { token } })
       .then((done) => {
         setResult(done);
         void refresh();
       })
-      .catch((err: unknown) => setResult({ error: err instanceof ApiError ? err.code : 'generic' }));
+      .catch((err: unknown) => setResult(isLinkProblem(err) ? problemOf(err) : { error: err instanceof ApiError ? err.code : 'generic' }));
   }, [token, refresh]);
 
   const next = user ? (
@@ -260,7 +289,11 @@ export function ConfirmEmailPage() {
         <Outcome
           tone="error"
           title={t('verify.failedTitle')}
-          body={result.error === 'link_invalid' ? t('verify.invalidBody') : errorMessage(new ApiError(result.error, 400))}
+          body={
+            result.error.startsWith('link_')
+              ? `${describeProblem(result)}${result.reason === 'account_deleted' || result.reason === 'cancelled' ? '' : ` ${t('verify.invalidBody')}`}`
+              : errorMessage(new ApiError(result.error, 400))
+          }
         >
           {next}
         </Outcome>
@@ -268,7 +301,16 @@ export function ConfirmEmailPage() {
         <Outcome
           tone="ok"
           title={t(result.purpose === 'change' ? 'verify.changedTitle' : 'verify.doneTitle')}
-          body={t(result.purpose === 'change' ? 'verify.changedBody' : 'verify.doneBody', { email: result.email })}
+          body={t(
+            result.already
+              ? result.purpose === 'change'
+                ? 'verify.alreadyChangedBody'
+                : 'verify.alreadyBody'
+              : result.purpose === 'change'
+                ? 'verify.changedBody'
+                : 'verify.doneBody',
+            { email: result.email },
+          )}
         >
           {next}
         </Outcome>

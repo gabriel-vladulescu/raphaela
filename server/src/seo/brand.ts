@@ -5,7 +5,7 @@ import { config } from '@/config';
 
 /**
  * The site's logo: server/assets/logo.png (a phoenix on a transparent background), unless an administrator uploaded
- * another one (admin panel → Setări → Identitate; kept as uploads/brand-logo.png). The home-screen icons, the favicon,
+ * another one (admin panel → Settings → Identity; kept as uploads/brand-logo.png). The home-screen icons, the favicon,
  * the splash and the share images are all made from it, so changing it changes them all. `LOGO` and `BRAND_VERSION`
  * are live bindings: modules that import them see a new logo at once.
  */
@@ -32,3 +32,5 @@ export async function setLogo(png: Buffer | null) {
 
 /** The midnight theme's sky, behind the logo where it needs a background (Android's and Apple's icons). */
 export const NIGHT = '#050918';
+/** The light theme's page colour (the default theme): the installed app's launch screen and status bar. */
+export const DAWN = '#f4ece6';

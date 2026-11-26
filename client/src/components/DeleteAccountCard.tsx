@@ -74,7 +74,7 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title={t('deleteAccount.title')} onClose={busy ? undefined : onClose}>
+    <Modal title={t('deleteAccount.confirmTitle')} onClose={busy ? undefined : onClose} head>
       <form
         className="modal-body delete-account-dialog"
         onSubmit={(event) => {
@@ -82,7 +82,6 @@ function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
           if (sure && chosen) void confirm();
         }}
       >
-        <h2>{t('deleteAccount.confirmTitle')}</h2>
         <p className="field-warning">
           <TriangleAlert size={16} aria-hidden="true" /> {t('deleteAccount.warning', { months: RETENTION_MONTHS })}
         </p>

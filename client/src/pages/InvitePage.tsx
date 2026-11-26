@@ -8,6 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { showToast } from '@/lib/toast';
 import { Outcome, Shell } from '@/pages/AccountLinkPages';
+import { newArticlePath } from '@/lib/paths';
 
 interface Invite {
   email: string;
@@ -51,7 +52,7 @@ export function InvitePage() {
       await api('/invites/accept', { method: 'POST', body: user ? { token } : { token, name: name.trim(), password, acceptTerms: agreed } });
       await refresh();
       showToast({ message: t('invite.welcome') });
-      navigate(user ? `/${user.username}/articole/nou` : '/profil', { replace: true });
+      navigate(user ? newArticlePath() : '/profil', { replace: true });
     } catch (err) {
       setBusy(false);
       if (err instanceof ApiError && err.code === 'link_invalid') return setInvite('invalid');

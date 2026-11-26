@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { RowDataPacket } from 'mysql2/promise';
 import { site } from '@/lib/siteIdentity';
 import { siteSettings } from '@/lib/siteSettings';
-import { summaryOf, TEXT_START, VISIBLE_POST } from '@/lib/posts';
+import { postPath, summaryOf, TEXT_START, VISIBLE_POST } from '@/lib/posts';
 import { shareImagePath } from '@/seo/og';
 import { siteOrigin } from '@/seo/page';
 
@@ -27,7 +27,8 @@ const feedRoutes: FastifyPluginAsync = async (app) => {
     if (closed()) return reply.code(503).header('Retry-After', '3600').type('text/plain; charset=utf-8').send('Maintenance');
     const origin = siteOrigin();
     const [posts] = await db.query<RowDataPacket[]>(
-      `SELECT p.slug, p.title, p.banner_url, p.updated_at FROM posts p WHERE ${VISIBLE_POST} ORDER BY p.published_at DESC`,
+      `SELECT p.slug, (SELECT bk.slug FROM books bk WHERE bk.id = p.book_id) AS book_slug, p.title, p.banner_url, p.updated_at
+         FROM posts p WHERE ${VISIBLE_POST} ORDER BY p.published_at DESC`,
     );
     // Tags with public posts (each has its page).
     const [tags] = await db.query<RowDataPacket[]>(
@@ -40,16 +41,27 @@ const feedRoutes: FastifyPluginAsync = async (app) => {
          FROM categories c JOIN posts p ON p.category_id = c.id AND ${VISIBLE_POST}
         GROUP BY c.id, c.slug`,
     );
+    // Books with a public chapter, and the subjects (top-level categories).
+    const [books] = await db.query<RowDataPacket[]>(
+      `SELECT bk.slug, MAX(p.updated_at) AS updated_at
+         FROM books bk JOIN posts p ON p.book_id = bk.id AND ${VISIBLE_POST}
+        WHERE bk.deleted_at IS NULL
+        GROUP BY bk.id, bk.slug`,
+    );
     const lastmod = (date: Date | null) => (date ? `<lastmod>${new Date(date).toISOString()}</lastmod>` : '');
     const urls = [
       `<url><loc>${origin}/</loc>${lastmod(posts[0]?.updated_at ?? null)}</url>`,
+      `<url><loc>${origin}/jurnal</loc>${lastmod(posts[0]?.updated_at ?? null)}</url>`,
+      `<url><loc>${origin}/carti</loc></url>`,
+      `<url><loc>${origin}/subiecte</loc></url>`,
+      ...books.map((book) => `<url><loc>${xml(`${origin}/carti/${encodeURIComponent(book.slug)}`)}</loc>${lastmod(book.updated_at)}</url>`),
       ...posts.map(
         (post) =>
-          `<url><loc>${xml(`${origin}/posts/${post.slug}`)}</loc>${lastmod(post.updated_at)}` +
+          `<url><loc>${xml(`${origin}${postPath(post.slug, post.book_slug)}`)}</loc>${lastmod(post.updated_at)}` +
           (post.banner_url ? `<image:image><image:loc>${xml(absolute(post.banner_url))}</image:loc></image:image>` : '') +
           '</url>',
       ),
-      ...categories.map((category) => `<url><loc>${xml(`${origin}/?category=${encodeURIComponent(category.slug)}`)}</loc>${lastmod(category.updated_at)}</url>`),
+      ...categories.map((category) => `<url><loc>${xml(`${origin}/jurnal?category=${encodeURIComponent(category.slug)}`)}</loc>${lastmod(category.updated_at)}</url>`),
       ...tags.map((tag) => `<url><loc>${xml(`${origin}/eticheta/${encodeURIComponent(tag.slug)}`)}</loc>${lastmod(tag.updated_at)}</url>`),
       `<url><loc>${origin}/termeni-si-conditii</loc></url>`,
     ];
@@ -65,12 +77,13 @@ ${urls.join('\n')}
     if (closed()) return reply.code(503).header('Retry-After', '3600').type('text/plain; charset=utf-8').send('Maintenance');
     const origin = siteOrigin();
     const [posts] = await db.query<RowDataPacket[]>(
-      `SELECT p.id, p.slug, p.title, p.excerpt, ${TEXT_START}, p.banner_url, p.published_at, u.name AS author_name, c.name AS category_name
+      `SELECT p.id, p.slug, (SELECT bk.slug FROM books bk WHERE bk.id = p.book_id) AS book_slug, p.title, p.excerpt, ${TEXT_START}, p.banner_url, p.published_at,
+              u.name AS author_name, c.name AS category_name
          FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN categories c ON c.id = p.category_id
         WHERE ${VISIBLE_POST} ORDER BY p.published_at DESC LIMIT 30`,
     );
     const items = posts.map((post) => {
-      const link = xml(`${origin}/posts/${post.slug}`);
+      const link = xml(`${origin}${postPath(post.slug, post.book_slug)}`);
       return `    <item>
       <title>${xml(post.title)}</title>
       <link>${link}</link>

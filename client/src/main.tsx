@@ -13,12 +13,17 @@ import { hideSplashLater } from '@/lib/splash';
 import { ConfirmEmailPage, ForgotPasswordPage, ResetPasswordPage } from '@/pages/AccountLinkPages';
 import { StatsPage } from '@/pages/StatsPage';
 import { AuthPage } from '@/pages/AuthPage';
+import { BookPage, JourneysPage, LibraryPage, SubjectPage, SubjectsPage } from '@/pages/BookPages';
 import { HomePage } from '@/pages/HomePage';
+import { TodayPage } from '@/pages/TodayPage';
 import { InvitePage } from '@/pages/InvitePage';
 import { NewsletterConfirmPage, NewsletterManagePage } from '@/pages/NewsletterPages';
 import { PersonIndex } from '@/pages/PersonIndex';
 import { PreviewPage } from '@/pages/PreviewPage';
-import { ArticlesPage, MyPage } from '@/pages/ArticlesPage';
+import { JournalPage, OldPath } from '@/pages/ArticlesPage';
+import { PersonPage } from '@/pages/PersonPage';
+import { bookEditorPath, chapterEditorPath, newBookPath, newChapterPath } from '@/lib/books';
+import { articlePath, articlesPath, newArticlePath, personListPath } from '@/lib/paths';
 import { PostPage } from '@/pages/PostPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { SavedPage } from '@/pages/SavedPage';
@@ -26,6 +31,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { NotFoundPage, RequireRole, RouteError } from '@/pages/StatusPages';
 import { SupportPage } from '@/pages/SupportPage';
+import { SupportTicketPage, SupportTicketsPage } from '@/pages/SupportTicketsPage';
 import { TermsPage } from '@/pages/TermsPage';
 import '@/styles/fonts.css';
 import '@/styles/base.css';
@@ -35,9 +41,13 @@ import '@/styles/editor.css';
 import '@/styles/sky.css';
 import '@/styles/comments.css';
 import '@/styles/features.css';
+import '@/styles/books.css';
 
 // The editor (TipTap) is most of the bundle and only authors and owners use it, so it loads on demand.
 const EditorPage = lazy(() => import('@/pages/EditorPage').then((module) => ({ default: module.EditorPage })));
+// A writer's books (and the cover studio): on demand too.
+const MyBooksPage = lazy(() => import('@/pages/MyBooksPage').then((module) => ({ default: module.MyBooksPage })));
+const BookEditorPage = lazy(() => import('@/pages/MyBooksPage').then((module) => ({ default: module.BookEditorPage })));
 
 /**
  * The admin panel is its own app (src/admin), with its own look, for administrators only: loaded on demand, page by
@@ -52,6 +62,7 @@ const adminRoutes: RouteObject = {
     { index: true, ...adminPage(async () => (await import('@/admin/pages/Dashboard')).DashboardPage) },
     { path: 'statistici', ...adminPage(async () => (await import('@/admin/pages/Stats')).StatsPage) },
     { path: 'articole', ...adminPage(async () => (await import('@/admin/pages/Posts')).PostsPage) },
+    { path: 'carti', ...adminPage(async () => (await import('@/admin/pages/Books')).BooksPage) },
     { path: 'categorii', ...adminPage(async () => (await import('@/admin/pages/Categories')).CategoriesPage) },
     { path: 'comentarii', ...adminPage(async () => (await import('@/admin/pages/Comments')).CommentsPage) },
     { path: 'utilizatori', ...adminPage(async () => (await import('@/admin/pages/Users')).UsersPage) },
@@ -69,10 +80,17 @@ const adminRoutes: RouteObject = {
   ],
 };
 
-const editor = (): ReactNode => (
+const writerPage = (page: ReactNode): ReactNode => (
+  <RequireRole role="writer">
+    <Suspense fallback={<div className="container page-loading">…</div>}>{page}</Suspense>
+  </RequireRole>
+);
+
+/** The editor: an article, or a chapter of a book (the same editor, with a few fields of its own). */
+const editor = (kind: 'post' | 'chapter' = 'post'): ReactNode => (
   <RequireRole role="writer">
     <Suspense fallback={<div className="container page-loading">…</div>}>
-      <EditorPage />
+      <EditorPage key={kind} kind={kind} />
     </Suspense>
   </RequireRole>
 );
@@ -87,7 +105,15 @@ const router = createBrowserRouter([
       {
         errorElement: <RouteError />, // a page failed: the header and footer stay
         children: [
-          { path: '/', element: <HomePage /> },
+          { path: '/', element: <TodayPage /> },
+          { path: '/jurnal', element: <HomePage /> },
+          { path: '/carti', element: <LibraryPage /> },
+          { path: '/carti/:slug', element: <BookPage /> },
+          // A book's chapter: the post page, with its book.
+          { path: '/carti/:book/:slug', element: <PostPage /> },
+          { path: '/subiecte', element: <SubjectsPage /> },
+          { path: '/subiecte/:slug', element: <SubjectPage /> },
+          { path: '/drumuri', element: <JourneysPage /> },
           { path: '/login', element: <AuthPage mode="login" /> },
           { path: '/register', element: <AuthPage mode="register" /> },
           { path: '/parola-uitata', element: <ForgotPasswordPage /> },
@@ -101,24 +127,49 @@ const router = createBrowserRouter([
           { path: '/invitatie', element: <InvitePage /> },
           // The first run's setup shows on every address while it's needed (Layout); after that, home.
           { path: '/setup', element: <Navigate to="/" replace /> },
-          { path: '/articole-salvate', element: <SavedPage /> },
-          { path: '/saved', element: <Navigate to="/articole-salvate" replace /> },
+          // One's own saved posts (a guest's, in the browser); the old addresses lead there.
+          { path: '/salvate', element: <SavedPage /> },
+          { path: '/articole-salvate', element: <Navigate to="/salvate" replace /> },
+          { path: '/saved', element: <Navigate to="/salvate" replace /> },
           { path: TERMS_PATH, element: <TermsPage /> },
           { path: '/profil', element: <RequireRole role="user"><ProfilePage /></RequireRole> },
           { path: '/notificari', element: <RequireRole role="user"><NotificationsPage /></RequireRole> },
           { path: '/setari', element: <RequireRole role="user"><SettingsPage /></RequireRole> },
           { path: '/suport', element: <SupportPage /> },
-          { path: '/editor/new', element: <RequireRole role="writer"><MyPage to="new" /></RequireRole> },
+          { path: '/suport/tichete', element: <SupportTicketsPage /> },
+          { path: '/suport/tichete/:id', element: <SupportTicketPage /> },
+          { path: '/editor/new', element: <Navigate to={newArticlePath()} replace /> },
           { path: '/editor/:id', element: editor() },
-          { path: '/admin/posts', element: <RequireRole role="writer"><MyPage to="articles" /></RequireRole> },
+          { path: '/admin/posts', element: <Navigate to={articlesPath()} replace /> },
           { path: '/statistici', element: <RequireRole role="writer"><StatsPage /></RequireRole> },
-          // A person's pages (after the site's own: usernames never take its words, server/src/lib/usernames.ts).
-          // The username alone leads to the list of theirs the viewer may see.
+          // The writer's own pages (theirs alone, no username in them): their journal and its articles in the editor;
+          // their books, one to write, its chapters in the editor.
+          { path: '/jurnalul-meu', element: <RequireRole role="writer"><JournalPage /></RequireRole> },
+          { path: '/jurnalul-meu/nou', element: editor() },
+          { path: '/jurnalul-meu/:id', element: editor() },
+          { path: '/cartile-mele', element: writerPage(<MyBooksPage />) },
+          { path: '/cartile-mele/nou', element: writerPage(<BookEditorPage />) },
+          { path: '/cartile-mele/:id', element: writerPage(<BookEditorPage />) },
+          { path: '/cartile-mele/:book/capitole/nou', element: editor('chapter') },
+          { path: '/cartile-mele/:book/capitole/:id', element: editor('chapter') },
+          // A person's public pages (after the site's own: usernames never take its words, server/src/lib/usernames.ts):
+          // their journal, books and saved posts, each when they made it public. The username alone leads to the first
+          // of them the viewer may see.
           { path: '/:username', element: <PersonIndex />, handle: { untracked: true } },
-          { path: '/:username/articole', element: <ArticlesPage /> },
-          { path: '/:username/articole/nou', element: editor() },
-          { path: '/:username/articole/:id', element: editor() },
-          { path: '/:username/articole-salvate', element: <SavedPage /> },
+          { path: '/:username/jurnal', element: <PersonPage list="jurnal" /> },
+          { path: '/:username/carti', element: <PersonPage list="carti" /> },
+          { path: '/:username/salvate', element: <PersonPage list="salvate" /> },
+          // The old addresses: the writer's pages and editors under their username, "articole", "articole-salvate".
+          { path: '/:username/jurnal/nou', element: <OldPath to={() => newArticlePath()} /> },
+          { path: '/:username/jurnal/:id', element: <OldPath to={({ id }) => articlePath(Number(id))} /> },
+          { path: '/:username/articole', element: <OldPath to={({ username }) => personListPath(username ?? '', 'jurnal')} /> },
+          { path: '/:username/articole/nou', element: <OldPath to={() => newArticlePath()} /> },
+          { path: '/:username/articole/:id', element: <OldPath to={({ id }) => articlePath(Number(id))} /> },
+          { path: '/:username/articole-salvate', element: <OldPath to={({ username }) => personListPath(username ?? '', 'salvate')} /> },
+          { path: '/:username/carti/nou', element: <OldPath to={() => newBookPath()} /> },
+          { path: '/:username/carti/:id', element: <OldPath to={({ id }) => bookEditorPath(Number(id))} /> },
+          { path: '/:username/carti/:book/capitole/nou', element: <OldPath to={({ book }) => newChapterPath(Number(book))} /> },
+          { path: '/:username/carti/:book/capitole/:id', element: <OldPath to={({ book, id }) => chapterEditorPath(Number(book), Number(id))} /> },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

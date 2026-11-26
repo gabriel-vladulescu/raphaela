@@ -1,9 +1,10 @@
 import { Link, useNavigate } from 'react-router';
-import { Bookmark, LayoutDashboard, LifeBuoy, LogOut, SlidersHorizontal, UserRound } from 'lucide-react';
+import { BellRing, Bookmark, LayoutDashboard, LifeBuoy, LogOut, SlidersHorizontal, UserRound } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { Popover } from '@/components/Popover';
 import { useAuth } from '@/context/auth';
 import { useI18n } from '@/lib/i18n';
+import { openNewsletter } from '@/lib/newsletterSheet';
 import { savedPath } from '@/lib/paths';
 
 export function UserMenu() {
@@ -46,7 +47,7 @@ export function UserMenu() {
               </Link>
             ) : (
               <>
-                <Link to={savedPath(user.username)} className="menu-item">
+                <Link to={savedPath()} className="menu-item">
                   <Bookmark size={16} /> {t('nav.saved')}
                 </Link>
                 <Link to="/suport" className="menu-item">
@@ -54,6 +55,9 @@ export function UserMenu() {
                 </Link>
               </>
             )}
+            <button type="button" className="menu-item" aria-haspopup="dialog" onClick={() => openNewsletter('menu')}>
+              <BellRing size={16} /> {t('stay.title')}
+            </button>
             <button
               type="button"
               className="menu-item"

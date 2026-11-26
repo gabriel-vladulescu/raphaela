@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { CheckCircle2, FileText, ImageIcon, MessageCircleQuestion, Paperclip, UserRound, Wrench, X } from 'lucide-react';
+import { Link } from 'react-router';
+import { CheckCircle2, FileText, ImageIcon, LogIn, MessageCircleQuestion, MessagesSquare, Paperclip, ScrollText, SlidersHorizontal, UserRound, Wrench, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HeaderBackLink } from '@/components/HeaderBackLink';
+import { PageBand } from '@/components/PageBand';
+import { TERMS_PATH } from '@/config';
 import { SelectField } from '@/components/SelectField';
 import { useAuth } from '@/context/auth';
-import { sendSupport } from '@/lib/api';
+import { TicketList } from '@/pages/SupportTicketsPage';
+import type { MyTicket } from '@/pages/SupportTicketsPage';
+import { api, sendSupport } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
 const MAX_FILES = 3;
@@ -27,7 +32,8 @@ function size(bytes: number, locale: string) {
 
 /**
  * Support (anyone): a message to the administrators, with an email to answer to, a title, a description and up to
- * three attachments. It's kept on the server (server/src/routes/support.ts); answers come by email.
+ * three attachments. It's kept on the server (server/src/routes/support.ts); answers come by email, and, sent signed
+ * in, into the account too (the conversation: /suport/tichete), which the side says, with the person's tickets.
  */
 export function SupportPage() {
   const { t, locale, errorMessage } = useI18n();
@@ -43,7 +49,21 @@ export function SupportPage() {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  /** The ticket just sent signed in: its conversation. */
+  const [sentId, setSentId] = useState<number | null>(null);
+  const [tickets, setTickets] = useState<MyTicket[] | null>(null);
   const picker = useRef<HTMLInputElement>(null);
+
+  // Signed in: their tickets, the latest first (a few here, all on their page).
+  useEffect(() => {
+    if (!user) {
+      setTickets(null);
+      return;
+    }
+    api<{ tickets: MyTicket[] }>('/support/tickets')
+      .then((data) => setTickets(data.tickets))
+      .catch(() => setTickets([]));
+  }, [user, sentId]);
 
   // Signed in: their email and name, unless something's already typed.
   useEffect(() => {
@@ -88,8 +108,9 @@ export function SupportPage() {
       form.set('body', body.trim());
       form.set('website', website);
       for (const file of files) form.append('files', file, file.name);
-      await sendSupport(form);
+      const sent = await sendSupport(form);
       setSentTo(email.trim());
+      setSentId(user && sent.id ? sent.id : null);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -104,19 +125,27 @@ export function SupportPage() {
         <div className="card support-sent" role="status">
           <CheckCircle2 size={44} aria-hidden="true" />
           <h1>{t('support.sent')}</h1>
-          <p className="muted">{t('support.sentHint', { email: sentTo })}</p>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setSentTo(null);
-              setTitle('');
-              setBody('');
-              setFiles([]);
-            }}
-          >
-            {t('support.another')}
-          </button>
+          <p className="muted">{t(sentId ? 'support.sentHintAccount' : 'support.sentHint', { email: sentTo })}</p>
+          <div className="support-sent-actions">
+            {sentId && (
+              <Link to={`/suport/tichete/${sentId}`} className="btn btn-primary">
+                <MessagesSquare size={16} aria-hidden="true" /> {t('support.seeTicket')}
+              </Link>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setSentTo(null);
+                setSentId(null);
+                setTitle('');
+                setBody('');
+                setFiles([]);
+              }}
+            >
+              {t('support.another')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -125,10 +154,10 @@ export function SupportPage() {
   return (
     <div className="container support-page">
       <HeaderBackLink />
-      <div className="support-head">
-        <h1>{t('support.title')}</h1>
-        <p className="muted">{t('support.subtitle')}</p>
-      </div>
+      <PageBand title={t('support.title')} line={t('support.subtitle')} />
+
+      {/* The form, and beside it (under it on phones) what happens next and where else to look. */}
+      <div className="support-layout">
 
       <form className="card support-form" onSubmit={submit} noValidate={false}>
         <div className="support-pair">
@@ -224,6 +253,70 @@ export function SupportPage() {
           </button>
         </div>
       </form>
+
+        <aside className="support-side">
+          {/* Where the answers come: email always, the account too (with its history); signed in, their tickets. */}
+          {user ? (
+            <section className="card support-account">
+              <h2 className="side-title">{t('support.yourTickets')}</h2>
+              <p className="muted small">{t('support.accountOn')}</p>
+              {tickets && tickets.length > 0 ? (
+                <>
+                  <TicketList tickets={tickets.slice(0, 4)} />
+                  <Link to="/suport/tichete" className="support-link">
+                    <MessagesSquare size={17} aria-hidden="true" />
+                    <span>
+                      <strong>{t('support.allTickets', { n: tickets.length })}</strong>
+                    </span>
+                  </Link>
+                </>
+              ) : (
+                tickets && <p className="muted small">{t('support.noTickets')}</p>
+              )}
+            </section>
+          ) : (
+            <section className="card support-account">
+              <h2 className="side-title">{t('support.accountTitle')}</h2>
+              <p className="muted small">{t('support.accountBody')}</p>
+              <Link to="/login?next=%2Fsuport" className="btn btn-soft btn-sm">
+                <LogIn size={16} aria-hidden="true" /> {t('support.signIn')}
+              </Link>
+            </section>
+          )}
+          <section className="card support-next">
+            <h2 className="side-title">{t('support.nextTitle')}</h2>
+            <ol>
+              {(['support.next1', 'support.next2', 'support.next3'] as const).map((key, index) => (
+                <li key={key}>
+                  <span className="support-next-no" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <span>{t(key)}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+          <section className="card support-links">
+            <h2 className="side-title">{t('support.linksTitle')}</h2>
+            {user && (
+              <Link to="/setari" className="support-link">
+                <SlidersHorizontal size={17} aria-hidden="true" />
+                <span>
+                  <strong>{t('support.linkSettings')}</strong>
+                  <span className="muted small">{t('support.linkSettingsHint')}</span>
+                </span>
+              </Link>
+            )}
+            <Link to={TERMS_PATH} className="support-link">
+              <ScrollText size={17} aria-hidden="true" />
+              <span>
+                <strong>{t('footer.terms')}</strong>
+                <span className="muted small">{t('support.linkTermsHint')}</span>
+              </span>
+            </Link>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

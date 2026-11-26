@@ -40,24 +40,50 @@ export async function getPushChoices(): Promise<PushChoices> {
 
 export class PushDenied extends Error {}
 
+/** The browser's permission (asked for: call it from a tap) and this device's subscription, made if needed. */
+async function ensureSubscription() {
+  if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new PushDenied();
+  const current = await subscription();
+  if (current) return current;
+  const { key } = await api<{ key: string }>('/push/key');
+  const registration = await navigator.serviceWorker.ready;
+  return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+}
+
 /**
  * Changes what this device gets. Turning something on asks for the browser's permission (so call it from a tap)
- * and subscribes; turning everything off unsubscribes.
+ * and subscribes; once the device gets nothing at all (no books either), it unsubscribes.
  */
 export async function setPushChoices(choices: PushChoices): Promise<PushChoices> {
-  let current = await subscription();
   if (!choices.newPosts && !choices.activity) {
+    const current = await subscription();
     if (current) {
-      await api('/push/subscription', { method: 'POST', body: { subscription: current.toJSON(), newPosts: false, activity: false } });
-      await current.unsubscribe();
+      const { kept } = await api<{ kept: boolean }>('/push/subscription', { method: 'POST', body: { subscription: current.toJSON(), newPosts: false, activity: false } });
+      if (!kept) await current.unsubscribe();
     }
     return choices;
   }
-  if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new PushDenied();
-  if (!current) {
-    const { key } = await api<{ key: string }>('/push/key');
-    const registration = await navigator.serviceWorker.ready;
-    current = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
-  }
+  const current = await ensureSubscription();
   return api<PushChoices>('/push/subscription', { method: 'POST', body: { subscription: current.toJSON(), ...choices } });
+}
+
+/** Whether this device gets a book's new chapters ("Notify me"). */
+export async function getBookPush(bookId: number) {
+  const current = await subscription();
+  if (!current) return false;
+  return (await api<{ on: boolean }>(`/push/books/${bookId}/state`, { method: 'POST', body: { endpoint: current.endpoint } })).on;
+}
+
+/** A book's new chapters on this device: on (asks for permission: call it from a tap) or off. */
+export async function setBookPush(bookId: number, on: boolean) {
+  if (!on) {
+    const current = await subscription();
+    if (!current) return false;
+    const { kept } = await api<{ kept: boolean }>(`/push/books/${bookId}`, { method: 'POST', body: { subscription: current.toJSON(), on: false } });
+    if (!kept) await current.unsubscribe();
+    return false;
+  }
+  const current = await ensureSubscription();
+  await api(`/push/books/${bookId}`, { method: 'POST', body: { subscription: current.toJSON(), on: true } });
+  return true;
 }

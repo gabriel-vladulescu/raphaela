@@ -1,32 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import { UserMinus } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
+import { followAuthors } from '@/components/FollowButton';
+import { EmailOffModal, isEmailOff } from '@/components/EmailOffModal';
+import type { MySubscription } from '@/components/NewsletterSignup';
+import { NewsletterChoices } from '@/components/NewsletterChoices';
 import { siteSettings } from '@/config';
 import { useAuth } from '@/context/auth';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { articlesPath } from '@/lib/paths';
 
-// Settings: what the account gets besides the bell. The newsletter at its address, and the authors it follows.
+// Settings: what the account gets besides the bell. The newsletter at its address (every new post, some books' new
+// chapters), and the authors it follows.
 
-interface Subscription {
-  frequency: 'instant' | 'weekly';
-  active: boolean;
-  confirmed: boolean;
-  token: string;
-}
-
-/** The newsletter at the account's address: on (how often) or off. */
+/** The newsletter at the account's address: every new post (on or off), and the books it follows by email. */
 export function NewsletterCard() {
   const { t, lang, errorMessage } = useI18n();
   const { user } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null | undefined>(undefined);
+  const [subscription, setSubscription] = useState<MySubscription | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** The site's email isn't working: the dialog saying so, then no "open the email" hint. */
+  const [unsent, setUnsent] = useState<'open' | 'closed' | null>(null);
 
   const load = () =>
-    api<{ subscription: Subscription | null }>('/me/newsletter')
+    api<{ subscription: MySubscription | null }>('/me/newsletter')
       .then((data) => setSubscription(data.subscription))
       .catch(() => setSubscription(null));
   useEffect(() => void load(), []);
@@ -40,46 +38,41 @@ export function NewsletterCard() {
       await action();
       await load();
     } catch (err) {
-      setError(errorMessage(err));
+      if (isEmailOff(err)) setUnsent('open');
+      else setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   }
 
-  const subscribe = (frequency: Subscription['frequency']) =>
-    run(() => api('/newsletter/subscribe', { method: 'POST', body: { email: user!.email, frequency, lang } }));
-  const on = subscription?.active === true;
-  const pending = subscription !== null && !subscription.confirmed && subscription.active === false;
+  // Confirmed once: switched there and then. Otherwise subscribing (a confirmation email, unless the account's address
+  // is confirmed; the site's email not working: a dialog says so).
+  const setAllPosts = (on: boolean) =>
+    run(async () => {
+      if (subscription?.confirmed) {
+        await api(`/newsletter/manage/${subscription.token}`, { method: 'PUT', body: { allPosts: on } });
+      } else if (on) {
+        await api('/newsletter/subscribe', { method: 'POST', body: { email: user!.email, lang } });
+      }
+    });
+  const dropBook = (bookId: number) => run(() => api(`/newsletter/manage/${subscription!.token}/books/${bookId}`, { method: 'DELETE' }));
+  const active = subscription?.active === true;
+  const pending = subscription !== null && !subscription.confirmed;
 
   return (
     <section className="card prefs-card">
       <h2 className="side-title">{t('newsletter.title')}</h2>
-      <p className="muted small">{t(on ? 'newsletter.settingsOn' : 'newsletter.settingsOff', { email: user!.email })}</p>
-      <div className="prefs-row">
-        <div className="segmented" role="group" aria-label={t('newsletter.frequency')}>
-          {(['weekly', 'instant'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={on && subscription!.frequency === value ? 'is-selected' : ''}
-              aria-pressed={on && subscription!.frequency === value}
-              disabled={busy}
-              onClick={() =>
-                void (on ? run(() => api(`/newsletter/manage/${subscription!.token}`, { method: 'PUT', body: { frequency: value } })) : subscribe(value))
-              }
-            >
-              {t(`newsletter.${value}`)}
-            </button>
-          ))}
-        </div>
-        {pending && <p className="field-hint">{t('newsletter.pendingHint', { email: user!.email })}</p>}
-        {on && (
-          <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void run(() => api(`/newsletter/unsubscribe/${subscription!.token}`, { method: 'POST' }))}>
-            {t('newsletter.unsubscribe')}
-          </button>
-        )}
-      </div>
+      <p className="muted small">{t(active ? 'newsletter.settingsOn' : 'newsletter.settingsOff', { email: user!.email })}</p>
+      <NewsletterChoices
+        allPosts={active && subscription!.allPosts}
+        books={active ? subscription!.books : []}
+        busy={busy}
+        onAllPosts={(on) => void setAllPosts(on)}
+        onDropBook={(bookId) => void dropBook(bookId)}
+      />
+      {pending && !unsent && <p className="field-hint">{t('newsletter.pendingHint', { email: user!.email })}</p>}
       {error && <p className="form-error small">{error}</p>}
+      {unsent === 'open' && <EmailOffModal onClose={() => setUnsent('closed')} />}
     </section>
   );
 }
@@ -91,12 +84,14 @@ interface Followed {
   picture: string | null;
 }
 
-/** The authors the account follows (Follow on their posts), to stop following one. */
+/** The authors the account follows (Follow on their posts), to stop following one. Not where the site has a single
+ *  author (no following there). */
 export function FollowingCard() {
   const { t } = useI18n();
   const [authors, setAuthors] = useState<Followed[] | null>(null);
 
   useEffect(() => {
+    if (!followAuthors()) return;
     api<{ authors: Followed[] }>('/me/following')
       .then((data) => setAuthors(data.authors))
       .catch(() => setAuthors([]));
@@ -107,6 +102,7 @@ export function FollowingCard() {
     await api(`/authors/${author.id}/follow`, { method: 'DELETE' }).catch(() => setAuthors((list) => (list ? [...list, author] : list)));
   }
 
+  if (!followAuthors()) return null;
   return (
     <section className="card prefs-card">
       <h2 className="side-title">{t('follow.title')}</h2>
@@ -118,10 +114,10 @@ export function FollowingCard() {
         <ul className="following-list">
           {authors.map((author) => (
             <li key={author.id}>
-              <Link to={articlesPath(author.username)} className="following-person">
+              <span className="following-person">
                 <Avatar name={author.name} picture={author.picture} size={32} />
                 <span>{author.name}</span>
-              </Link>
+              </span>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => void unfollow(author)}>
                 <UserMinus size={15} /> {t('follow.unfollow')}
               </button>

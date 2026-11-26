@@ -1,14 +1,15 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { canSendMail } from '@/lib/mail';
+import { followingOn } from '@/lib/follows';
+import { mailConfigured } from '@/lib/mail';
 import { setupNeeded } from '@/lib/setup';
 
-// Settings administrators change in the admin panel (Setări → General), kept in app_settings ('site', JSON).
+// Settings administrators change in the admin panel (Settings → General), kept in app_settings ('site', JSON).
 
 export interface Announcement {
   enabled: boolean;
   /** One or two sentences, shown in a bar above every page. */
   text: string;
-  /** An optional link at its end ("Află mai multe"). */
+  /** An optional link at its end ("Read more"). */
   linkUrl: string;
   linkLabel: string;
   tone: 'info' | 'success' | 'warning';
@@ -72,15 +73,17 @@ export async function saveSiteSettings(db: Pool, next: SiteSettings) {
   return value;
 }
 
-/** What every visitor's page needs to know (the announcement, whether the site is closed, the newsletter). */
+/** What every visitor's page needs to know (the announcement, whether the site is closed, the newsletter, following). */
 export function publicSiteSettings() {
   const s = current;
   return {
     announcement: s.announcement.enabled && s.announcement.text.trim() ? s.announcement : null,
     maintenance: s.maintenance ? { message: s.maintenanceMessage } : null,
-    // The signup box only where its emails can go out (production without an SMTP server: hidden).
-    newsletter: s.newsletterEnabled && canSendMail(),
+    // The signup box only where its emails can go out (without an SMTP server: hidden).
+    newsletter: s.newsletterEnabled && mailConfigured(),
     commentsRequireVerifiedEmail: s.commentsRequireVerifiedEmail,
+    /** Following authors: only with more than one (lib/follows.ts). */
+    follow: followingOn(),
     /** A fresh copy that still needs its first administrator (lib/setup.ts). */
     setupNeeded: setupNeeded(),
   };
