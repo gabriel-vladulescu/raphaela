@@ -163,6 +163,7 @@ The project lives twice, side by side: `local/` is where it's developed (`npm ru
 - Production has its own database (`raphaela_production`, on the same MySQL as `local/`, which must be running) and its own uploads (`production/server/uploads`), and its own `production/server/.env`.
 - **Google sign-in** in production needs its redirect address added to the Google OAuth client: `http://localhost:4400/api/auth/google/callback` (and the real domain's, once there is one). Email and password work regardless.
 - On a real domain: put it in `APP_URL` (https), which also turns on secure cookies, and set `PUSH_CONTACT`. Service workers, installing the app and push notifications need https (or localhost).
+- **On a cPanel host** (Setup Node.js App, MySQL 8): `production/SETUP.md`. The host starts `server/app.cjs` (it reads `server/.env`, loads TypeScript through tsx and starts the server); `npm run migrate` applies the database migrations without starting the site (the server also applies them whenever it starts).
 
 ## Mock content (seed)
 
@@ -190,6 +191,7 @@ unnamed buttons. See `../testing/README.md`.
 | `npm run dev`       | API (watch mode) + Vite together    |
 | `npm run db`        | Start the MySQL container           |
 | `npm run typecheck` | `tsc` on both packages              |
+| `npm run migrate`   | Bring the database up to date (the migrations), without starting the server |
 | `npm run seed` / `npm run seed:clear` | Load / remove mock content |
 | `npm run build -w client` | Production build of the client |
 
